@@ -79,3 +79,13 @@ temp/
 test/
 *.test.js
 *.spec.js
+debug_driveleech.js
+debug_instant_download.js
+debug_instant_real.js
+debug_uhdmovies_mov.js
+test_instant_fixed.js
+test_instant_priority.js
+.gitignore
+test_instant_real.js
+test_instant.js
+test_uhdmovies.js

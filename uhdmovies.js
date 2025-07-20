@@ -465,42 +465,50 @@ async function resolveSidToDriveleech(sidUrl) {
 
 // Function to try Instant Download method
 async function tryInstantDownload(html) {
-  // Try multiple patterns to match the instant download button
-  const patterns = [
-    /<a[^>]*href="([^"]*)"[^>]*class="[^"]*btn-danger[^"]*"[^>]*>.*?Instant Download.*?<\/a>/i,
-    /href="([^"]*video-leech[^"]*)"/i,
-    /<a[^>]*href="([^"]*)"[^>]*>.*?Instant Download.*?<\/a>/i
-  ];
+  // Look for video-seed.pro or video-leech.pro links (the actual instant download pattern)
+  const videoSeedRegex = /href="([^"]*(?:video-seed\.pro|video-leech\.pro)[^"]*)"/i;
+  const match = videoSeedRegex.exec(html);
   
-  let instantDownloadLink = null;
-  for (const pattern of patterns) {
-    const match = pattern.exec(html);
-    if (match && match[1]) {
-      instantDownloadLink = match[1];
-      console.log(`[UHDMovies] Found "Instant Download" link using pattern: ${instantDownloadLink}`);
-      break;
-    }
-  }
-  
-  if (!instantDownloadLink) {
-    console.log('[UHDMovies] No Instant Download link found');
+  if (!match || !match[1]) {
     return null;
   }
 
+  const instantDownloadLink = match[1];
+  console.log('[UHDMovies] Found "Instant Download" link, attempting to extract final URL...');
+
   try {
-    // The instant download link goes to video-leech.pro with encoded URL
-    if (instantDownloadLink.includes('video-leech.pro')) {
-      const url = new URL(instantDownloadLink);
-      const encodedUrl = url.searchParams.get('url');
-      
-      if (encodedUrl) {
-        // Decode the base64 URL
-        try {
-          const decodedUrl = atob(encodedUrl);
-          console.log('[UHDMovies] Decoded instant download URL:', decodedUrl);
-          return decodedUrl;
-        } catch (decodeError) {
-          console.log('[UHDMovies] Failed to decode instant download URL');
+    const url = new URL(instantDownloadLink);
+    const keys = url.searchParams.get('url');
+
+    if (keys) {
+      const apiUrl = `${url.origin}/api`;
+      const formData = new URLSearchParams();
+      formData.append('keys', keys);
+
+      const apiResponse = await fetch(apiUrl, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'x-token': url.hostname,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+
+      if (apiResponse.ok) {
+        const responseData = await apiResponse.json();
+        if (responseData && responseData.url) {
+          let finalUrl = responseData.url;
+          // Fix spaces in workers.dev URLs by encoding them properly
+          if (finalUrl.includes('workers.dev')) {
+            const urlParts = finalUrl.split('/');
+            const filename = urlParts[urlParts.length - 1];
+            const encodedFilename = filename.replace(/ /g, '%20');
+            urlParts[urlParts.length - 1] = encodedFilename;
+            finalUrl = urlParts.join('/');
+          }
+          console.log('[UHDMovies] Extracted final link from API:', finalUrl);
+          return finalUrl;
         }
       }
     }
@@ -709,6 +717,12 @@ async function resolveDownloadLink(linkInfo) {
     
     if (!driveleechUrl) {
       console.log(`[UHDMovies] Could not resolve SID link for ${linkInfo.quality}`);
+      return null;
+    }
+    
+    // Filter out non-driveleech/driveseed URLs
+    if (!driveleechUrl.includes('driveleech.net') && !driveleechUrl.includes('driveseed.org')) {
+      console.log(`[UHDMovies] Skipping non-driveleech URL: ${driveleechUrl}`);
       return null;
     }
     
