@@ -7,8 +7,8 @@
       "description": "High-quality movie and TV show streams from UHD Movies",
       "version": "1.0.0",
       "author": "Nuvio Team",
-      "types": ["movie", "tv"],
-      "file": "uhdmovies.js",
+      "supportedTypes": ["movie", "tv"],
+      "filename": "uhdmovies.js",
       "enabled": true
     }
   ]
