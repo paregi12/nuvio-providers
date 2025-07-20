@@ -1,11 +1,11 @@
 {
-  "version": "1.0.1",
+  "version": "1.0.0",
   "scrapers": [
     {
       "id": "uhdmovies",
       "name": "UHD Movies",
       "description": "High-quality movie and TV show streams from UHD Movies",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": ["movie", "tv"],
       "filename": "uhdmovies.js",
