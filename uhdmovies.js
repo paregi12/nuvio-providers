@@ -813,6 +813,206 @@ async function resolveDownloadLink(linkInfo) {
   }
 }
 
+// Extract TV show download links from show page (improved based on Kotlin CloudStream provider)
+async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpisode) {
+  try {
+    console.log(`[UHDMovies] Extracting TV show links from: ${showPageUrl}`);
+    console.log(`[UHDMovies] Looking for Season ${targetSeason}, Episode ${targetEpisode}`);
+    
+    const response = await makeRequest(showPageUrl);
+    const html = await response.text();
+    
+    const links = [];
+    
+    // Extract page title for quality info
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+    const pageTitle = titleMatch ? titleMatch[1] : '';
+    const pageTitleQualities = extractQualityFromTitle(pageTitle);
+    
+    // Improved approach based on Kotlin CloudStream provider
+    // Look for paragraph or div tags that contain episode links
+    const episodeContainerRegex = /<(p|div)[^>]*>([\s\S]*?)<\/\1>/gi;
+    let containerMatch;
+    
+    let currentSeason = 1;
+    let foundTargetEpisode = false;
+    
+    while ((containerMatch = episodeContainerRegex.exec(html)) !== null) {
+      const containerContent = containerMatch[2];
+      
+      // Check if this container has episode links
+      const hasEpisodeLinks = /<a[^>]*>.*?Episode.*?<\/a>/i.test(containerContent);
+      
+      if (hasEpisodeLinks) {
+        // Look for season information in the previous sibling element
+        const containerIndex = html.indexOf(containerMatch[0]);
+        const beforeContainer = html.substring(Math.max(0, containerIndex - 2000), containerIndex);
+        
+        // Find the last element before this container that might contain season info
+        const prevElementRegex = /<(p|div|h[1-6])[^>]*>([^<]*)<\/\1>/gi;
+        let prevMatch;
+        let lastPrevElement = '';
+        
+        // Get the last element before our container
+        const tempHtml = beforeContainer;
+        while ((prevMatch = prevElementRegex.exec(tempHtml)) !== null) {
+          lastPrevElement = prevMatch[2];
+        }
+        
+        // Check for season information using improved regex
+        const seasonRegex = /(?:Season |S0)(\d+)/i;
+        const seasonMatch = seasonRegex.exec(lastPrevElement);
+        
+        if (seasonMatch) {
+          currentSeason = parseInt(seasonMatch[1]);
+          console.log(`[UHDMovies] Found season ${currentSeason} header`);
+        }
+        
+        // If this is our target season, extract episode links
+        if (currentSeason === targetSeason) {
+          console.log(`[UHDMovies] Processing target season ${targetSeason}`);
+          
+          // Extract quality and size from the season header
+          let seasonQuality = 'Unknown Quality';
+          let seasonSize = 'Unknown';
+          
+          // Improved quality regex based on Kotlin code
+          const qualityRegex = /(1080p|720p|480p|2160p|4K|[0-9]*0p)/i;
+          const qualityMatch = qualityRegex.exec(lastPrevElement);
+          if (qualityMatch) {
+            seasonQuality = qualityMatch[1];
+          }
+          
+          // Extract size
+          const sizeRegex = /\d+(?:\.\d+)?\s*(?:MB|GB)\b/i;
+          const sizeMatch = sizeRegex.exec(lastPrevElement);
+          if (sizeMatch) {
+            seasonSize = sizeMatch[0];
+          }
+          
+          // Find all episode links in this container
+          const episodeLinkRegex = /<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)">([^<]*Episode[^<]*)<\/a>/gi;
+          let episodeMatch;
+          let episodeIndex = 1;
+          
+          while ((episodeMatch = episodeLinkRegex.exec(containerContent)) !== null) {
+            const url = episodeMatch[1];
+            const episodeText = episodeMatch[2];
+            
+            // Extract episode number from the link text
+            const episodeNumberRegex = /Episode\s*(\d+)/i;
+            const episodeNumberMatch = episodeNumberRegex.exec(episodeText);
+            const episodeNumber = episodeNumberMatch ? parseInt(episodeNumberMatch[1]) : episodeIndex;
+            
+            // Check if this is our target episode
+            if (episodeNumber === targetEpisode) {
+              console.log(`[UHDMovies] Found target episode ${targetEpisode} link`);
+              foundTargetEpisode = true;
+              
+              // Use season quality or extract from episode context
+              let quality = seasonQuality !== 'Unknown Quality' ? seasonQuality : pageTitleQualities;
+              let size = seasonSize !== 'Unknown' ? seasonSize : 'Unknown';
+              
+              // Try to extract more specific quality from episode context
+              const episodeContext = containerContent.substring(
+                Math.max(0, episodeMatch.index - 200),
+                Math.min(containerContent.length, episodeMatch.index + 200)
+              );
+              
+              const contextQuality = extractQualityFromTitle(episodeContext);
+              if (contextQuality !== 'Unknown Quality') {
+                quality = contextQuality;
+              }
+              
+              // Extract size from episode context if not found in season header
+              if (size === 'Unknown') {
+                const contextSizeMatch = episodeContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) || 
+                                        episodeContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
+                if (contextSizeMatch) {
+                  size = contextSizeMatch[1];
+                }
+              }
+              
+              // Clean quality text
+              const cleanQuality = extractCleanQuality(quality);
+              
+              links.push({
+                url,
+                quality: cleanQuality,
+                size: size,
+                rawQuality: quality,
+                episodeNumber: episodeNumber,
+                episodeText: episodeText
+              });
+            }
+            
+            episodeIndex++;
+          }
+        }
+        
+        // If we found our target episode, we can stop searching
+        if (foundTargetEpisode) {
+          break;
+        }
+      }
+    }
+    
+    // Fallback method if no links found using the improved approach
+    if (links.length === 0) {
+      console.log('[UHDMovies] Improved method found no links, trying fallback...');
+      
+      // Look for any download links and try to match them with episode patterns
+      const allDownloadLinks = [...html.matchAll(/<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)"/gi)];
+      
+      for (const linkMatch of allDownloadLinks) {
+        const url = linkMatch[1];
+        const linkIndex = html.indexOf(linkMatch[0]);
+        const contextBefore = html.substring(Math.max(0, linkIndex - 1000), linkIndex);
+        const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
+        const fullContext = contextBefore + contextAfter;
+        
+        // Check for season and episode in context using improved regex
+        const seasonRegex = new RegExp(`(?:Season |S0)\\s*0*${targetSeason}(?!\\d)`, 'i');
+        const episodeRegex = new RegExp(`(?:Episode|Ep|E)\\s*0*${targetEpisode}(?!\\d)`, 'i');
+        
+        if (seasonRegex.test(fullContext) && episodeRegex.test(fullContext)) {
+          console.log(`[UHDMovies] Fallback found matching link for S${targetSeason}E${targetEpisode}`);
+          
+          // Extract quality and size from context
+          let quality = pageTitleQualities;
+          let size = 'Unknown';
+          
+          const contextQuality = extractQualityFromTitle(fullContext);
+          if (contextQuality !== 'Unknown Quality') {
+            quality = contextQuality;
+          }
+          
+          const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) || 
+                           fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
+          if (sizeMatch) {
+            size = sizeMatch[1];
+          }
+          
+          const cleanQuality = extractCleanQuality(quality);
+          
+          links.push({
+            url,
+            quality: cleanQuality,
+            size: size,
+            rawQuality: quality
+          });
+        }
+      }
+    }
+    
+    console.log(`[UHDMovies] Found ${links.length} episode links for S${targetSeason}E${targetEpisode}`);
+    return links;
+  } catch (error) {
+    console.error(`[UHDMovies] Failed to extract TV show links: ${error.message}`);
+    return [];
+  }
+}
+
 // Main function - this is the interface our local scraper service expects
 async function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
@@ -856,8 +1056,13 @@ async function getStreams(tmdbId, mediaType = 'movie', season = null, episode = 
     const bestMatch = searchResults.find(result => compareMedia(mediaInfo, result)) || searchResults[0];
     console.log(`[UHDMovies] Using result: "${bestMatch.title}" (${bestMatch.year})`);
     
-    // Extract download links
-    const downloadLinks = await extractDownloadLinks(bestMatch.url);
+    // Extract download links based on media type
+    let downloadLinks = [];
+    if (mediaType === 'tv' && season && episode) {
+      downloadLinks = await extractTvShowDownloadLinks(bestMatch.url, season, episode);
+    } else {
+      downloadLinks = await extractDownloadLinks(bestMatch.url);
+    }
     
     if (downloadLinks.length === 0) {
       console.log(`[UHDMovies] No download links found`);
