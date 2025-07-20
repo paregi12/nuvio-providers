@@ -244,6 +244,35 @@ function compareMedia(mediaInfo, searchResult) {
   return titleMatch && yearMatch;
 }
 
+// Extract quality information from page title
+function extractQualityFromTitle(pageTitle) {
+  if (!pageTitle) return 'Unknown Quality';
+  
+  const qualities = [];
+  const title = pageTitle.toLowerCase();
+  
+  // Extract resolution
+  if (title.includes('2160p') || title.includes('4k')) {
+    qualities.push('4K');
+  } else if (title.includes('1080p')) {
+    qualities.push('1080p');
+  } else if (title.includes('720p')) {
+    qualities.push('720p');
+  } else if (title.includes('480p')) {
+    qualities.push('480p');
+  }
+  
+  // Extract special features
+  if (title.includes('hdr')) qualities.push('HDR');
+  if (title.includes('dolby vision') || title.includes('dv')) qualities.push('DV');
+  if (title.includes('imax')) qualities.push('IMAX');
+  if (title.includes('bluray') || title.includes('blu-ray')) qualities.push('BluRay');
+  if (title.includes('hevc') || title.includes('x265')) qualities.push('HEVC');
+  if (title.includes('10bit')) qualities.push('10bit');
+  
+  return qualities.length > 0 ? qualities.join(' | ') : 'Unknown Quality';
+}
+
 // Extract download links from movie page
 async function extractDownloadLinks(movieUrl) {
   try {
@@ -253,7 +282,11 @@ async function extractDownloadLinks(movieUrl) {
     const html = await response.text();
     
     const links = [];
-    let currentQuality = 'Unknown Quality';
+    
+    // Extract page title for quality info
+    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+    const pageTitle = titleMatch ? titleMatch[1] : '';
+    const pageTitleQualities = extractQualityFromTitle(pageTitle);
     
     // Look for download links with the new patterns
     const downloadLinkRegex = /<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)"/gi;
@@ -266,17 +299,25 @@ async function extractDownloadLinks(movieUrl) {
         // Look for quality information before this link
         const linkIndex = html.indexOf(match[0]);
         const contextBefore = html.substring(Math.max(0, linkIndex - 1000), linkIndex);
+        const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
+        const fullContext = contextBefore + contextAfter;
+        
+        let currentQuality = 'Unknown Quality';
+        let size = 'Unknown';
         
         // Look for quality headers (usually in <pre>, <p><strong>, etc.)
         const qualityPatterns = [
           /<(?:pre|p|h[1-6])[^>]*>\s*<(?:strong|b)[^>]*>([^<]+)<\/(?:strong|b)>\s*<\/(?:pre|p|h[1-6])>/gi,
           /<(?:pre|p)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:pre|p)>/gi,
-          /<(?:strong|b)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:strong|b)>/gi
+          /<(?:strong|b)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:strong|b)>/gi,
+          // Look for text patterns that contain quality info
+          /\b((?:720p|1080p|2160p|4K).*?(?:HEVC|x264|x265).*?)\b/gi,
+          /\b((?:HEVC|x264|x265).*?(?:720p|1080p|2160p|4K).*?)\b/gi
         ];
         
         let qualityFound = false;
         for (const pattern of qualityPatterns) {
-          const qualityMatches = [...contextBefore.matchAll(pattern)];
+          const qualityMatches = [...fullContext.matchAll(pattern)];
           if (qualityMatches.length > 0) {
             const lastMatch = qualityMatches[qualityMatches.length - 1];
             if (lastMatch[1] && lastMatch[1].trim().length > 5) {
@@ -287,9 +328,27 @@ async function extractDownloadLinks(movieUrl) {
           }
         }
         
-        // Extract size from quality text
-        const sizeMatch = currentQuality.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i);
-        const size = sizeMatch ? sizeMatch[1] : 'Unknown';
+        // If no quality found in context, extract from nearby text
+        if (!qualityFound) {
+          const nearbyText = fullContext.replace(/<[^>]*>/g, ' ');
+          const extractedQuality = extractQualityFromTitle(nearbyText);
+          if (extractedQuality !== 'Unknown Quality') {
+            currentQuality = extractedQuality;
+            qualityFound = true;
+          }
+        }
+        
+        // Fallback to page title qualities if still no quality found
+        if (!qualityFound && pageTitleQualities !== 'Unknown Quality') {
+          currentQuality = pageTitleQualities;
+        }
+        
+        // Extract size from quality text or context
+        const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) || 
+                         fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
+        if (sizeMatch) {
+          size = sizeMatch[1];
+        }
         
         // Clean quality text
         const cleanQuality = extractCleanQuality(currentQuality);
