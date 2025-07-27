@@ -12,7 +12,8 @@
         "tv"
       ],
       "filename": "uhdmovies.js",
-      "enabled": true
+      "enabled": true,
+      "logo": "https://uhdmovies.cat/wp-content/uploads/2021/03/cropped-output-onlinepngtools-1-32x32.png"
     },
     {
       "id": "moviesmod",
@@ -25,7 +26,8 @@
         "tv"
       ],
       "filename": "moviesmod.js",
-      "enabled": false
+      "enabled": false,
+      "logo": "https://raw.githubusercontent.com/tapframe/nuvio-providers/main/logos/moviesmod.png"
     }
   ]
 }
