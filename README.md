@@ -23,7 +23,7 @@ This repository contains local scrapers for the Nuvio streaming application. The
 
 2. **GitHub Repository URL:**
    ```
-   https://raw.githubusercontent.com/YOUR_USERNAME/nuvio-local-scrapers/main/
+   https://raw.githubusercontent.com/tapframe/nuvio-local-scrapers/main/
    ```
 
 ## Available Scrapers
@@ -832,5 +832,3 @@ For issues or questions:
 - Join the community discussions
 
 ---
-
-**Note:** Replace `YOUR_USERNAME` with your actual GitHub username when publishing.
