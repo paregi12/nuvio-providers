@@ -28,6 +28,20 @@
       "filename": "moviesmod.js",
       "enabled": false,
       "logo": "https://moviesmod.tube/wp-content/uploads/2022/10/moviesmod.png"
+    },
+    {
+      "id": "hdrezka",
+      "name": "HDRezka",
+      "description": "High-quality movie and TV show streams",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "hdrezka.js",
+      "enabled": true,
+      "logo": "https://hdrezka.ag/templates/hdrezka/images/favicon.ico"
     }
   ]
 }

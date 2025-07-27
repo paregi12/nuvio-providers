@@ -8,8 +8,10 @@ This repository contains local scrapers for the Nuvio streaming application. The
 ├── manifest.json          # Repository manifest with scraper definitions
 ├── uhdmovies.js           # UHD Movies scraper
 ├── moviesmod.js           # MoviesMod scraper
+├── hdrezka.js             # HDRezka scraper
 ├── test_uhdmovies.js      # Test file for UHD Movies scraper
 ├── test_moviesmod.js      # Test file for MoviesMod scraper
+├── test_hdrezka.js        # Test file for HDRezka scraper
 └── README.md              # This file
 ```
 
@@ -40,6 +42,13 @@ This repository contains local scrapers for the Nuvio streaming application. The
 - **Content:** Movies and TV shows with multiple quality options
 - **Formats:** 720p, 1080p, 4K with various encodings (x264, x265/HEVC, 10-bit)
 - **Features:** Dynamic domain fetching, SID link resolution, multiple tech domains
+- **Status:** Active
+
+### HDRezka
+- **Source:** HDRezka website
+- **Content:** High-quality movies and TV shows with subtitle support
+- **Formats:** 360p, 480p, 720p, 1080p Ultra (premium content requires login)
+- **Features:** Multi-language subtitles (Russian, Ukrainian, English), episode-specific streaming
 - **Status:** Active
 
 ## Scraper Development
