@@ -748,6 +748,12 @@ async function getFinalLink(driveleechUrl) {
         const finalUrl = await method.func(finalHtml);
 
         if (finalUrl) {
+          // Check if URL validation is enabled
+          if (typeof URL_VALIDATION_ENABLED !== 'undefined' && !URL_VALIDATION_ENABLED) {
+            console.log(`[UHDMovies] ✓ URL validation disabled, accepting ${method.name} result`);
+            return { url: finalUrl, size: sizeInfo, fileName: fileName };
+          }
+          
           const isValid = await validateVideoUrl(finalUrl);
           if (isValid) {
             console.log(`[UHDMovies] ✓ Successfully resolved using ${method.name}`);

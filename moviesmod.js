@@ -683,6 +683,13 @@ async function processDownloadLink(link, selectedResult, mediaType, episodeNum) 
               }
 
               if (finalDownloadUrl) {
+                // Check if URL validation is enabled
+                if (typeof URL_VALIDATION_ENABLED !== 'undefined' && !URL_VALIDATION_ENABLED) {
+                  usedMethod = option.title;
+                  console.log(`[MoviesMod] ✓ URL validation disabled, accepting ${usedMethod} result`);
+                  break;
+                }
+                
                 const isValid = await validateVideoUrl(finalDownloadUrl);
                 if (isValid) {
                   usedMethod = option.title;
