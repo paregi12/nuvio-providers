@@ -592,13 +592,13 @@ async function processDownloadLink(link) {
    git add .
    git commit -m "Initial commit with UHD Movies scraper"
    git branch -M main
-   git remote add origin https://github.com/YOUR_USERNAME/nuvio-local-scrapers.git
+   git remote add origin https://github.com/tapframe/nuvio-local-scrapers.git
    git push -u origin main
    ```
 
 3. **Get the raw URL:**
    ```
-   https://raw.githubusercontent.com/YOUR_USERNAME/nuvio-local-scrapers/main/
+   https://raw.githubusercontent.com/tapframe/nuvio-local-scrapers/main/
    ```
 
 ## Contributing
@@ -608,7 +608,7 @@ async function processDownloadLink(link) {
 1. **Fork this repository**
    ```bash
    # Clone your fork
-   git clone https://github.com/YOUR_USERNAME/nuvio-local-scrapers.git
+   git clone https://github.com/tapframe/nuvio-local-scrapers.git
    cd nuvio-local-scrapers
    ```
 
