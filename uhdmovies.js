@@ -1,5 +1,13 @@
 // UHD Movies Scraper for Nuvio Local Scrapers
-// React Native compatible version based on original Node.js implementation
+// React Native compatible version with Cheerio support
+
+// Import cheerio for React Native
+let cheerio = null;
+try {
+  cheerio = require('react-native-cheerio');
+} catch (error) {
+  console.warn('[UHDMovies] react-native-cheerio not found, falling back to regex parsing');
+}
 
 // Constants
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
@@ -25,7 +33,7 @@ async function getUHDMoviesDomain() {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
     });
-    
+
     if (response.ok) {
       const data = await response.json();
       if (data && data.UHDMovies) {
@@ -37,7 +45,7 @@ async function getUHDMoviesDomain() {
   } catch (error) {
     console.error(`[UHDMovies] Failed to fetch latest domain: ${error.message}`);
   }
-  
+
   return uhdMoviesDomain;
 }
 
@@ -72,87 +80,91 @@ async function searchMovies(query) {
   try {
     const domain = await getUHDMoviesDomain();
     const searchUrl = `${domain}/search/${encodeURIComponent(query)}`;
-    
+
     console.log(`[UHDMovies] Searching: ${searchUrl}`);
-    
+
     const response = await makeRequest(searchUrl);
     const html = await response.text();
-    
+
     const results = [];
-    
-    // Look for grid-based search results (article.gridlove-post)
-    const gridPostRegex = /<article[^>]*class="[^"]*gridlove-post[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
-    let gridMatch;
-    
-    while ((gridMatch = gridPostRegex.exec(html)) !== null) {
-      const articleContent = gridMatch[1];
-      
-      // Look for download links within this article
-      const downloadLinkRegex = /<a[^>]*href="([^"]*\/download-[^"]*)"/i;
-      const linkMatch = downloadLinkRegex.exec(articleContent);
-      
-      if (linkMatch) {
-        const link = linkMatch[1];
-        
-        // Extract title from title attribute or h1.sanket
-        const titleAttrRegex = /<a[^>]*title="([^"]+)"/i;
-        const h1SanketRegex = /<h1[^>]*class="[^"]*sanket[^"]*"[^>]*>([^<]+)<\/h1>/i;
-        
-        const titleAttrMatch = titleAttrRegex.exec(articleContent);
-        const h1SanketMatch = h1SanketRegex.exec(articleContent);
-        
-        const title = (titleAttrMatch && titleAttrMatch[1]) || (h1SanketMatch && h1SanketMatch[1]) || '';
-        
-        if (title && !results.some(item => item.url === link)) {
-          // Extract year from title
-          const yearMatch = title.match(/\((\d{4})\)/);
-          const year = yearMatch ? parseInt(yearMatch[1]) : null;
-          
-          results.push({
-            title: title.replace(/\(\d{4}\)/, '').trim(),
-            year,
-            url: link.startsWith('http') ? link : `${domain}${link}`
-          });
-        }
-      }
-    }
-    
-    // Fallback for original list-based search if new logic fails
-    if (results.length === 0) {
-      console.log('[UHDMovies] Grid search logic found no results, trying original list-based logic...');
-      const downloadLinkRegex = /<a[^>]*href="([^"]*\/download-[^"]*)"/gi;
-      let linkMatch;
-      
-      while ((linkMatch = downloadLinkRegex.exec(html)) !== null) {
-        const link = linkMatch[1];
-        
-        if (link && !results.some(item => item.url === link)) {
-          // Try to find title near the link
-          const linkIndex = html.indexOf(linkMatch[0]);
-          const contextBefore = html.substring(Math.max(0, linkIndex - 500), linkIndex);
-          const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
-          
-          // Look for title in various patterns
-          const titlePatterns = [
-            /<title>([^<]+)<\/title>/i,
-            /<h[1-6][^>]*>([^<]+)<\/h[1-6]>/i,
-            /title="([^"]+)"/i
-          ];
-          
-          let title = '';
-          for (const pattern of titlePatterns) {
-            const match = pattern.exec(contextBefore + contextAfter);
-            if (match && match[1]) {
-              title = match[1].trim();
-              break;
-            }
-          }
-          
-          if (title) {
+
+    if (cheerio) {
+      // Use Cheerio for better DOM parsing
+      const $ = cheerio.load(html);
+
+      // New logic for grid-based search results
+      $('article.gridlove-post').each((index, element) => {
+        const linkElement = $(element).find('a[href*="/download-"]');
+        if (linkElement.length > 0) {
+          const link = linkElement.first().attr('href');
+          // Prefer the 'title' attribute, fallback to h1 text
+          const title = linkElement.first().attr('title') || $(element).find('h1.sanket').text().trim();
+
+          if (link && title && !results.some(item => item.url === link)) {
             // Extract year from title
             const yearMatch = title.match(/\((\d{4})\)/);
             const year = yearMatch ? parseInt(yearMatch[1]) : null;
-            
+
+            results.push({
+              title: title.replace(/\(\d{4}\)/, '').trim(),
+              year,
+              url: link.startsWith('http') ? link : `${domain}${link}`
+            });
+          }
+        }
+      });
+
+      // Fallback for original list-based search if new logic fails
+      if (results.length === 0) {
+        console.log('[UHDMovies] Grid search logic found no results, trying original list-based logic...');
+        $('a[href*="/download-"]').each((index, element) => {
+          const link = $(element).attr('href');
+          // Avoid duplicates by checking if link already exists in results
+          if (link && !results.some(item => item.url === link)) {
+            const title = $(element).text().trim();
+            if (title) {
+              // Extract year from title
+              const yearMatch = title.match(/\((\d{4})\)/);
+              const year = yearMatch ? parseInt(yearMatch[1]) : null;
+
+              results.push({
+                title: title.replace(/\(\d{4}\)/, '').trim(),
+                year,
+                url: link.startsWith('http') ? link : `${domain}${link}`
+              });
+            }
+          }
+        });
+      }
+    } else {
+      // Fallback to regex parsing if Cheerio is not available
+      const gridPostRegex = /<article[^>]*class="[^"]*gridlove-post[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
+      let gridMatch;
+
+      while ((gridMatch = gridPostRegex.exec(html)) !== null) {
+        const articleContent = gridMatch[1];
+
+        // Look for download links within this article
+        const downloadLinkRegex = /<a[^>]*href="([^"]*\/download-[^"]*)"/i;
+        const linkMatch = downloadLinkRegex.exec(articleContent);
+
+        if (linkMatch) {
+          const link = linkMatch[1];
+
+          // Extract title from title attribute or h1.sanket
+          const titleAttrRegex = /<a[^>]*title="([^"]+)"/i;
+          const h1SanketRegex = /<h1[^>]*class="[^"]*sanket[^"]*"[^>]*>([^<]+)<\/h1>/i;
+
+          const titleAttrMatch = titleAttrRegex.exec(articleContent);
+          const h1SanketMatch = h1SanketRegex.exec(articleContent);
+
+          const title = (titleAttrMatch && titleAttrMatch[1]) || (h1SanketMatch && h1SanketMatch[1]) || '';
+
+          if (title && !results.some(item => item.url === link)) {
+            // Extract year from title
+            const yearMatch = title.match(/\((\d{4})\)/);
+            const year = yearMatch ? parseInt(yearMatch[1]) : null;
+
             results.push({
               title: title.replace(/\(\d{4}\)/, '').trim(),
               year,
@@ -162,7 +174,7 @@ async function searchMovies(query) {
         }
       }
     }
-    
+
     console.log(`[UHDMovies] Found ${results.length} search results`);
     return results;
   } catch (error) {
@@ -236,21 +248,21 @@ function extractCleanQuality(fullQualityText) {
 // Compare media info with search results
 function compareMedia(mediaInfo, searchResult) {
   const titleMatch = mediaInfo.title.toLowerCase().includes(searchResult.title.toLowerCase()) ||
-                    searchResult.title.toLowerCase().includes(mediaInfo.title.toLowerCase());
-  
-  const yearMatch = !mediaInfo.year || !searchResult.year || 
-                   Math.abs(mediaInfo.year - searchResult.year) <= 1;
-  
+    searchResult.title.toLowerCase().includes(mediaInfo.title.toLowerCase());
+
+  const yearMatch = !mediaInfo.year || !searchResult.year ||
+    Math.abs(mediaInfo.year - searchResult.year) <= 1;
+
   return titleMatch && yearMatch;
 }
 
 // Extract quality information from page title
 function extractQualityFromTitle(pageTitle) {
   if (!pageTitle) return 'Unknown Quality';
-  
+
   const qualities = [];
   const title = pageTitle.toLowerCase();
-  
+
   // Extract resolution
   if (title.includes('2160p') || title.includes('4k')) {
     qualities.push('4K');
@@ -261,7 +273,7 @@ function extractQualityFromTitle(pageTitle) {
   } else if (title.includes('480p')) {
     qualities.push('480p');
   }
-  
+
   // Extract special features
   if (title.includes('hdr')) qualities.push('HDR');
   if (title.includes('dolby vision') || title.includes('dv')) qualities.push('DV');
@@ -269,99 +281,230 @@ function extractQualityFromTitle(pageTitle) {
   if (title.includes('bluray') || title.includes('blu-ray')) qualities.push('BluRay');
   if (title.includes('hevc') || title.includes('x265')) qualities.push('HEVC');
   if (title.includes('10bit')) qualities.push('10bit');
-  
+
   return qualities.length > 0 ? qualities.join(' | ') : 'Unknown Quality';
 }
 
 // Extract download links from movie page
-async function extractDownloadLinks(movieUrl) {
+async function extractDownloadLinks(movieUrl, targetYear = null) {
   try {
     console.log(`[UHDMovies] Extracting links from: ${movieUrl}`);
-    
+
     const response = await makeRequest(movieUrl);
     const html = await response.text();
-    
+
     const links = [];
-    
-    // Extract page title for quality info
-    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-    const pageTitle = titleMatch ? titleMatch[1] : '';
-    const pageTitleQualities = extractQualityFromTitle(pageTitle);
-    
-    // Look for download links with the new patterns
-    const downloadLinkRegex = /<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)"/gi;
-    let match;
-    
-    while ((match = downloadLinkRegex.exec(html)) !== null) {
-      const url = match[1];
-      
-      if (!links.some(link => link.url === url)) {
-        // Look for quality information before this link
-        const linkIndex = html.indexOf(match[0]);
-        const contextBefore = html.substring(Math.max(0, linkIndex - 1000), linkIndex);
-        const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
-        const fullContext = contextBefore + contextAfter;
-        
-        let currentQuality = 'Unknown Quality';
-        let size = 'Unknown';
-        
-        // Look for quality headers (usually in <pre>, <p><strong>, etc.)
-        const qualityPatterns = [
-          /<(?:pre|p|h[1-6])[^>]*>\s*<(?:strong|b)[^>]*>([^<]+)<\/(?:strong|b)>\s*<\/(?:pre|p|h[1-6])>/gi,
-          /<(?:pre|p)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:pre|p)>/gi,
-          /<(?:strong|b)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:strong|b)>/gi,
-          // Look for text patterns that contain quality info
-          /\b((?:720p|1080p|2160p|4K).*?(?:HEVC|x264|x265).*?)\b/gi,
-          /\b((?:HEVC|x264|x265).*?(?:720p|1080p|2160p|4K).*?)\b/gi
-        ];
-        
-        let qualityFound = false;
-        for (const pattern of qualityPatterns) {
-          const qualityMatches = [...fullContext.matchAll(pattern)];
-          if (qualityMatches.length > 0) {
-            const lastMatch = qualityMatches[qualityMatches.length - 1];
-            if (lastMatch[1] && lastMatch[1].trim().length > 5) {
-              currentQuality = lastMatch[1].trim();
-              qualityFound = true;
-              break;
+
+    if (cheerio) {
+      // Use Cheerio for better DOM parsing (same as Node.js version)
+      const $ = cheerio.load(html);
+      const movieTitle = $('h1').first().text().trim();
+
+      // Find all download links (the new SID links) and their associated quality information
+      $('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"]').each((index, element) => {
+        const link = $(element).attr('href');
+
+        if (link && !links.some(item => item.url === link)) {
+          let quality = 'Unknown Quality';
+          let size = 'Unknown';
+
+          // Method 1: Look for quality in the closest preceding paragraph or heading
+          const prevElement = $(element).closest('p').prev();
+          if (prevElement.length > 0) {
+            const prevText = prevElement.text().trim();
+            if (prevText && prevText.length > 20 && !prevText.includes('Download')) {
+              quality = prevText;
             }
           }
-        }
-        
-        // If no quality found in context, extract from nearby text
-        if (!qualityFound) {
-          const nearbyText = fullContext.replace(/<[^>]*>/g, ' ');
-          const extractedQuality = extractQualityFromTitle(nearbyText);
-          if (extractedQuality !== 'Unknown Quality') {
-            currentQuality = extractedQuality;
-            qualityFound = true;
+
+          // Method 2: Look for quality in parent's siblings
+          if (quality === 'Unknown Quality') {
+            const parentSiblings = $(element).parent().prevAll().first().text().trim();
+            if (parentSiblings && parentSiblings.length > 20) {
+              quality = parentSiblings;
+            }
           }
+
+          // Method 3: Look for bold/strong text above the link
+          if (quality === 'Unknown Quality') {
+            const strongText = $(element).closest('p').prevAll().find('strong, b').last().text().trim();
+            if (strongText && strongText.length > 20) {
+              quality = strongText;
+            }
+          }
+
+          // Method 4: Look for the entire paragraph containing quality info
+          if (quality === 'Unknown Quality') {
+            let currentElement = $(element).parent();
+            for (let i = 0; i < 5; i++) {
+              currentElement = currentElement.prev();
+              if (currentElement.length === 0) break;
+
+              const text = currentElement.text().trim();
+              if (text && text.length > 30 &&
+                (text.includes('1080p') || text.includes('720p') || text.includes('2160p') ||
+                  text.includes('4K') || text.includes('HEVC') || text.includes('x264') || text.includes('x265'))) {
+                quality = text;
+                break;
+              }
+            }
+          }
+
+          // Year-based filtering for collections
+          if (targetYear && quality !== 'Unknown Quality') {
+            // Check for years in quality text
+            const yearMatches = quality.match(/\((\d{4})\)/g);
+            let hasMatchingYear = false;
+
+            if (yearMatches && yearMatches.length > 0) {
+              for (const yearMatch of yearMatches) {
+                const year = parseInt(yearMatch.replace(/[()]/g, ''));
+                if (year === targetYear) {
+                  hasMatchingYear = true;
+                  break;
+                }
+              }
+              if (!hasMatchingYear) {
+                console.log(`[UHDMovies] Skipping link due to year mismatch. Target: ${targetYear}, Found: ${yearMatches.join(', ')} in "${quality}"`);
+                return; // Skip this link
+              }
+            } else {
+              // If no year in quality text, check filename and other indicators
+              const linkText = $(element).text().trim();
+              const parentText = $(element).parent().text().trim();
+              const combinedText = `${quality} ${linkText} ${parentText}`;
+
+              // Look for years in combined text
+              const allYearMatches = combinedText.match(/\((\d{4})\)/g) || combinedText.match(/(\d{4})/g);
+              if (allYearMatches) {
+                let foundTargetYear = false;
+                for (const yearMatch of allYearMatches) {
+                  const year = parseInt(yearMatch.replace(/[()]/g, ''));
+                  if (year >= 1900 && year <= 2030) { // Valid movie year range
+                    if (year === targetYear) {
+                      foundTargetYear = true;
+                      break;
+                    }
+                  }
+                }
+                if (!foundTargetYear && allYearMatches.length > 0) {
+                  console.log(`[UHDMovies] Skipping link due to no matching year found. Target: ${targetYear}, Found years: ${allYearMatches.join(', ')} in combined text`);
+                  return; // Skip this link
+                }
+              }
+
+              // Additional check: if quality contains movie names that don't match target year
+              const lowerQuality = quality.toLowerCase();
+              if (targetYear === 2015) {
+                if (lowerQuality.includes('wasp') || lowerQuality.includes('quantumania')) {
+                  console.log(`[UHDMovies] Skipping link for 2015 target as it contains 'wasp' or 'quantumania': "${quality}"`);
+                  return; // Skip this link
+                }
+              }
+            }
+          }
+
+          // Extract size from quality text if present
+          const sizeMatch = quality.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
+          if (sizeMatch) {
+            size = sizeMatch[1];
+          }
+
+          // Clean up the quality information
+          const cleanQuality = extractCleanQuality(quality);
+
+          links.push({
+            url: link,
+            quality: cleanQuality,
+            size: size,
+            rawQuality: quality.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim()
+          });
         }
-        
-        // Fallback to page title qualities if still no quality found
-        if (!qualityFound && pageTitleQualities !== 'Unknown Quality') {
-          currentQuality = pageTitleQualities;
+      });
+    } else {
+      // Fallback to regex parsing if Cheerio is not available
+      console.log('[UHDMovies] Cheerio not available, using regex fallback for movies');
+
+      // Extract page title for quality info
+      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+      const pageTitle = titleMatch ? titleMatch[1] : '';
+      const pageTitleQualities = extractQualityFromTitle(pageTitle);
+
+      // Look for download links with the new patterns
+      const downloadLinkRegex = /<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)"/gi;
+      let match;
+
+      while ((match = downloadLinkRegex.exec(html)) !== null) {
+        const url = match[1];
+
+        if (!links.some(link => link.url === url)) {
+          // Look for quality information before this link
+          const linkIndex = html.indexOf(match[0]);
+          const contextBefore = html.substring(Math.max(0, linkIndex - 1000), linkIndex);
+          const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
+          const fullContext = contextBefore + contextAfter;
+
+          let currentQuality = 'Unknown Quality';
+          let size = 'Unknown';
+
+          // Look for quality headers (usually in <pre>, <p><strong>, etc.)
+          const qualityPatterns = [
+            /<(?:pre|p|h[1-6])[^>]*>\s*<(?:strong|b)[^>]*>([^<]+)<\/(?:strong|b)>\s*<\/(?:pre|p|h[1-6])>/gi,
+            /<(?:pre|p)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:pre|p)>/gi,
+            /<(?:strong|b)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:strong|b)>/gi,
+            // Look for text patterns that contain quality info
+            /\b((?:720p|1080p|2160p|4K).*?(?:HEVC|x264|x265).*?)\b/gi,
+            /\b((?:HEVC|x264|x265).*?(?:720p|1080p|2160p|4K).*?)\b/gi
+          ];
+
+          let qualityFound = false;
+          for (const pattern of qualityPatterns) {
+            const qualityMatches = [...fullContext.matchAll(pattern)];
+            if (qualityMatches.length > 0) {
+              const lastMatch = qualityMatches[qualityMatches.length - 1];
+              if (lastMatch[1] && lastMatch[1].trim().length > 5) {
+                currentQuality = lastMatch[1].trim();
+                qualityFound = true;
+                break;
+              }
+            }
+          }
+
+          // If no quality found in context, extract from nearby text
+          if (!qualityFound) {
+            const nearbyText = fullContext.replace(/<[^>]*>/g, ' ');
+            const extractedQuality = extractQualityFromTitle(nearbyText);
+            if (extractedQuality !== 'Unknown Quality') {
+              currentQuality = extractedQuality;
+              qualityFound = true;
+            }
+          }
+
+          // Fallback to page title qualities if still no quality found
+          if (!qualityFound && pageTitleQualities !== 'Unknown Quality') {
+            currentQuality = pageTitleQualities;
+          }
+
+          // Extract size from quality text or context
+          const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) ||
+            fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
+          if (sizeMatch) {
+            size = sizeMatch[1];
+          }
+
+          // Clean quality text
+          const cleanQuality = extractCleanQuality(currentQuality);
+
+          links.push({
+            url,
+            quality: cleanQuality,
+            size: size,
+            rawQuality: currentQuality
+          });
         }
-        
-        // Extract size from quality text or context
-        const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) || 
-                         fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
-        if (sizeMatch) {
-          size = sizeMatch[1];
-        }
-        
-        // Clean quality text
-        const cleanQuality = extractCleanQuality(currentQuality);
-        
-        links.push({
-          url,
-          quality: cleanQuality,
-          size: size,
-          rawQuality: currentQuality
-        });
       }
     }
-    
+
     console.log(`[UHDMovies] Extracted ${links.length} download links`);
     return links;
   } catch (error) {
@@ -373,13 +516,13 @@ async function extractDownloadLinks(movieUrl) {
 // Parse size string to bytes for sorting
 function parseSize(sizeString) {
   if (!sizeString || typeof sizeString !== 'string') return 0;
-  
+
   const match = sizeString.match(/(\d+(?:\.\d+)?)\s*(GB|MB|TB)/i);
   if (!match) return 0;
-  
+
   const value = parseFloat(match[1]);
   const unit = match[2].toUpperCase();
-  
+
   switch (unit) {
     case 'TB': return value * 1024 * 1024 * 1024 * 1024;
     case 'GB': return value * 1024 * 1024 * 1024;
@@ -392,24 +535,24 @@ function parseSize(sizeString) {
 async function resolveSidToDriveleech(sidUrl) {
   console.log(`[UHDMovies] Resolving SID link: ${sidUrl}`);
   const origin = new URL(sidUrl).origin;
-  
+
   try {
     // Step 0: Get the _wp_http value
     console.log("  [SID] Step 0: Fetching initial page...");
     const responseStep0 = await makeRequest(sidUrl);
     const html0 = await responseStep0.text();
-    
+
     const wpHttpRegex = /<input[^>]*name="_wp_http"[^>]*value="([^"]*)"[^>]*>/i;
     const actionRegex = /<form[^>]*id="landing"[^>]*action="([^"]*)"[^>]*>/i;
-    
+
     const wpHttpMatch = wpHttpRegex.exec(html0);
     const actionMatch = actionRegex.exec(html0);
-    
+
     if (!wpHttpMatch || !actionMatch) {
       console.error("  [SID] Error: Could not find _wp_http in initial form.");
       return null;
     }
-    
+
     const wpHttp = wpHttpMatch[1];
     const actionUrl = actionMatch[1];
 
@@ -419,13 +562,13 @@ async function resolveSidToDriveleech(sidUrl) {
     const responseStep1 = await fetch(actionUrl, {
       method: 'POST',
       body: step1Data,
-      headers: { 
-        'Referer': sidUrl, 
+      headers: {
+        'Referer': sidUrl,
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
       }
     });
-    
+
     const html1 = await responseStep1.text();
 
     // Step 2: Parse verification page for second form
@@ -433,16 +576,16 @@ async function resolveSidToDriveleech(sidUrl) {
     const action2Regex = /<form[^>]*id="landing"[^>]*action="([^"]*)"[^>]*>/i;
     const wpHttp2Regex = /<input[^>]*name="_wp_http2"[^>]*value="([^"]*)"[^>]*>/i;
     const tokenRegex = /<input[^>]*name="token"[^>]*value="([^"]*)"[^>]*>/i;
-    
+
     const action2Match = action2Regex.exec(html1);
     const wpHttp2Match = wpHttp2Regex.exec(html1);
     const tokenMatch = tokenRegex.exec(html1);
-    
+
     if (!action2Match) {
       console.error("  [SID] Error: Could not find verification form action.");
       return null;
     }
-    
+
     const action2Url = action2Match[1];
     const wpHttp2 = wpHttp2Match ? wpHttp2Match[1] : '';
     const token = tokenMatch ? tokenMatch[1] : '';
@@ -453,13 +596,13 @@ async function resolveSidToDriveleech(sidUrl) {
     const responseStep2 = await fetch(action2Url, {
       method: 'POST',
       body: step2Data,
-      headers: { 
-        'Referer': responseStep1.url, 
+      headers: {
+        'Referer': responseStep1.url,
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
       }
     });
-    
+
     const html2 = await responseStep2.text();
 
     // Step 4: Find dynamic cookie and link from JavaScript
@@ -494,19 +637,19 @@ async function resolveSidToDriveleech(sidUrl) {
     const cookieHeader = `${cookieName}=${cookieValue}`;
 
     const finalResponse = await fetch(finalUrl, {
-      headers: { 
+      headers: {
         'Referer': responseStep2.url,
         'Cookie': cookieHeader,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36'
       }
     });
-    
+
     const finalHtml = await finalResponse.text();
 
     // Step 6: Extract driveleech URL from meta refresh tag
     const metaRefreshRegex = /<meta[^>]*http-equiv="refresh"[^>]*content="[^"]*url=([^"]*)"[^>]*>/i;
     const metaMatch = metaRefreshRegex.exec(finalHtml);
-    
+
     if (metaMatch && metaMatch[1]) {
       const driveleechUrl = metaMatch[1].replace(/['"]/g, '');
       console.log(`  [SID] SUCCESS! Resolved Driveleech URL: ${driveleechUrl}`);
@@ -527,7 +670,7 @@ async function tryInstantDownload(html) {
   // Look for video-seed.pro or video-leech.pro links (the actual instant download pattern)
   const videoSeedRegex = /href="([^"]*(?:video-seed\.pro|video-leech\.pro)[^"]*)"/i;
   const match = videoSeedRegex.exec(html);
-  
+
   if (!match || !match[1]) {
     return null;
   }
@@ -588,7 +731,7 @@ async function tryResumeCloud(html) {
     /href="([^"]*zfile[^"]*)"/i,
     /<a[^>]*href="([^"]*)"[^>]*>.*?Resume Cloud.*?<\/a>/i
   ];
-  
+
   let resumeLink = null;
   for (const pattern of patterns) {
     const match = pattern.exec(html);
@@ -598,7 +741,7 @@ async function tryResumeCloud(html) {
       break;
     }
   }
-  
+
   if (!resumeLink) {
     console.log('[UHDMovies] No Resume Cloud link found');
     return null;
@@ -692,14 +835,14 @@ async function validateVideoUrl(url, timeout = 10000) {
 async function getFinalLink(driveleechUrl) {
   try {
     console.log(`[UHDMovies] Processing driveleech page: ${driveleechUrl}`);
-    
+
     const response = await makeRequest(driveleechUrl);
     const html = await response.text();
-    
+
     // Check for JavaScript redirect
     const jsRedirectRegex = /window\.location\.replace\("([^"]+)"\)/;
     const jsMatch = jsRedirectRegex.exec(html);
-    
+
     let finalHtml = html;
     if (jsMatch) {
       const newUrl = new URL(jsMatch[1], 'https://driveleech.net/').href;
@@ -707,34 +850,34 @@ async function getFinalLink(driveleechUrl) {
       const newResponse = await makeRequest(newUrl);
       finalHtml = await newResponse.text();
     }
-    
+
     // Extract size and filename information
     let sizeInfo = 'Unknown';
     let fileName = null;
-    
+
     const sizeRegex = /Size\s*:\s*([0-9.,]+\s*[KMGT]B)/i;
     const sizeMatch = sizeRegex.exec(finalHtml);
     if (sizeMatch) {
       sizeInfo = sizeMatch[1];
     }
-    
+
     const nameRegex = /Name\s*:\s*([^<\n]+)/i;
     const nameMatch = nameRegex.exec(finalHtml);
     if (nameMatch) {
       fileName = nameMatch[1].trim();
     }
-    
+
     // Try download methods
     const downloadMethods = [
       { name: 'Resume Cloud', func: tryResumeCloud },
       { name: 'Instant Download', func: tryInstantDownload }
     ];
-    
+
     for (const method of downloadMethods) {
       try {
         console.log(`[UHDMovies] Trying ${method.name}...`);
         const finalUrl = await method.func(finalHtml);
-        
+
         if (finalUrl) {
           const isValid = await validateVideoUrl(finalUrl);
           if (isValid) {
@@ -748,10 +891,10 @@ async function getFinalLink(driveleechUrl) {
         console.log(`[UHDMovies] ✗ ${method.name} failed: ${error.message}`);
       }
     }
-    
+
     console.log('[UHDMovies] ✗ All download methods failed');
     return null;
-    
+
   } catch (error) {
     console.error(`[UHDMovies] Error in getFinalLink: ${error.message}`);
     return null;
@@ -762,41 +905,41 @@ async function getFinalLink(driveleechUrl) {
 async function resolveDownloadLink(linkInfo) {
   try {
     console.log(`[UHDMovies] Resolving link: ${linkInfo.quality}`);
-    
+
     // Step 1: Resolve SID link to driveleech URL
     let driveleechUrl = null;
-    
-    if (linkInfo.url.includes('tech.unblockedgames.world') || 
-        linkInfo.url.includes('tech.examzculture.in') ||
-        linkInfo.url.includes('tech.creativeexpressionsblog.com')) {
+
+    if (linkInfo.url.includes('tech.unblockedgames.world') ||
+      linkInfo.url.includes('tech.examzculture.in') ||
+      linkInfo.url.includes('tech.creativeexpressionsblog.com')) {
       driveleechUrl = await resolveSidToDriveleech(linkInfo.url);
     } else if (linkInfo.url.includes('driveleech.net') || linkInfo.url.includes('driveseed.org')) {
       driveleechUrl = linkInfo.url;
     }
-    
+
     if (!driveleechUrl) {
       console.log(`[UHDMovies] Could not resolve SID link for ${linkInfo.quality}`);
       return null;
     }
-    
+
     // Filter out non-driveleech/driveseed URLs
     if (!driveleechUrl.includes('driveleech.net') && !driveleechUrl.includes('driveseed.org')) {
       console.log(`[UHDMovies] Skipping non-driveleech URL: ${driveleechUrl}`);
       return null;
     }
-    
+
     // Step 2: Get final streaming URL from driveleech page
     const finalLinkInfo = await getFinalLink(driveleechUrl);
-    
+
     if (!finalLinkInfo) {
       console.log(`[UHDMovies] Could not get final link for ${linkInfo.quality}`);
       return null;
     }
-    
+
     // Step 3: Return formatted stream info
     const fileName = finalLinkInfo.fileName || linkInfo.quality;
     const cleanFileName = fileName.replace(/\.[^/.]+$/, "").replace(/[._]/g, ' ');
-    
+
     return {
       name: `UHD Movies`,
       title: `${cleanFileName}\n${finalLinkInfo.size}`,
@@ -806,195 +949,173 @@ async function resolveDownloadLink(linkInfo) {
       fileName: finalLinkInfo.fileName,
       type: 'direct'
     };
-    
+
   } catch (error) {
     console.error(`[UHDMovies] Failed to resolve link: ${error.message}`);
     return null;
   }
 }
 
-// Extract TV show download links from show page (improved based on Kotlin CloudStream provider)
+// Extract TV show download links from show page using Cheerio (same approach as Node.js version)
 async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpisode) {
   try {
-    console.log(`[UHDMovies] Extracting TV show links from: ${showPageUrl}`);
-    console.log(`[UHDMovies] Looking for Season ${targetSeason}, Episode ${targetEpisode}`);
-    
+    console.log(`[UHDMovies] Extracting TV show links from: ${showPageUrl} for S${targetSeason}E${targetEpisode}`);
+
     const response = await makeRequest(showPageUrl);
     const html = await response.text();
-    
+
     const links = [];
-    
-    // Extract page title for quality info
-    const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-    const pageTitle = titleMatch ? titleMatch[1] : '';
-    const pageTitleQualities = extractQualityFromTitle(pageTitle);
-    
-    // Improved approach based on Kotlin CloudStream provider
-    // Look for paragraph or div tags that contain episode links
-    const episodeContainerRegex = /<(p|div)[^>]*>([\s\S]*?)<\/\1>/gi;
-    let containerMatch;
-    
-    let currentSeason = 1;
-    let foundTargetEpisode = false;
-    
-    while ((containerMatch = episodeContainerRegex.exec(html)) !== null) {
-      const containerContent = containerMatch[2];
-      
-      // Check if this container has episode links
-      const hasEpisodeLinks = /<a[^>]*>.*?Episode.*?<\/a>/i.test(containerContent);
-      
-      if (hasEpisodeLinks) {
-        // Look for season information in the previous sibling element
-        const containerIndex = html.indexOf(containerMatch[0]);
-        const beforeContainer = html.substring(Math.max(0, containerIndex - 2000), containerIndex);
-        
-        // Find the last element before this container that might contain season info
-        const prevElementRegex = /<(p|div|h[1-6])[^>]*>([^<]*)<\/\1>/gi;
-        let prevMatch;
-        let lastPrevElement = '';
-        
-        // Get the last element before our container
-        const tempHtml = beforeContainer;
-        while ((prevMatch = prevElementRegex.exec(tempHtml)) !== null) {
-          lastPrevElement = prevMatch[2];
-        }
-        
-        // Check for season information using improved regex
-        const seasonRegex = /(?:Season |S0)(\d+)/i;
-        const seasonMatch = seasonRegex.exec(lastPrevElement);
-        
+
+    if (cheerio) {
+      // Use Cheerio for precise DOM traversal (same as Node.js version)
+      const $ = cheerio.load(html);
+      const showTitle = $('h1').first().text().trim();
+
+      // --- NEW LOGIC TO SCOPE SEARCH TO THE CORRECT SEASON ---
+      let inTargetSeason = false;
+      let qualityText = '';
+
+      $('.entry-content').find('*').each((index, element) => {
+        const $el = $(element);
+        const text = $el.text().trim();
+        const seasonMatch = text.match(/^SEASON\s+(\d+)/i);
+
+        // Check if we are entering a new season block
         if (seasonMatch) {
-          currentSeason = parseInt(seasonMatch[1]);
-          console.log(`[UHDMovies] Found season ${currentSeason} header`);
+          const currentSeasonNum = parseInt(seasonMatch[1], 10);
+          if (currentSeasonNum == targetSeason) {
+            inTargetSeason = true;
+            console.log(`[UHDMovies] Entering Season ${targetSeason} block.`);
+          } else if (inTargetSeason) {
+            // We've hit the next season, so we stop.
+            console.log(`[UHDMovies] Exiting Season ${targetSeason} block, now in Season ${currentSeasonNum}.`);
+            inTargetSeason = false;
+            return false; // Exit .each() loop
+          }
         }
-        
-        // If this is our target season, extract episode links
-        if (currentSeason === targetSeason) {
-          console.log(`[UHDMovies] Processing target season ${targetSeason}`);
-          
-          // Extract quality and size from the season header
-          let seasonQuality = 'Unknown Quality';
-          let seasonSize = 'Unknown';
-          
-          // Improved quality regex based on Kotlin code
-          const qualityRegex = /(1080p|720p|480p|2160p|4K|[0-9]*0p)/i;
-          const qualityMatch = qualityRegex.exec(lastPrevElement);
-          if (qualityMatch) {
-            seasonQuality = qualityMatch[1];
+
+        if (inTargetSeason) {
+          // This element is within the correct season's block.
+
+          // Is this a quality header? (e.g., a <pre> or a <p> with <strong>)
+          // It often contains resolution, release group, etc.
+          const isQualityHeader = $el.is('pre, p:has(strong), p:has(b), h3, h4');
+          if (isQualityHeader) {
+            const headerText = $el.text().trim();
+            // Filter out irrelevant headers. We can be more aggressive here.
+            if (headerText.length > 5 && !/plot|download|screenshot|trailer|join|powered by|season/i.test(headerText) && !($el.find('a').length > 0)) {
+              qualityText = headerText; // Store the most recent quality header
+            }
           }
-          
-          // Extract size
-          const sizeRegex = /\d+(?:\.\d+)?\s*(?:MB|GB)\b/i;
-          const sizeMatch = sizeRegex.exec(lastPrevElement);
-          if (sizeMatch) {
-            seasonSize = sizeMatch[0];
-          }
-          
-          // Find all episode links in this container
-          const episodeLinkRegex = /<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)">([^<]*Episode[^<]*)<\/a>/gi;
-          let episodeMatch;
-          let episodeIndex = 1;
-          
-          while ((episodeMatch = episodeLinkRegex.exec(containerContent)) !== null) {
-            const url = episodeMatch[1];
-            const episodeText = episodeMatch[2];
-            
-            // Extract episode number from the link text
-            const episodeNumberRegex = /Episode\s*(\d+)/i;
-            const episodeNumberMatch = episodeNumberRegex.exec(episodeText);
-            const episodeNumber = episodeNumberMatch ? parseInt(episodeNumberMatch[1]) : episodeIndex;
-            
-            // Check if this is our target episode
-            if (episodeNumber === targetEpisode) {
-              console.log(`[UHDMovies] Found target episode ${targetEpisode} link`);
-              foundTargetEpisode = true;
-              
-              // Use season quality or extract from episode context
-              let quality = seasonQuality !== 'Unknown Quality' ? seasonQuality : pageTitleQualities;
-              let size = seasonSize !== 'Unknown' ? seasonSize : 'Unknown';
-              
-              // Try to extract more specific quality from episode context
-              const episodeContext = containerContent.substring(
-                Math.max(0, episodeMatch.index - 200),
-                Math.min(containerContent.length, episodeMatch.index + 200)
-              );
-              
-              const contextQuality = extractQualityFromTitle(episodeContext);
-              if (contextQuality !== 'Unknown Quality') {
-                quality = contextQuality;
+
+          // Is this a paragraph with episode links?
+          if ($el.is('p') && $el.find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"]').length > 0) {
+            const linksParagraph = $el;
+            const episodeRegex = new RegExp(`^Episode\\s+0*${targetEpisode}(?!\\d)`, 'i');
+            const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => {
+              return episodeRegex.test($(el).text().trim());
+            }).first();
+
+            if (targetEpisodeLink.length > 0) {
+              const link = targetEpisodeLink.attr('href');
+              if (link && !links.some(item => item.url === link)) {
+                const sizeMatch = qualityText.match(/\[\s*([0-9.,]+\s*[KMGT]B)/i);
+                const size = sizeMatch ? sizeMatch[1] : 'Unknown';
+
+                const cleanQuality = extractCleanQuality(qualityText);
+                const rawQuality = qualityText.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim();
+
+                console.log(`[UHDMovies] Found match: Quality='${qualityText}', Link='${link}'`);
+                links.push({
+                  url: link,
+                  quality: cleanQuality,
+                  size: size,
+                  rawQuality: rawQuality
+                });
               }
-              
-              // Extract size from episode context if not found in season header
-              if (size === 'Unknown') {
-                const contextSizeMatch = episodeContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) || 
-                                        episodeContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
-                if (contextSizeMatch) {
-                  size = contextSizeMatch[1];
+            }
+          }
+        }
+      });
+
+      if (links.length === 0) {
+        console.log('[UHDMovies] Main extraction logic failed. Trying fallback method without season scoping.');
+        $('.entry-content').find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"]').each((i, el) => {
+          const linkElement = $(el);
+          const episodeRegex = new RegExp(`^Episode\\s+0*${targetEpisode}(?!\\d)`, 'i');
+
+          if (episodeRegex.test(linkElement.text().trim())) {
+            const link = linkElement.attr('href');
+            if (link && !links.some(item => item.url === link)) {
+              let qualityText = 'Unknown Quality';
+              const parentP = linkElement.closest('p, div');
+              const prevElement = parentP.prev();
+              if (prevElement.length > 0) {
+                const prevText = prevElement.text().trim();
+                if (prevText && prevText.length > 5 && !prevText.toLowerCase().includes('download')) {
+                  qualityText = prevText;
                 }
               }
-              
-              // Clean quality text
-              const cleanQuality = extractCleanQuality(quality);
-              
+
+              const sizeMatch = qualityText.match(/\[([0-9.,]+[KMGT]B[^\]]*)\]/i);
+              const size = sizeMatch ? sizeMatch[1] : 'Unknown';
+              const cleanQuality = extractCleanQuality(qualityText);
+              const rawQuality = qualityText.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim();
+
+              console.log(`[UHDMovies] Found match via fallback: Quality='${qualityText}', Link='${link}'`);
               links.push({
-                url,
+                url: link,
                 quality: cleanQuality,
                 size: size,
-                rawQuality: quality,
-                episodeNumber: episodeNumber,
-                episodeText: episodeText
+                rawQuality: rawQuality
               });
             }
-            
-            episodeIndex++;
           }
-        }
-        
-        // If we found our target episode, we can stop searching
-        if (foundTargetEpisode) {
-          break;
-        }
+        });
       }
-    }
-    
-    // Fallback method if no links found using the improved approach
-    if (links.length === 0) {
-      console.log('[UHDMovies] Improved method found no links, trying fallback...');
-      
+    } else {
+      // Fallback to regex parsing if Cheerio is not available
+      console.log('[UHDMovies] Cheerio not available, using regex fallback for TV shows');
+
+      // Extract page title for quality info
+      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
+      const pageTitle = titleMatch ? titleMatch[1] : '';
+      const pageTitleQualities = extractQualityFromTitle(pageTitle);
+
       // Look for any download links and try to match them with episode patterns
       const allDownloadLinks = [...html.matchAll(/<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)"/gi)];
-      
+
       for (const linkMatch of allDownloadLinks) {
         const url = linkMatch[1];
         const linkIndex = html.indexOf(linkMatch[0]);
         const contextBefore = html.substring(Math.max(0, linkIndex - 1000), linkIndex);
         const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
         const fullContext = contextBefore + contextAfter;
-        
-        // Check for season and episode in context using improved regex
+
+        // Check for season and episode in context
         const seasonRegex = new RegExp(`(?:Season |S0)\\s*0*${targetSeason}(?!\\d)`, 'i');
         const episodeRegex = new RegExp(`(?:Episode|Ep|E)\\s*0*${targetEpisode}(?!\\d)`, 'i');
-        
+
         if (seasonRegex.test(fullContext) && episodeRegex.test(fullContext)) {
-          console.log(`[UHDMovies] Fallback found matching link for S${targetSeason}E${targetEpisode}`);
-          
+          console.log(`[UHDMovies] Regex fallback found matching link for S${targetSeason}E${targetEpisode}`);
+
           // Extract quality and size from context
           let quality = pageTitleQualities;
           let size = 'Unknown';
-          
+
           const contextQuality = extractQualityFromTitle(fullContext);
           if (contextQuality !== 'Unknown Quality') {
             quality = contextQuality;
           }
-          
-          const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) || 
-                           fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
+
+          const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) ||
+            fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
           if (sizeMatch) {
             size = sizeMatch[1];
           }
-          
+
           const cleanQuality = extractCleanQuality(quality);
-          
+
           links.push({
             url,
             quality: cleanQuality,
@@ -1004,7 +1125,7 @@ async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpiso
         }
       }
     }
-    
+
     console.log(`[UHDMovies] Found ${links.length} episode links for S${targetSeason}E${targetEpisode}`);
     return links;
   } catch (error) {
@@ -1016,28 +1137,28 @@ async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpiso
 // Main function - this is the interface our local scraper service expects
 async function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) {
   console.log(`[UHDMovies] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${season}E:${episode}` : ''}`);
-  
+
   try {
     // Get TMDB info
     const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
     const tmdbResponse = await makeRequest(tmdbUrl);
     const tmdbData = await tmdbResponse.json();
-    
+
     const mediaInfo = {
       title: mediaType === 'tv' ? tmdbData.name : tmdbData.title,
       year: parseInt(((mediaType === 'tv' ? tmdbData.first_air_date : tmdbData.release_date) || '').split('-')[0], 10)
     };
-    
+
     if (!mediaInfo.title) {
       throw new Error('Could not extract title from TMDB response');
     }
-    
+
     console.log(`[UHDMovies] TMDB Info: "${mediaInfo.title}" (${mediaInfo.year || 'N/A'})`);
-    
+
     // Search for the media
     let searchTitle = mediaInfo.title.replace(/:/g, '').replace(/\s*&\s*/g, ' and ');
     let searchResults = await searchMovies(searchTitle);
-    
+
     // Try fallback search if no results
     if (searchResults.length === 0 || !searchResults.some(result => compareMedia(mediaInfo, result))) {
       console.log(`[UHDMovies] Primary search failed, trying fallback...`);
@@ -1046,16 +1167,16 @@ async function getStreams(tmdbId, mediaType = 'movie', season = null, episode = 
         searchResults = await searchMovies(fallbackTitle);
       }
     }
-    
+
     if (searchResults.length === 0) {
       console.log(`[UHDMovies] No search results found`);
       return [];
     }
-    
+
     // Find best match
     const bestMatch = searchResults.find(result => compareMedia(mediaInfo, result)) || searchResults[0];
     console.log(`[UHDMovies] Using result: "${bestMatch.title}" (${bestMatch.year})`);
-    
+
     // Extract download links based on media type
     let downloadLinks = [];
     if (mediaType === 'tv' && season && episode) {
@@ -1063,26 +1184,26 @@ async function getStreams(tmdbId, mediaType = 'movie', season = null, episode = 
     } else {
       downloadLinks = await extractDownloadLinks(bestMatch.url);
     }
-    
+
     if (downloadLinks.length === 0) {
       console.log(`[UHDMovies] No download links found`);
       return [];
     }
-    
+
     // Resolve links to streams
     const streamPromises = downloadLinks.map(link => resolveDownloadLink(link));
     const streams = (await Promise.all(streamPromises)).filter(Boolean);
-    
+
     // Sort by size (largest first)
     streams.sort((a, b) => {
       const sizeA = parseSize(a.size);
       const sizeB = parseSize(b.size);
       return sizeB - sizeA;
     });
-    
+
     console.log(`[UHDMovies] Successfully processed ${streams.length} streams`);
     return streams;
-    
+
   } catch (error) {
     console.error(`[UHDMovies] Error in getStreams: ${error.message}`);
     return [];
