@@ -1,21 +1,9 @@
 // UHD Movies Scraper for Nuvio Local Scrapers
 // React Native compatible version with Cheerio support
 
-// Import cheerio for React Native
-let cheerio = null;
-try {
-  // Try cheerio-without-node-native first (more reliable)
-  cheerio = require('cheerio-without-node-native');
-  console.log('[UHDMovies] Using cheerio-without-node-native for DOM parsing');
-} catch (error) {
-  try {
-    // Fallback to react-native-cheerio
-    cheerio = require('react-native-cheerio');
-    console.log('[UHDMovies] Using react-native-cheerio for DOM parsing');
-  } catch (error2) {
-    console.warn('[UHDMovies] No Cheerio library found, falling back to regex parsing');
-  }
-}
+// Import cheerio-without-node-native for React Native
+const cheerio = require('cheerio-without-node-native');
+console.log('[UHDMovies] Using cheerio-without-node-native for DOM parsing');
 
 // Constants
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
@@ -95,20 +83,39 @@ async function searchMovies(query) {
     const html = await response.text();
 
     const results = [];
+    const $ = cheerio.load(html);
 
-    if (cheerio) {
-      // Use Cheerio for better DOM parsing
-      const $ = cheerio.load(html);
+    // New logic for grid-based search results
+    $('article.gridlove-post').each((index, element) => {
+      const linkElement = $(element).find('a[href*="/download-"]');
+      if (linkElement.length > 0) {
+        const link = linkElement.first().attr('href');
+        // Prefer the 'title' attribute, fallback to h1 text
+        const title = linkElement.first().attr('title') || $(element).find('h1.sanket').text().trim();
 
-      // New logic for grid-based search results
-      $('article.gridlove-post').each((index, element) => {
-        const linkElement = $(element).find('a[href*="/download-"]');
-        if (linkElement.length > 0) {
-          const link = linkElement.first().attr('href');
-          // Prefer the 'title' attribute, fallback to h1 text
-          const title = linkElement.first().attr('title') || $(element).find('h1.sanket').text().trim();
+        if (link && title && !results.some(item => item.url === link)) {
+          // Extract year from title
+          const yearMatch = title.match(/\((\d{4})\)/);
+          const year = yearMatch ? parseInt(yearMatch[1]) : null;
 
-          if (link && title && !results.some(item => item.url === link)) {
+          results.push({
+            title: title.replace(/\(\d{4}\)/, '').trim(),
+            year,
+            url: link.startsWith('http') ? link : `${domain}${link}`
+          });
+        }
+      }
+    });
+
+    // Fallback for original list-based search if new logic fails
+    if (results.length === 0) {
+      console.log('[UHDMovies] Grid search logic found no results, trying original list-based logic...');
+      $('a[href*="/download-"]').each((index, element) => {
+        const link = $(element).attr('href');
+        // Avoid duplicates by checking if link already exists in results
+        if (link && !results.some(item => item.url === link)) {
+          const title = $(element).text().trim();
+          if (title) {
             // Extract year from title
             const yearMatch = title.match(/\((\d{4})\)/);
             const year = yearMatch ? parseInt(yearMatch[1]) : null;
@@ -121,66 +128,6 @@ async function searchMovies(query) {
           }
         }
       });
-
-      // Fallback for original list-based search if new logic fails
-      if (results.length === 0) {
-        console.log('[UHDMovies] Grid search logic found no results, trying original list-based logic...');
-        $('a[href*="/download-"]').each((index, element) => {
-          const link = $(element).attr('href');
-          // Avoid duplicates by checking if link already exists in results
-          if (link && !results.some(item => item.url === link)) {
-            const title = $(element).text().trim();
-            if (title) {
-              // Extract year from title
-              const yearMatch = title.match(/\((\d{4})\)/);
-              const year = yearMatch ? parseInt(yearMatch[1]) : null;
-
-              results.push({
-                title: title.replace(/\(\d{4}\)/, '').trim(),
-                year,
-                url: link.startsWith('http') ? link : `${domain}${link}`
-              });
-            }
-          }
-        });
-      }
-    } else {
-      // Fallback to regex parsing if Cheerio is not available
-      const gridPostRegex = /<article[^>]*class="[^"]*gridlove-post[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
-      let gridMatch;
-
-      while ((gridMatch = gridPostRegex.exec(html)) !== null) {
-        const articleContent = gridMatch[1];
-
-        // Look for download links within this article
-        const downloadLinkRegex = /<a[^>]*href="([^"]*\/download-[^"]*)"/i;
-        const linkMatch = downloadLinkRegex.exec(articleContent);
-
-        if (linkMatch) {
-          const link = linkMatch[1];
-
-          // Extract title from title attribute or h1.sanket
-          const titleAttrRegex = /<a[^>]*title="([^"]+)"/i;
-          const h1SanketRegex = /<h1[^>]*class="[^"]*sanket[^"]*"[^>]*>([^<]+)<\/h1>/i;
-
-          const titleAttrMatch = titleAttrRegex.exec(articleContent);
-          const h1SanketMatch = h1SanketRegex.exec(articleContent);
-
-          const title = (titleAttrMatch && titleAttrMatch[1]) || (h1SanketMatch && h1SanketMatch[1]) || '';
-
-          if (title && !results.some(item => item.url === link)) {
-            // Extract year from title
-            const yearMatch = title.match(/\((\d{4})\)/);
-            const year = yearMatch ? parseInt(yearMatch[1]) : null;
-
-            results.push({
-              title: title.replace(/\(\d{4}\)/, '').trim(),
-              year,
-              url: link.startsWith('http') ? link : `${domain}${link}`
-            });
-          }
-        }
-      }
     }
 
     console.log(`[UHDMovies] Found ${results.length} search results`);
@@ -302,216 +249,130 @@ async function extractDownloadLinks(movieUrl, targetYear = null) {
     const html = await response.text();
 
     const links = [];
+    const $ = cheerio.load(html);
+    const movieTitle = $('h1').first().text().trim();
 
-    if (cheerio) {
-      // Use Cheerio for better DOM parsing (same as Node.js version)
-      const $ = cheerio.load(html);
-      const movieTitle = $('h1').first().text().trim();
+    // Find all download links (the new SID links) and their associated quality information
+    $('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"], a[href*="tech.examdegree.site"]').each((index, element) => {
+      const link = $(element).attr('href');
 
-      // Find all download links (the new SID links) and their associated quality information
-      $('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"]').each((index, element) => {
-        const link = $(element).attr('href');
+      if (link && !links.some(item => item.url === link)) {
+        let quality = 'Unknown Quality';
+        let size = 'Unknown';
 
-        if (link && !links.some(item => item.url === link)) {
-          let quality = 'Unknown Quality';
-          let size = 'Unknown';
+        // Method 1: Look for quality in the closest preceding paragraph or heading
+        const prevElement = $(element).closest('p').prev();
+        if (prevElement.length > 0) {
+          const prevText = prevElement.text().trim();
+          if (prevText && prevText.length > 20 && !prevText.includes('Download')) {
+            quality = prevText;
+          }
+        }
 
-          // Method 1: Look for quality in the closest preceding paragraph or heading
-          const prevElement = $(element).closest('p').prev();
-          if (prevElement.length > 0) {
-            const prevText = prevElement.text().trim();
-            if (prevText && prevText.length > 20 && !prevText.includes('Download')) {
-              quality = prevText;
+        // Method 2: Look for quality in parent's siblings
+        if (quality === 'Unknown Quality') {
+          const parentSiblings = $(element).parent().prevAll().first().text().trim();
+          if (parentSiblings && parentSiblings.length > 20) {
+            quality = parentSiblings;
+          }
+        }
+
+        // Method 3: Look for bold/strong text above the link
+        if (quality === 'Unknown Quality') {
+          const strongText = $(element).closest('p').prevAll().find('strong, b').last().text().trim();
+          if (strongText && strongText.length > 20) {
+            quality = strongText;
+          }
+        }
+
+        // Method 4: Look for the entire paragraph containing quality info
+        if (quality === 'Unknown Quality') {
+          let currentElement = $(element).parent();
+          for (let i = 0; i < 5; i++) {
+            currentElement = currentElement.prev();
+            if (currentElement.length === 0) break;
+
+            const text = currentElement.text().trim();
+            if (text && text.length > 30 &&
+              (text.includes('1080p') || text.includes('720p') || text.includes('2160p') ||
+                text.includes('4K') || text.includes('HEVC') || text.includes('x264') || text.includes('x265'))) {
+              quality = text;
+              break;
             }
           }
+        }
 
-          // Method 2: Look for quality in parent's siblings
-          if (quality === 'Unknown Quality') {
-            const parentSiblings = $(element).parent().prevAll().first().text().trim();
-            if (parentSiblings && parentSiblings.length > 20) {
-              quality = parentSiblings;
-            }
-          }
+        // Year-based filtering for collections
+        if (targetYear && quality !== 'Unknown Quality') {
+          // Check for years in quality text
+          const yearMatches = quality.match(/\((\d{4})\)/g);
+          let hasMatchingYear = false;
 
-          // Method 3: Look for bold/strong text above the link
-          if (quality === 'Unknown Quality') {
-            const strongText = $(element).closest('p').prevAll().find('strong, b').last().text().trim();
-            if (strongText && strongText.length > 20) {
-              quality = strongText;
-            }
-          }
-
-          // Method 4: Look for the entire paragraph containing quality info
-          if (quality === 'Unknown Quality') {
-            let currentElement = $(element).parent();
-            for (let i = 0; i < 5; i++) {
-              currentElement = currentElement.prev();
-              if (currentElement.length === 0) break;
-
-              const text = currentElement.text().trim();
-              if (text && text.length > 30 &&
-                (text.includes('1080p') || text.includes('720p') || text.includes('2160p') ||
-                  text.includes('4K') || text.includes('HEVC') || text.includes('x264') || text.includes('x265'))) {
-                quality = text;
+          if (yearMatches && yearMatches.length > 0) {
+            for (const yearMatch of yearMatches) {
+              const year = parseInt(yearMatch.replace(/[()]/g, ''));
+              if (year === targetYear) {
+                hasMatchingYear = true;
                 break;
               }
             }
-          }
+            if (!hasMatchingYear) {
+              console.log(`[UHDMovies] Skipping link due to year mismatch. Target: ${targetYear}, Found: ${yearMatches.join(', ')} in "${quality}"`);
+              return; // Skip this link
+            }
+          } else {
+            // If no year in quality text, check filename and other indicators
+            const linkText = $(element).text().trim();
+            const parentText = $(element).parent().text().trim();
+            const combinedText = `${quality} ${linkText} ${parentText}`;
 
-          // Year-based filtering for collections
-          if (targetYear && quality !== 'Unknown Quality') {
-            // Check for years in quality text
-            const yearMatches = quality.match(/\((\d{4})\)/g);
-            let hasMatchingYear = false;
-
-            if (yearMatches && yearMatches.length > 0) {
-              for (const yearMatch of yearMatches) {
+            // Look for years in combined text
+            const allYearMatches = combinedText.match(/\((\d{4})\)/g) || combinedText.match(/(\d{4})/g);
+            if (allYearMatches) {
+              let foundTargetYear = false;
+              for (const yearMatch of allYearMatches) {
                 const year = parseInt(yearMatch.replace(/[()]/g, ''));
-                if (year === targetYear) {
-                  hasMatchingYear = true;
-                  break;
-                }
-              }
-              if (!hasMatchingYear) {
-                console.log(`[UHDMovies] Skipping link due to year mismatch. Target: ${targetYear}, Found: ${yearMatches.join(', ')} in "${quality}"`);
-                return; // Skip this link
-              }
-            } else {
-              // If no year in quality text, check filename and other indicators
-              const linkText = $(element).text().trim();
-              const parentText = $(element).parent().text().trim();
-              const combinedText = `${quality} ${linkText} ${parentText}`;
-
-              // Look for years in combined text
-              const allYearMatches = combinedText.match(/\((\d{4})\)/g) || combinedText.match(/(\d{4})/g);
-              if (allYearMatches) {
-                let foundTargetYear = false;
-                for (const yearMatch of allYearMatches) {
-                  const year = parseInt(yearMatch.replace(/[()]/g, ''));
-                  if (year >= 1900 && year <= 2030) { // Valid movie year range
-                    if (year === targetYear) {
-                      foundTargetYear = true;
-                      break;
-                    }
+                if (year >= 1900 && year <= 2030) { // Valid movie year range
+                  if (year === targetYear) {
+                    foundTargetYear = true;
+                    break;
                   }
                 }
-                if (!foundTargetYear && allYearMatches.length > 0) {
-                  console.log(`[UHDMovies] Skipping link due to no matching year found. Target: ${targetYear}, Found years: ${allYearMatches.join(', ')} in combined text`);
-                  return; // Skip this link
-                }
               }
+              if (!foundTargetYear && allYearMatches.length > 0) {
+                console.log(`[UHDMovies] Skipping link due to no matching year found. Target: ${targetYear}, Found years: ${allYearMatches.join(', ')} in combined text`);
+                return; // Skip this link
+              }
+            }
 
-              // Additional check: if quality contains movie names that don't match target year
-              const lowerQuality = quality.toLowerCase();
-              if (targetYear === 2015) {
-                if (lowerQuality.includes('wasp') || lowerQuality.includes('quantumania')) {
-                  console.log(`[UHDMovies] Skipping link for 2015 target as it contains 'wasp' or 'quantumania': "${quality}"`);
-                  return; // Skip this link
-                }
+            // Additional check: if quality contains movie names that don't match target year
+            const lowerQuality = quality.toLowerCase();
+            if (targetYear === 2015) {
+              if (lowerQuality.includes('wasp') || lowerQuality.includes('quantumania')) {
+                console.log(`[UHDMovies] Skipping link for 2015 target as it contains 'wasp' or 'quantumania': "${quality}"`);
+                return; // Skip this link
               }
             }
           }
-
-          // Extract size from quality text if present
-          const sizeMatch = quality.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
-          if (sizeMatch) {
-            size = sizeMatch[1];
-          }
-
-          // Clean up the quality information
-          const cleanQuality = extractCleanQuality(quality);
-
-          links.push({
-            url: link,
-            quality: cleanQuality,
-            size: size,
-            rawQuality: quality.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim()
-          });
         }
-      });
-    } else {
-      // Fallback to regex parsing if Cheerio is not available
-      console.log('[UHDMovies] Cheerio not available, using regex fallback for movies');
 
-      // Extract page title for quality info
-      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-      const pageTitle = titleMatch ? titleMatch[1] : '';
-      const pageTitleQualities = extractQualityFromTitle(pageTitle);
-
-      // Look for download links with the new patterns
-      const downloadLinkRegex = /<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)"/gi;
-      let match;
-
-      while ((match = downloadLinkRegex.exec(html)) !== null) {
-        const url = match[1];
-
-        if (!links.some(link => link.url === url)) {
-          // Look for quality information before this link
-          const linkIndex = html.indexOf(match[0]);
-          const contextBefore = html.substring(Math.max(0, linkIndex - 1000), linkIndex);
-          const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
-          const fullContext = contextBefore + contextAfter;
-
-          let currentQuality = 'Unknown Quality';
-          let size = 'Unknown';
-
-          // Look for quality headers (usually in <pre>, <p><strong>, etc.)
-          const qualityPatterns = [
-            /<(?:pre|p|h[1-6])[^>]*>\s*<(?:strong|b)[^>]*>([^<]+)<\/(?:strong|b)>\s*<\/(?:pre|p|h[1-6])>/gi,
-            /<(?:pre|p)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:pre|p)>/gi,
-            /<(?:strong|b)[^>]*>([^<]*(?:1080p|720p|2160p|4K|HEVC|x264|x265)[^<]*)<\/(?:strong|b)>/gi,
-            // Look for text patterns that contain quality info
-            /\b((?:720p|1080p|2160p|4K).*?(?:HEVC|x264|x265).*?)\b/gi,
-            /\b((?:HEVC|x264|x265).*?(?:720p|1080p|2160p|4K).*?)\b/gi
-          ];
-
-          let qualityFound = false;
-          for (const pattern of qualityPatterns) {
-            const qualityMatches = [...fullContext.matchAll(pattern)];
-            if (qualityMatches.length > 0) {
-              const lastMatch = qualityMatches[qualityMatches.length - 1];
-              if (lastMatch[1] && lastMatch[1].trim().length > 5) {
-                currentQuality = lastMatch[1].trim();
-                qualityFound = true;
-                break;
-              }
-            }
-          }
-
-          // If no quality found in context, extract from nearby text
-          if (!qualityFound) {
-            const nearbyText = fullContext.replace(/<[^>]*>/g, ' ');
-            const extractedQuality = extractQualityFromTitle(nearbyText);
-            if (extractedQuality !== 'Unknown Quality') {
-              currentQuality = extractedQuality;
-              qualityFound = true;
-            }
-          }
-
-          // Fallback to page title qualities if still no quality found
-          if (!qualityFound && pageTitleQualities !== 'Unknown Quality') {
-            currentQuality = pageTitleQualities;
-          }
-
-          // Extract size from quality text or context
-          const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) ||
-            fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
-          if (sizeMatch) {
-            size = sizeMatch[1];
-          }
-
-          // Clean quality text
-          const cleanQuality = extractCleanQuality(currentQuality);
-
-          links.push({
-            url,
-            quality: cleanQuality,
-            size: size,
-            rawQuality: currentQuality
-          });
+        // Extract size from quality text if present
+        const sizeMatch = quality.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/);
+        if (sizeMatch) {
+          size = sizeMatch[1];
         }
+
+        // Clean up the quality information
+        const cleanQuality = extractCleanQuality(quality);
+
+        links.push({
+          url: link,
+          quality: cleanQuality,
+          size: size,
+          rawQuality: quality.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim()
+        });
       }
-    }
+    });
 
     console.log(`[UHDMovies] Extracted ${links.length} download links`);
     return links;
@@ -919,6 +780,7 @@ async function resolveDownloadLink(linkInfo) {
 
     if (linkInfo.url.includes('tech.unblockedgames.world') ||
       linkInfo.url.includes('tech.examzculture.in') ||
+      linkInfo.url.includes('tech.examdegree.site') ||
       linkInfo.url.includes('tech.creativeexpressionsblog.com')) {
       driveleechUrl = await resolveSidToDriveleech(linkInfo.url);
     } else if (linkInfo.url.includes('driveleech.net') || linkInfo.url.includes('driveseed.org')) {
@@ -973,95 +835,132 @@ async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpiso
     const html = await response.text();
 
     const links = [];
+    const $ = cheerio.load(html);
+    const showTitle = $('h1').first().text().trim();
 
-    if (cheerio) {
-      // Use Cheerio for precise DOM traversal (same as Node.js version)
-      const $ = cheerio.load(html);
-      const showTitle = $('h1').first().text().trim();
+    // --- NEW LOGIC TO SCOPE SEARCH TO THE CORRECT SEASON ---
+    let inTargetSeason = false;
+    let qualityText = '';
 
-      // --- NEW LOGIC TO SCOPE SEARCH TO THE CORRECT SEASON ---
-      let inTargetSeason = false;
-      let qualityText = '';
+    $('.entry-content').find('*').each((index, element) => {
+      const $el = $(element);
+      const text = $el.text().trim();
+      const seasonMatch = text.match(/^SEASON\s+(\d+)/i);
 
-      $('.entry-content').find('*').each((index, element) => {
-        const $el = $(element);
-        const text = $el.text().trim();
-        const seasonMatch = text.match(/^SEASON\s+(\d+)/i);
+      // Check if we are entering a new season block
+      if (seasonMatch) {
+        const currentSeasonNum = parseInt(seasonMatch[1], 10);
+        if (currentSeasonNum == targetSeason) {
+          inTargetSeason = true;
+          console.log(`[UHDMovies] Entering Season ${targetSeason} block.`);
+        } else if (inTargetSeason) {
+          // We've hit the next season, so we stop.
+          console.log(`[UHDMovies] Exiting Season ${targetSeason} block, now in Season ${currentSeasonNum}.`);
+          inTargetSeason = false;
+          return false; // Exit .each() loop
+        }
+      }
 
-        // Check if we are entering a new season block
-        if (seasonMatch) {
-          const currentSeasonNum = parseInt(seasonMatch[1], 10);
-          if (currentSeasonNum == targetSeason) {
-            inTargetSeason = true;
-            console.log(`[UHDMovies] Entering Season ${targetSeason} block.`);
-          } else if (inTargetSeason) {
-            // We've hit the next season, so we stop.
-            console.log(`[UHDMovies] Exiting Season ${targetSeason} block, now in Season ${currentSeasonNum}.`);
-            inTargetSeason = false;
-            return false; // Exit .each() loop
+      if (inTargetSeason) {
+        // This element is within the correct season's block.
+
+        // Is this a quality header? (e.g., a <pre> or a <p> with <strong>)
+        // It often contains resolution, release group, etc.
+        const isQualityHeader = $el.is('pre, p:has(strong), p:has(b), h3, h4');
+        if (isQualityHeader) {
+          const headerText = $el.text().trim();
+          // Filter out irrelevant headers. We can be more aggressive here.
+          if (headerText.length > 5 && !/plot|download|screenshot|trailer|join|powered by|season/i.test(headerText) && !($el.find('a').length > 0)) {
+            qualityText = headerText; // Store the most recent quality header
           }
         }
 
-        if (inTargetSeason) {
-          // This element is within the correct season's block.
+        // Is this a paragraph with episode links?
+        if ($el.is('p') && $el.find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"], a[href*="tech.examdegree.site"]').length > 0) {
+          const linksParagraph = $el;
+          const episodeRegex = new RegExp(`^Episode\\s+0*${targetEpisode}(?!\\d)`, 'i');
+          const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => {
+            return episodeRegex.test($(el).text().trim());
+          }).first();
 
-          // Is this a quality header? (e.g., a <pre> or a <p> with <strong>)
-          // It often contains resolution, release group, etc.
-          const isQualityHeader = $el.is('pre, p:has(strong), p:has(b), h3, h4');
-          if (isQualityHeader) {
-            const headerText = $el.text().trim();
-            // Filter out irrelevant headers. We can be more aggressive here.
-            if (headerText.length > 5 && !/plot|download|screenshot|trailer|join|powered by|season/i.test(headerText) && !($el.find('a').length > 0)) {
-              qualityText = headerText; // Store the most recent quality header
+          if (targetEpisodeLink.length > 0) {
+            const link = targetEpisodeLink.attr('href');
+            if (link && !links.some(item => item.url === link)) {
+              const sizeMatch = qualityText.match(/\[\s*([0-9.,]+\s*[KMGT]B)/i);
+              const size = sizeMatch ? sizeMatch[1] : 'Unknown';
+
+              const cleanQuality = extractCleanQuality(qualityText);
+              const rawQuality = qualityText.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim();
+
+              console.log(`[UHDMovies] Found match: Quality='${qualityText}', Link='${link}'`);
+              links.push({
+                url: link,
+                quality: cleanQuality,
+                size: size,
+                rawQuality: rawQuality
+              });
             }
           }
+        }
+      }
+    });
 
-          // Is this a paragraph with episode links?
-          if ($el.is('p') && $el.find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"]').length > 0) {
-            const linksParagraph = $el;
-            const episodeRegex = new RegExp(`^Episode\\s+0*${targetEpisode}(?!\\d)`, 'i');
-            const targetEpisodeLink = linksParagraph.find('a').filter((i, el) => {
-              return episodeRegex.test($(el).text().trim());
-            }).first();
+    if (links.length === 0) {
+      console.log('[UHDMovies] Main extraction logic failed. Trying fallback method with season filtering.');
+      $('.entry-content').find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"], a[href*="tech.examdegree.site"]').each((i, el) => {
+        const linkElement = $(el);
+        const episodeRegex = new RegExp(`^Episode\\s+0*${targetEpisode}(?!\\d)`, 'i');
 
-            if (targetEpisodeLink.length > 0) {
-              const link = targetEpisodeLink.attr('href');
-              if (link && !links.some(item => item.url === link)) {
-                const sizeMatch = qualityText.match(/\[\s*([0-9.,]+\s*[KMGT]B)/i);
-                const size = sizeMatch ? sizeMatch[1] : 'Unknown';
-
-                const cleanQuality = extractCleanQuality(qualityText);
-                const rawQuality = qualityText.replace(/(\r\n|\n|\r)/gm, " ").replace(/\s+/g, ' ').trim();
-
-                console.log(`[UHDMovies] Found match: Quality='${qualityText}', Link='${link}'`);
-                links.push({
-                  url: link,
-                  quality: cleanQuality,
-                  size: size,
-                  rawQuality: rawQuality
-                });
+        if (episodeRegex.test(linkElement.text().trim())) {
+          const link = linkElement.attr('href');
+          if (link && !links.some(item => item.url === link)) {
+            let qualityText = 'Unknown Quality';
+            const parentP = linkElement.closest('p, div');
+            
+            // Look for season information in the quality text and surrounding context
+            let foundSeasonMatch = false;
+            
+            // Check previous elements for quality and season info
+            let currentElement = parentP;
+            for (let j = 0; j < 10; j++) {
+              currentElement = currentElement.prev();
+              if (currentElement.length === 0) break;
+              
+              const prevText = currentElement.text().trim();
+              if (prevText && prevText.length > 5) {
+                // Check if this text contains season information
+                const seasonRegex = new RegExp(`S0?${targetSeason}(?![0-9])`, 'i');
+                const seasonWordRegex = new RegExp(`Season\\s+0*${targetSeason}(?![0-9])`, 'i');
+                
+                if (seasonRegex.test(prevText) || seasonWordRegex.test(prevText)) {
+                  qualityText = prevText;
+                  foundSeasonMatch = true;
+                  break;
+                }
+                
+                // If we find a different season, skip this link
+                const otherSeasonRegex = /S0?(\d+)(?![0-9])|Season\s+(\d+)(?![0-9])/i;
+                const otherSeasonMatch = otherSeasonRegex.exec(prevText);
+                if (otherSeasonMatch) {
+                  const foundSeason = parseInt(otherSeasonMatch[1] || otherSeasonMatch[2]);
+                  if (foundSeason !== targetSeason) {
+                    console.log(`[UHDMovies] Skipping link - found Season ${foundSeason}, looking for Season ${targetSeason}`);
+                    return; // Skip this link
+                  }
+                }
               }
             }
-          }
-        }
-      });
-
-      if (links.length === 0) {
-        console.log('[UHDMovies] Main extraction logic failed. Trying fallback method without season scoping.');
-        $('.entry-content').find('a[href*="tech.unblockedgames.world"], a[href*="tech.examzculture.in"]').each((i, el) => {
-          const linkElement = $(el);
-          const episodeRegex = new RegExp(`^Episode\\s+0*${targetEpisode}(?!\\d)`, 'i');
-
-          if (episodeRegex.test(linkElement.text().trim())) {
-            const link = linkElement.attr('href');
-            if (link && !links.some(item => item.url === link)) {
-              let qualityText = 'Unknown Quality';
-              const parentP = linkElement.closest('p, div');
-              const prevElement = parentP.prev();
-              if (prevElement.length > 0) {
-                const prevText = prevElement.text().trim();
-                if (prevText && prevText.length > 5 && !prevText.toLowerCase().includes('download')) {
-                  qualityText = prevText;
+            
+            // Only add the link if we found a season match or no season info at all
+            if (foundSeasonMatch || qualityText === 'Unknown Quality') {
+              if (qualityText === 'Unknown Quality') {
+                // Last resort: check immediate previous element
+                const prevElement = parentP.prev();
+                if (prevElement.length > 0) {
+                  const prevText = prevElement.text().trim();
+                  if (prevText && prevText.length > 5 && !prevText.toLowerCase().includes('download')) {
+                    qualityText = prevText;
+                  }
                 }
               }
 
@@ -1079,59 +978,8 @@ async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpiso
               });
             }
           }
-        });
-      }
-    } else {
-      // Fallback to regex parsing if Cheerio is not available
-      console.log('[UHDMovies] Cheerio not available, using regex fallback for TV shows');
-
-      // Extract page title for quality info
-      const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
-      const pageTitle = titleMatch ? titleMatch[1] : '';
-      const pageTitleQualities = extractQualityFromTitle(pageTitle);
-
-      // Look for any download links and try to match them with episode patterns
-      const allDownloadLinks = [...html.matchAll(/<a[^>]*href="([^"]*(?:tech\.unblockedgames\.world|tech\.examzculture\.in)[^"]*)"/gi)];
-
-      for (const linkMatch of allDownloadLinks) {
-        const url = linkMatch[1];
-        const linkIndex = html.indexOf(linkMatch[0]);
-        const contextBefore = html.substring(Math.max(0, linkIndex - 1000), linkIndex);
-        const contextAfter = html.substring(linkIndex, Math.min(html.length, linkIndex + 500));
-        const fullContext = contextBefore + contextAfter;
-
-        // Check for season and episode in context
-        const seasonRegex = new RegExp(`(?:Season |S0)\\s*0*${targetSeason}(?!\\d)`, 'i');
-        const episodeRegex = new RegExp(`(?:Episode|Ep|E)\\s*0*${targetEpisode}(?!\\d)`, 'i');
-
-        if (seasonRegex.test(fullContext) && episodeRegex.test(fullContext)) {
-          console.log(`[UHDMovies] Regex fallback found matching link for S${targetSeason}E${targetEpisode}`);
-
-          // Extract quality and size from context
-          let quality = pageTitleQualities;
-          let size = 'Unknown';
-
-          const contextQuality = extractQualityFromTitle(fullContext);
-          if (contextQuality !== 'Unknown Quality') {
-            quality = contextQuality;
-          }
-
-          const sizeMatch = fullContext.match(/\[([0-9.,]+\s*[KMGT]B[^\]]*)\]/i) ||
-            fullContext.match(/\b([0-9.,]+\s*[KMGT]B)\b/i);
-          if (sizeMatch) {
-            size = sizeMatch[1];
-          }
-
-          const cleanQuality = extractCleanQuality(quality);
-
-          links.push({
-            url,
-            quality: cleanQuality,
-            size: size,
-            rawQuality: quality
-          });
         }
-      }
+      });
     }
 
     console.log(`[UHDMovies] Found ${links.length} episode links for S${targetSeason}E${targetEpisode}`);
