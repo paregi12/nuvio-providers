@@ -1,5 +1,5 @@
 // HDRezka Scraper for Nuvio Local Scrapers
-// React Native compatible version
+// React Native compatible version - No async/await for sandbox compatibility
 
 // Import cheerio for HTML parsing (React Native compatible)
 const cheerio = require('cheerio-without-node-native');
@@ -19,20 +19,19 @@ const BASE_HEADERS = {
 };
 
 // Helper function to make HTTP requests
-async function makeRequest(url, options = {}) {
-    const response = await fetch(url, {
+function makeRequest(url, options = {}) {
+    return fetch(url, {
         ...options,
         headers: {
             ...BASE_HEADERS,
             ...options.headers
         }
+    }).then(function(response) {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        return response;
     });
-
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    return response;
 }
 
 // Generate random favs parameter
@@ -143,7 +142,7 @@ function parseSubtitles(inputString) {
 }
 
 // Search for content and find media ID
-async function searchAndFindMediaId(media) {
+function searchAndFindMediaId(media) {
     console.log(`[HDRezka] Searching for title: ${media.title}, type: ${media.type}, year: ${media.releaseYear || 'any'}`);
 
     const itemRegexPattern = /<a href="([^"]+)"><span class="enty">([^<]+)<\/span> \(([^)]+)\)/g;
@@ -153,92 +152,95 @@ async function searchAndFindMediaId(media) {
     fullUrl.searchParams.append('q', media.title);
 
     console.log(`[HDRezka] Making search request to: ${fullUrl.toString()}`);
-    const response = await makeRequest(fullUrl.toString());
+    return makeRequest(fullUrl.toString()).then(function(response) {
+        return response.text();
+    }).then(function(searchData) {
+        console.log(`[HDRezka] Search response length: ${searchData.length}`);
 
-    const searchData = await response.text();
-    console.log(`[HDRezka] Search response length: ${searchData.length}`);
+        const movieData = [];
+        let match;
 
-    const movieData = [];
-    let match;
+        while ((match = itemRegexPattern.exec(searchData)) !== null) {
+            const url = match[1];
+            const titleAndYear = match[3];
 
-    while ((match = itemRegexPattern.exec(searchData)) !== null) {
-        const url = match[1];
-        const titleAndYear = match[3];
+            const result = extractTitleAndYear(titleAndYear);
+            if (result !== null) {
+                const id = url.match(idRegexPattern)?.[1] || null;
+                const isMovie = url.includes('/films/');
+                const isShow = url.includes('/series/');
+                const type = isMovie ? 'movie' : isShow ? 'tv' : 'unknown';
 
-        const result = extractTitleAndYear(titleAndYear);
-        if (result !== null) {
-            const id = url.match(idRegexPattern)?.[1] || null;
-            const isMovie = url.includes('/films/');
-            const isShow = url.includes('/series/');
-            const type = isMovie ? 'movie' : isShow ? 'tv' : 'unknown';
-
-            movieData.push({
-                id: id ?? '',
-                year: result.year ?? 0,
-                type,
-                url,
-                title: match[2]
-            });
-            console.log(`[HDRezka] Found: id=${id}, title=${match[2]}, type=${type}, year=${result.year}`);
+                movieData.push({
+                    id: id ?? '',
+                    year: result.year ?? 0,
+                    type,
+                    url,
+                    title: match[2]
+                });
+                console.log(`[HDRezka] Found: id=${id}, title=${match[2]}, type=${type}, year=${result.year}`);
+            }
         }
-    }
 
-    // Filter by year if provided
-    let filteredItems = movieData;
-    if (media.releaseYear) {
-        filteredItems = movieData.filter(item => item.year === media.releaseYear);
-        console.log(`[HDRezka] Items filtered by year ${media.releaseYear}: ${filteredItems.length}`);
-    }
+        // Filter by year if provided
+        let filteredItems = movieData;
+        if (media.releaseYear) {
+            filteredItems = movieData.filter(item => item.year === media.releaseYear);
+            console.log(`[HDRezka] Items filtered by year ${media.releaseYear}: ${filteredItems.length}`);
+        }
 
-    // Filter by type if provided
-    if (media.type) {
-        filteredItems = filteredItems.filter(item => item.type === media.type);
-        console.log(`[HDRezka] Items filtered by type ${media.type}: ${filteredItems.length}`);
-    }
+        // Filter by type if provided
+        if (media.type) {
+            filteredItems = filteredItems.filter(item => item.type === media.type);
+            console.log(`[HDRezka] Items filtered by type ${media.type}: ${filteredItems.length}`);
+        }
 
-    if (filteredItems.length === 0 && movieData.length > 0) {
-        console.log(`[HDRezka] No exact match found, using first result: ${movieData[0].title}`);
-        return movieData[0];
-    }
+        if (filteredItems.length === 0 && movieData.length > 0) {
+            console.log(`[HDRezka] No exact match found, using first result: ${movieData[0].title}`);
+            return movieData[0];
+        }
 
-    if (filteredItems.length > 0) {
-        console.log(`[HDRezka] Selected item: id=${filteredItems[0].id}, title=${filteredItems[0].title}`);
-        return filteredItems[0];
-    } else {
-        console.log(`[HDRezka] No matching items found`);
-        return null;
-    }
+        if (filteredItems.length > 0) {
+            console.log(`[HDRezka] Selected item: id=${filteredItems[0].id}, title=${filteredItems[0].title}`);
+            return filteredItems[0];
+        } else {
+            console.log(`[HDRezka] No matching items found`);
+            return null;
+        }
+    });
 }
 
 // Get translator ID from media page
-async function getTranslatorId(url, id, media) {
+function getTranslatorId(url, id, media) {
     console.log(`[HDRezka] Getting translator ID for url=${url}, id=${id}`);
 
     // Make sure the URL is absolute
     const fullUrl = url.startsWith('http') ? url : `${REZKA_BASE}${url.startsWith('/') ? url.substring(1) : url}`;
     console.log(`[HDRezka] Making request to: ${fullUrl}`);
 
-    const response = await makeRequest(fullUrl);
-    const responseText = await response.text();
-    console.log(`[HDRezka] Translator page response length: ${responseText.length}`);
+    return makeRequest(fullUrl).then(function(response) {
+        return response.text();
+    }).then(function(responseText) {
+        console.log(`[HDRezka] Translator page response length: ${responseText.length}`);
 
-    // Translator ID 238 represents the Original + subtitles player.
-    if (responseText.includes(`data-translator_id="238"`)) {
-        console.log(`[HDRezka] Found translator ID 238 (Original + subtitles)`);
-        return '238';
-    }
+        // Translator ID 238 represents the Original + subtitles player.
+        if (responseText.includes(`data-translator_id="238"`)) {
+            console.log(`[HDRezka] Found translator ID 238 (Original + subtitles)`);
+            return '238';
+        }
 
-    const functionName = media.type === 'movie' ? 'initCDNMoviesEvents' : 'initCDNSeriesEvents';
-    const regexPattern = new RegExp(`sof\\.tv\\.${functionName}\\(${id}, ([^,]+)`, 'i');
-    const match = responseText.match(regexPattern);
-    const translatorId = match ? match[1] : null;
+        const functionName = media.type === 'movie' ? 'initCDNMoviesEvents' : 'initCDNSeriesEvents';
+        const regexPattern = new RegExp(`sof\.tv\.${functionName}\\(${id}, ([^,]+)`, 'i');
+        const match = responseText.match(regexPattern);
+        const translatorId = match ? match[1] : null;
 
-    console.log(`[HDRezka] Extracted translator ID: ${translatorId}`);
-    return translatorId;
+        console.log(`[HDRezka] Extracted translator ID: ${translatorId}`);
+        return translatorId;
+    });
 }
 
 // Get stream data from HDRezka
-async function getStreamData(id, translatorId, media) {
+function getStreamData(id, translatorId, media) {
     console.log(`[HDRezka] Getting stream for id=${id}, translatorId=${translatorId}`);
 
     const searchParams = new URLSearchParams();
@@ -258,49 +260,44 @@ async function getStreamData(id, translatorId, media) {
     const fullUrl = `${REZKA_BASE}ajax/get_cdn_series/`;
     console.log(`[HDRezka] Making stream request with action=${media.type === 'tv' ? 'get_stream' : 'get_movie'}`);
 
-    const response = await makeRequest(fullUrl, {
+    return makeRequest(fullUrl, {
         method: 'POST',
         body: searchParams,
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
         }
+    }).then(function(response) {
+        return response.text();
+    }).then(function(rawText) {
+        console.log(`[HDRezka] Stream response length: ${rawText.length}`);
+
+        try {
+            const parsedResponse = JSON.parse(rawText);
+            console.log(`[HDRezka] Parsed response successfully`);
+
+            // Process video qualities and subtitles synchronously
+            const qualities = parseVideoLinks(parsedResponse.url);
+            const captions = parseSubtitles(parsedResponse.subtitle);
+
+            return { qualities, captions };
+        } catch (e) {
+            console.error(`[HDRezka] Failed to parse JSON response: ${e.message}`);
+            console.log(`[HDRezka] Raw response: ${rawText.substring(0, 200)}...`);
+            return null;
+        }
     });
-
-    const rawText = await response.text();
-    console.log(`[HDRezka] Stream response length: ${rawText.length}`);
-
-    try {
-        const parsedResponse = JSON.parse(rawText);
-        console.log(`[HDRezka] Parsed response successfully`);
-
-        // Process video qualities and subtitles in parallel (React Native compatible)
-        const qualitiesPromise = Promise.resolve(parseVideoLinks(parsedResponse.url));
-        const captionsPromise = Promise.resolve(parseSubtitles(parsedResponse.subtitle));
-        
-        const [qualities, captions] = await Promise.all([qualitiesPromise, captionsPromise]);
-
-        return { qualities, captions };
-    } catch (e) {
-        console.error(`[HDRezka] Failed to parse JSON response: ${e.message}`);
-        console.log(`[HDRezka] Raw response: ${rawText.substring(0, 200)}...`);
-        return null;
-    }
 }
 
-
-
 // Get file size using HEAD request
-async function getFileSize(url) {
-    try {
-        console.log(`[HDRezka] Getting file size for: ${url.substring(0, 60)}...`);
-        
-        const response = await fetch(url, {
-            method: 'HEAD',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-        });
-
+function getFileSize(url) {
+    console.log(`[HDRezka] Getting file size for: ${url.substring(0, 60)}...`);
+    
+    return fetch(url, {
+        method: 'HEAD',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+    }).then(function(response) {
         if (response.ok) {
             const contentLength = response.headers.get('content-length');
             if (contentLength) {
@@ -313,10 +310,10 @@ async function getFileSize(url) {
         
         console.log(`[HDRezka] Could not determine file size`);
         return null;
-    } catch (error) {
+    }).catch(function(error) {
         console.log(`[HDRezka] Error getting file size: ${error.message}`);
         return null;
-    }
+    });
 }
 
 // Format file size in human readable format
@@ -338,15 +335,14 @@ function parseQualityForSort(qualityString) {
 }
 
 // Main function to get streams for TMDB content
-async function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = null) {
+function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = null) {
     console.log(`[HDRezka] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ''}`);
 
-    try {
-        // Get TMDB info
-        const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
-        const tmdbResponse = await makeRequest(tmdbUrl);
-        const tmdbData = await tmdbResponse.json();
-
+    // Get TMDB info
+    const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+    return makeRequest(tmdbUrl).then(function(tmdbResponse) {
+        return tmdbResponse.json();
+    }).then(function(tmdbData) {
         const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
         const year = mediaType === 'tv' ? tmdbData.first_air_date?.substring(0, 4) : tmdbData.release_date?.substring(0, 4);
 
@@ -370,64 +366,66 @@ async function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episode
         }
 
         // Step 1: Search and find media ID
-        const searchResult = await searchAndFindMediaId(media);
-        if (!searchResult || !searchResult.id) {
-            console.log('[HDRezka] No search result found');
-            return [];
-        }
+        return searchAndFindMediaId(media).then(function(searchResult) {
+            if (!searchResult || !searchResult.id) {
+                console.log('[HDRezka] No search result found');
+                return [];
+            }
 
-        // Step 2: Get translator ID
-        const translatorId = await getTranslatorId(searchResult.url, searchResult.id, media);
-        if (!translatorId) {
-            console.log('[HDRezka] No translator ID found');
-            return [];
-        }
+            // Step 2: Get translator ID
+            return getTranslatorId(searchResult.url, searchResult.id, media).then(function(translatorId) {
+                if (!translatorId) {
+                    console.log('[HDRezka] No translator ID found');
+                    return [];
+                }
 
-        // Step 3: Get stream data
-        const streamData = await getStreamData(searchResult.id, translatorId, media);
-        if (!streamData || !streamData.qualities) {
-            console.log('[HDRezka] No stream data found');
-            return [];
-        }
+                // Step 3: Get stream data
+                return getStreamData(searchResult.id, translatorId, media).then(function(streamData) {
+                    if (!streamData || !streamData.qualities) {
+                        console.log('[HDRezka] No stream data found');
+                        return [];
+                    }
 
-        // Convert to Nuvio stream format with size detection (React Native compatible)
-        const streamEntries = Object.entries(streamData.qualities);
-        const streamPromises = streamEntries
-            .filter(([quality, data]) => data.url && data.url !== 'null')
-            .map(([quality, data]) => {
-                const cleanQuality = quality.replace(/p.*$/, 'p'); // "1080p Ultra" -> "1080p"
-                
-                // Get file size using Promise chain
-                return getFileSize(data.url).then(fileSize => {
-                    return {
-                        name: "HDRezka",
-                        title: `${title} ${year ? `(${year})` : ''} ${quality}${mediaType === 'tv' ? ` S${seasonNum}E${episodeNum}` : ''}`,
-                        url: data.url,
-                        quality: cleanQuality,
-                        size: fileSize,
-                        type: 'direct'
-                    };
+                    // Convert to Nuvio stream format with size detection
+                    const streamEntries = Object.entries(streamData.qualities);
+                    const streamPromises = streamEntries
+                        .filter(([quality, data]) => data.url && data.url !== 'null')
+                        .map(([quality, data]) => {
+                            const cleanQuality = quality.replace(/p.*$/, 'p'); // "1080p Ultra" -> "1080p"
+                            
+                            // Get file size using Promise chain
+                            return getFileSize(data.url).then(function(fileSize) {
+                                return {
+                                    name: "HDRezka",
+                                    title: `${title} ${year ? `(${year})` : ''} ${quality}${mediaType === 'tv' ? ` S${seasonNum}E${episodeNum}` : ''}`,
+                                    url: data.url,
+                                    quality: cleanQuality,
+                                    size: fileSize,
+                                    type: 'direct'
+                                };
+                            });
+                        });
+
+                    return Promise.all(streamPromises).then(function(streams) {
+                        // Sort by quality (highest first) - optimized
+                        if (streams.length > 1) {
+                            streams.sort(function(a, b) {
+                                const qualityA = parseQualityForSort(a.quality);
+                                const qualityB = parseQualityForSort(b.quality);
+                                return qualityB - qualityA;
+                            });
+                        }
+
+                        console.log(`[HDRezka] Successfully processed ${streams.length} streams`);
+                        return streams;
+                    });
                 });
             });
-
-        const streams = await Promise.all(streamPromises);
-
-        // Sort by quality (highest first) - optimized
-        if (streams.length > 1) {
-            streams.sort((a, b) => {
-                const qualityA = parseQualityForSort(a.quality);
-                const qualityB = parseQualityForSort(b.quality);
-                return qualityB - qualityA;
-            });
-        }
-
-        console.log(`[HDRezka] Successfully processed ${streams.length} streams`);
-        return streams;
-
-    } catch (error) {
+        });
+    }).catch(function(error) {
         console.error(`[HDRezka] Error in getStreams: ${error.message}`);
         return [];
-    }
+    });
 }
 
 // Export the main function
