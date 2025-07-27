@@ -273,11 +273,11 @@ async function getStreamData(id, translatorId, media) {
         const parsedResponse = JSON.parse(rawText);
         console.log(`[HDRezka] Parsed response successfully`);
 
-        // Process video qualities and subtitles in parallel
-        const [qualities, captions] = await Promise.all([
-            Promise.resolve(parseVideoLinks(parsedResponse.url)),
-            Promise.resolve(parseSubtitles(parsedResponse.subtitle))
-        ]);
+        // Process video qualities and subtitles in parallel (React Native compatible)
+        const qualitiesPromise = Promise.resolve(parseVideoLinks(parsedResponse.url));
+        const captionsPromise = Promise.resolve(parseSubtitles(parsedResponse.subtitle));
+        
+        const [qualities, captions] = await Promise.all([qualitiesPromise, captionsPromise]);
 
         return { qualities, captions };
     } catch (e) {
@@ -390,24 +390,24 @@ async function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episode
             return [];
         }
 
-        // Convert to Nuvio stream format with size detection
+        // Convert to Nuvio stream format with size detection (React Native compatible)
         const streamEntries = Object.entries(streamData.qualities);
         const streamPromises = streamEntries
             .filter(([quality, data]) => data.url && data.url !== 'null')
-            .map(async ([quality, data]) => {
+            .map(([quality, data]) => {
                 const cleanQuality = quality.replace(/p.*$/, 'p'); // "1080p Ultra" -> "1080p"
                 
-                // Get file size
-                const fileSize = await getFileSize(data.url);
-                
-                return {
-                    name: "HDRezka",
-                    title: `${title} ${year ? `(${year})` : ''} ${quality}${mediaType === 'tv' ? ` S${seasonNum}E${episodeNum}` : ''}`,
-                    url: data.url,
-                    quality: cleanQuality,
-                    size: fileSize,
-                    type: 'direct'
-                };
+                // Get file size using Promise chain
+                return getFileSize(data.url).then(fileSize => {
+                    return {
+                        name: "HDRezka",
+                        title: `${title} ${year ? `(${year})` : ''} ${quality}${mediaType === 'tv' ? ` S${seasonNum}E${episodeNum}` : ''}`,
+                        url: data.url,
+                        quality: cleanQuality,
+                        size: fileSize,
+                        type: 'direct'
+                    };
+                });
             });
 
         const streams = await Promise.all(streamPromises);
