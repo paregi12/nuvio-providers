@@ -3,7 +3,6 @@
 
 // Import cheerio-without-node-native for React Native
 const cheerio = require('cheerio-without-node-native');
-const { Buffer } = require('buffer');
 
 console.log('[MoviesMod] Using cheerio-without-node-native for DOM parsing');
 
@@ -246,8 +245,8 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
         return [];
       }
 
-      // Use Buffer.from instead of atob for proper base64 decoding
-      const decodedUrl = Buffer.from(encodedUrl, 'base64').toString('utf8');
+      // Use atob for base64 decoding (React Native compatible)
+      const decodedUrl = atob(encodedUrl);
       console.log(`[MoviesMod] Decoded modrefer URL: ${decodedUrl}`);
       
       const response = await makeRequest(decodedUrl, {
