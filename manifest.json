@@ -3,13 +3,29 @@
   "scrapers": [
     {
       "id": "uhdmovies",
-      "name": "UHD Movies",
+      "name": "UHDMovies",
       "description": "High-quality movie and TV show streams from UHD Movies",
       "version": "1.0.1",
       "author": "Nuvio Team",
-      "supportedTypes": ["movie", "tv"],
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
       "filename": "uhdmovies.js",
       "enabled": true
+    },
+    {
+      "id": "moviesmod",
+      "name": "MoviesMod",
+      "description": "Movie and TV show streams from MoviesMod with multiple quality options",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "moviesmod.js",
+      "enabled": false
     }
   ]
 }

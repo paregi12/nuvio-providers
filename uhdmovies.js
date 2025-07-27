@@ -916,28 +916,28 @@ async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpiso
           if (link && !links.some(item => item.url === link)) {
             let qualityText = 'Unknown Quality';
             const parentP = linkElement.closest('p, div');
-            
+
             // Look for season information in the quality text and surrounding context
             let foundSeasonMatch = false;
-            
+
             // Check previous elements for quality and season info
             let currentElement = parentP;
             for (let j = 0; j < 10; j++) {
               currentElement = currentElement.prev();
               if (currentElement.length === 0) break;
-              
+
               const prevText = currentElement.text().trim();
               if (prevText && prevText.length > 5) {
                 // Check if this text contains season information
                 const seasonRegex = new RegExp(`S0?${targetSeason}(?![0-9])`, 'i');
                 const seasonWordRegex = new RegExp(`Season\\s+0*${targetSeason}(?![0-9])`, 'i');
-                
+
                 if (seasonRegex.test(prevText) || seasonWordRegex.test(prevText)) {
                   qualityText = prevText;
                   foundSeasonMatch = true;
                   break;
                 }
-                
+
                 // If we find a different season, skip this link
                 const otherSeasonRegex = /S0?(\d+)(?![0-9])|Season\s+(\d+)(?![0-9])/i;
                 const otherSeasonMatch = otherSeasonRegex.exec(prevText);
@@ -950,7 +950,7 @@ async function extractTvShowDownloadLinks(showPageUrl, targetSeason, targetEpiso
                 }
               }
             }
-            
+
             // Only add the link if we found a season match or no season info at all
             if (foundSeasonMatch || qualityText === 'Unknown Quality') {
               if (qualityText === 'Unknown Quality') {
