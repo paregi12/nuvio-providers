@@ -282,10 +282,27 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
         $('a').each((i, el) => {
           const link = $(el).attr('href');
           const text = $(el).text().trim();
-          if (link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.examzculture.in') || link.includes('tech.creativeexpressionsblog.com'))) {
+          if (link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.examzculture.in') || link.includes('tech.creativeexpressionsblog.com') || link.includes('tech.examdegree.site'))) {
             console.log(`[MoviesMod] Found direct link: ${text} -> ${link}`);
             finalLinks.push({
               server: text || 'Download Link',
+              url: link,
+            });
+          }
+        });
+      }
+      
+      // Also look for any additional download buttons or links that might be hidden
+      if (finalLinks.length === 0) {
+        console.log(`[MoviesMod] Looking for alternative download patterns...`);
+        $('button, .download-btn, .btn, [class*="download"], [class*="btn"]').each((i, el) => {
+          const $el = $(el);
+          const link = $el.attr('href') || $el.attr('data-href') || $el.find('a').attr('href');
+          const text = $el.text().trim();
+          if (link && (link.includes('driveseed.org') || link.includes('tech.unblockedgames.world') || link.includes('tech.examzculture.in') || link.includes('tech.creativeexpressionsblog.com') || link.includes('tech.examdegree.site'))) {
+            console.log(`[MoviesMod] Found alternative link: ${text} -> ${link}`);
+            finalLinks.push({
+              server: text || 'Alternative Download',
               url: link,
             });
           }
@@ -474,6 +491,20 @@ async function resolveDriveseedLink(driveseedUrl) {
         });
       }
 
+      // Find any other download links as additional fallbacks
+      $('a[href*="/download/"]').each((i, el) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().trim();
+        if (href && text && !downloadOptions.some(opt => opt.url === href)) {
+          downloadOptions.push({
+            title: text,
+            type: 'generic',
+            url: href.startsWith('http') ? href : `https://driveseed.org${href}`,
+            priority: 4
+          });
+        }
+      });
+
       // Find Instant Download (final fallback)
       const instantDownloadLink = $('a:contains("Instant Download")').attr('href');
       if (instantDownloadLink) {
@@ -612,20 +643,30 @@ async function processDownloadLink(link, selectedResult, mediaType, episodeNum) 
         let currentUrl = targetLink.url;
 
         // Handle SID links if they appear
-        if (currentUrl && (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com') || currentUrl.includes('tech.examzculture.in'))) {
+        if (currentUrl && (currentUrl.includes('tech.unblockedgames.world') || currentUrl.includes('tech.creativeexpressionsblog.com') || currentUrl.includes('tech.examzculture.in') || currentUrl.includes('tech.examdegree.site'))) {
           console.log(`[MoviesMod] Resolving SID link: ${targetLink.server}`);
           const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
           if (!resolvedUrl) {
             console.log(`[MoviesMod] Failed to resolve SID link for ${targetLink.server}`);
             continue;
           }
+          
+          // Skip broken link report pages
+          if (resolvedUrl.includes('report-broken-links') || resolvedUrl.includes('moviesmod.wiki')) {
+            console.log(`[MoviesMod] Skipping broken link report page for ${targetLink.server}`);
+            continue;
+          }
+          
           currentUrl = resolvedUrl;
         }
 
         if (currentUrl && currentUrl.includes('driveseed.org')) {
           const { downloadOptions, size, fileName } = await resolveDriveseedLink(currentUrl);
 
-          if (!downloadOptions || downloadOptions.length === 0) continue;
+          if (!downloadOptions || downloadOptions.length === 0) {
+            console.log(`[MoviesMod] No download options found for ${targetLink.server} - ${currentUrl}`);
+            continue;
+          }
 
           // Try download methods in order of priority
           let finalDownloadUrl = null;
