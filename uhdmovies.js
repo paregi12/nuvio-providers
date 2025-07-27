@@ -4,9 +4,17 @@
 // Import cheerio for React Native
 let cheerio = null;
 try {
-  cheerio = require('react-native-cheerio');
+  // Try cheerio-without-node-native first (more reliable)
+  cheerio = require('cheerio-without-node-native');
+  console.log('[UHDMovies] Using cheerio-without-node-native for DOM parsing');
 } catch (error) {
-  console.warn('[UHDMovies] react-native-cheerio not found, falling back to regex parsing');
+  try {
+    // Fallback to react-native-cheerio
+    cheerio = require('react-native-cheerio');
+    console.log('[UHDMovies] Using react-native-cheerio for DOM parsing');
+  } catch (error2) {
+    console.warn('[UHDMovies] No Cheerio library found, falling back to regex parsing');
+  }
 }
 
 // Constants
