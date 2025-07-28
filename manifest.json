@@ -46,7 +46,7 @@
     {
       "id": "dahmermovies",
       "name": "DahmerMovies",
-      "description": "High-quality movie and TV show streams from Dahmer Movies",
+      "description": "High-quality movie and TV show streams from Dahmer Movies, Can be slow at times to fetch and stream. Only use if needed.",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
