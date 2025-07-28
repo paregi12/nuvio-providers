@@ -151,7 +151,18 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
         const results = filteredPaths.map(path => {
             const quality = getIndexQuality(path.text);
             const tags = getIndexQualityTags(path.text);
-            const fullUrl = decode(encodeUrl(url + path.href));
+            
+            // Construct proper URL - handle relative paths correctly
+            let fullUrl;
+            if (path.href.startsWith('http')) {
+                // Already a full URL
+                fullUrl = path.href;
+            } else {
+                // Relative path - combine with base URL
+                const baseUrl = url.endsWith('/') ? url : url + '/';
+                const relativePath = path.href.startsWith('/') ? path.href.substring(1) : path.href;
+                fullUrl = baseUrl + encodeURIComponent(relativePath);
+            }
             
             return {
                 name: "DahmerMovies",
