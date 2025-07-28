@@ -87,17 +87,70 @@ function decode(input) {
     }
 }
 
+// Format file size from bytes to human readable format
+function formatFileSize(sizeText) {
+    if (!sizeText) return null;
+    
+    // If it's already formatted (contains GB, MB, etc.), return as is
+    if (/\d+(\.\d+)?\s*(GB|MB|KB|TB)/i.test(sizeText)) {
+        return sizeText;
+    }
+    
+    // If it's a number (bytes), convert to human readable
+    const bytes = parseInt(sizeText);
+    if (isNaN(bytes)) return sizeText;
+    
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes === 0) return '0 Bytes';
+    
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    const size = (bytes / Math.pow(1024, i)).toFixed(2);
+    
+    return `${size} ${sizes[i]}`;
+}
+
 // Parse HTML using basic string manipulation (React Native compatible)
 function parseLinks(html) {
     const links = [];
-    const linkRegex = /<a[^>]*href=["']([^"']*)["'][^>]*>([^<]*)<\/a>/gi;
-    let match;
     
-    while ((match = linkRegex.exec(html)) !== null) {
-        const href = match[1];
-        const text = match[2].trim();
-        if (text && href) {
-            links.push({ text, href });
+    // Parse table rows to get both links and file sizes
+    const rowRegex = /<tr[^>]*>(.*?)<\/tr>/gis;
+    let rowMatch;
+    
+    while ((rowMatch = rowRegex.exec(html)) !== null) {
+        const rowContent = rowMatch[1];
+        
+        // Extract link from the row
+        const linkMatch = rowContent.match(/<a[^>]*href=["']([^"']*)["'][^>]*>([^<]*)<\/a>/i);
+        if (!linkMatch) continue;
+        
+        const href = linkMatch[1];
+        const text = linkMatch[2].trim();
+        
+        // Skip parent directory and empty links
+        if (!text || href === '../' || text === '../') continue;
+        
+        // Extract file size from the same row
+        let size = null;
+        const sizeMatch = rowContent.match(/<td[^>]*class=["']filesize["'][^>]*[^>]*>([^<]+)<\/td>/i);
+        if (sizeMatch) {
+            size = sizeMatch[1].trim();
+        }
+        
+        links.push({ text, href, size });
+    }
+    
+    // Fallback to simple link parsing if table parsing fails
+    if (links.length === 0) {
+        const linkRegex = /<a[^>]*href=["']([^"']*)["'][^>]*>([^<]*)<\/a>/gi;
+        let match;
+        
+        while ((match = linkRegex.exec(html)) !== null) {
+            const href = match[1];
+            const text = match[2].trim();
+            if (text && href && href !== '../' && text !== '../') {
+                links.push({ text, href, size: null });
+            }
         }
     }
     
@@ -169,7 +222,7 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
                 title: `DahmerMovies ${tags || path.text}`,
                 url: fullUrl,
                 quality: `${quality}p`,
-                size: null, // File size not available from directory listing
+                size: formatFileSize(path.size), // Format file size
                 type: 'direct',
                 filename: path.text
             };
