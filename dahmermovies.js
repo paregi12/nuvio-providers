@@ -59,6 +59,35 @@ function getIndexQuality(str) {
     return match ? parseInt(match[1]) : Qualities.Unknown;
 }
 
+// Extract quality with codec information
+function getQualityWithCodecs(str) {
+    if (!str) return 'Unknown';
+    
+    // Extract base quality (resolution)
+    const qualityMatch = str.match(/(\d{3,4})[pP]/);
+    const baseQuality = qualityMatch ? `${qualityMatch[1]}p` : 'Unknown';
+    
+    // Extract codec information (excluding HEVC and bit depth)
+    const codecs = [];
+    const lowerStr = str.toLowerCase();
+    
+    // HDR formats
+    if (lowerStr.includes('dv') || lowerStr.includes('dolby vision')) codecs.push('DV');
+    if (lowerStr.includes('hdr10+')) codecs.push('HDR10+');
+    else if (lowerStr.includes('hdr10') || lowerStr.includes('hdr')) codecs.push('HDR');
+    
+    // Special formats
+    if (lowerStr.includes('remux')) codecs.push('REMUX');
+    if (lowerStr.includes('imax')) codecs.push('IMAX');
+    
+    // Combine quality with codecs using pipeline separator
+    if (codecs.length > 0) {
+        return `${baseQuality} | ${codecs.join(' | ')}`;
+    }
+    
+    return baseQuality;
+}
+
 function getIndexQualityTags(str, fullTag = false) {
     if (!str) return '';
     
@@ -203,6 +232,7 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
         // Process and return results
         const results = filteredPaths.map(path => {
             const quality = getIndexQuality(path.text);
+            const qualityWithCodecs = getQualityWithCodecs(path.text);
             const tags = getIndexQualityTags(path.text);
             
             // Construct proper URL - handle relative paths correctly
@@ -231,7 +261,7 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
                 name: "DahmerMovies",
                 title: `DahmerMovies ${tags || path.text}`,
                 url: fullUrl,
-                quality: `${quality}p`,
+                quality: qualityWithCodecs, // Use enhanced quality with codecs
                 size: formatFileSize(path.size), // Format file size
                 type: 'direct',
                 filename: path.text
