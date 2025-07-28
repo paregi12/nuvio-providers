@@ -10,10 +10,12 @@ This repository contains local scrapers for the Nuvio streaming application. The
 ├── moviesmod.js           # MoviesMod scraper
 ├── hdrezka.js             # HDRezka scraper
 ├── dahmermovies.js        # Dahmer Movies scraper
+├── myflixer.js            # MyFlixer scraper
 ├── test_uhdmovies.js      # Test file for UHD Movies scraper
 ├── test_moviesmod.js      # Test file for MoviesMod scraper
 ├── test_hdrezka.js        # Test file for HDRezka scraper
 ├── test_dahmermovies.js   # Test file for Dahmer Movies scraper
+├── test_myflixer.js       # Test file for MyFlixer scraper
 └── README.md              # This file
 ```
 
@@ -58,6 +60,13 @@ This repository contains local scrapers for the Nuvio streaming application. The
 - **Content:** High-quality movies and TV shows
 - **Formats:** 1080p, 2160p (4K) with various encodings
 - **Features:** Direct file access, episode-specific extraction, quality filtering
+- **Status:** Active
+
+### MyFlixer
+- **Source:** MyFlixer website (watch32.sx)
+- **Content:** High-quality movies and TV shows with M3U8 streaming
+- **Formats:** 360p, 720p, 1080p with adaptive bitrate streaming
+- **Features:** M3U8 playlist extraction, Videostr decryption, multiple quality options, episode-specific streaming
 - **Status:** Active
 
 ## Scraper Development
@@ -482,6 +491,49 @@ const response = await fetch(url, {
 });
 
 // ❌ Avoid: axios, request, http modules
+```
+
+#### Async/Await Usage
+**IMPORTANT:** Do not use `async/await` syntax in your scrapers for React Native compatibility.
+
+```javascript
+// ❌ Don't use async/await
+async function getStreams(title, year) {
+  const response = await fetch(url);
+  const data = await response.json();
+  return data;
+}
+
+// ✅ Use Promises with .then()/.catch()
+function getStreams(title, year) {
+  return fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      // Process data
+      return processedStreams;
+    })
+    .catch(error => {
+      console.error(`[YourScraper] Error: ${error.message}`);
+      return [];
+    });
+}
+
+// ✅ Or use Promise constructor for complex flows
+function getStreams(title, year) {
+  return new Promise((resolve, reject) => {
+    fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        // Process data
+        const streams = processData(data);
+        resolve(streams);
+      })
+      .catch(error => {
+        console.error(`[YourScraper] Error: ${error.message}`);
+        resolve([]); // Return empty array instead of rejecting
+      });
+  });
+}
 ```
 
 #### Data Storage

@@ -14,7 +14,9 @@
       "filename": "uhdmovies.js",
       "enabled": true,
       "logo": "https://uhdmovies.cat/wp-content/uploads/2021/03/cropped-output-onlinepngtools-1-32x32.png",
-      "contentLanguage": ["en"]
+      "contentLanguage": [
+        "en"
+      ]
     },
     {
       "id": "moviesmod",
@@ -29,7 +31,9 @@
       "filename": "moviesmod.js",
       "enabled": false,
       "logo": "https://moviesmod.tube/wp-content/uploads/2022/10/moviesmod.png",
-      "contentLanguage": ["en"]
+      "contentLanguage": [
+        "en"
+      ]
     },
     {
       "id": "hdrezka",
@@ -44,7 +48,10 @@
       "filename": "hdrezka.js",
       "enabled": true,
       "logo": "https://hdrezka.ag/templates/hdrezka/images/favicon.ico",
-      "contentLanguage": ["ru", "en"]
+      "contentLanguage": [
+        "ru",
+        "en"
+      ]
     },
     {
       "id": "dahmermovies",
@@ -59,7 +66,26 @@
       "filename": "dahmermovies.js",
       "enabled": true,
       "logo": "https://image.similarpng.com/file/similarpng/very-thumbnail/2021/05/Letter-D-logo-design-template-with-geometric-shape-style-on-transparent-background-PNG.png",
-      "contentLanguage": ["en"]
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
+      "id": "myflixer",
+      "name": "MyFlixer",
+      "description": "High-quality movie and TV show streams from MyFlixer with M3U8 support and multiple quality options",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "myflixer.js",
+      "enabled": true,
+      "logo": "https://watch32.sx/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
