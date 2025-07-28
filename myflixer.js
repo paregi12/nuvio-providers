@@ -346,14 +346,30 @@ function parseM3U8Qualities(masterUrl) {
 }
 
 // Main scraping function
-function getStreams(title, year, season, episode, imdbId) {
-    console.log(`[MyFlixer] Searching for: ${title} (${year})`);
+function getStreams(tmdbId, mediaType, season, episode) {
+    console.log(`[MyFlixer] Searching for: ${tmdbId} (${mediaType})`);
     
-    // Build search query - use title instead of TMDB ID
-    const query = year ? `${title} ${year}` : title;
+    // First, get movie/TV show details from TMDB
+    const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`;
     
-    return searchContent(query)
-        .then(searchResults => {
+    return makeRequest(tmdbUrl)
+        .then(response => response.json())
+        .then(tmdbData => {
+            const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
+            const year = mediaType === 'tv' ? tmdbData.first_air_date?.substring(0, 4) : tmdbData.release_date?.substring(0, 4);
+            
+            if (!title) {
+                throw new Error('Could not extract title from TMDB response');
+            }
+            
+            console.log(`[MyFlixer] TMDB Info: "${title}" (${year || 'N/A'})`);
+            
+            // Build search query - use title instead of TMDB ID
+            const query = year ? `${title} ${year}` : title;
+            
+            return searchContent(query).then(searchResults => ({ searchResults, query }));
+        })
+        .then(({ searchResults, query }) => {
             if (searchResults.length === 0) {
                 console.log('[MyFlixer] No search results found');
                 return [];
@@ -493,6 +509,10 @@ function getStreams(title, year, season, episode, imdbId) {
         })
         .catch(error => {
             console.error(`[MyFlixer] Scraping error: ${error.message}`);
+            return [];
+        })
+        .catch(error => {
+            console.error(`[MyFlixer] TMDB API error: ${error.message}`);
             return [];
         });
 }
