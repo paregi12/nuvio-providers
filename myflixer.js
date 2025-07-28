@@ -267,9 +267,9 @@ function extractVideostrM3u8(url) {
                 .then(finalM3u8Url => {
                     console.log(`[MyFlixer] Final M3U8 URL: ${finalM3u8Url}`);
                     
-                    // Filter only megacdn links
-                    if (!finalM3u8Url.includes('megacdn.co')) {
-                        console.log('[MyFlixer] Skipping non-megacdn link');
+                    // Accept both megacdn and other reliable CDN links
+                    if (!finalM3u8Url.includes('megacdn.co') && !finalM3u8Url.includes('akmzed.cloud') && !finalM3u8Url.includes('sunnybreeze')) {
+                        console.log('[MyFlixer] Skipping unreliable CDN link');
                         return null;
                     }
                     
