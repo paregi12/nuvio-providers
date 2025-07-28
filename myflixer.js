@@ -349,7 +349,7 @@ function parseM3U8Qualities(masterUrl) {
 function getStreams(title, year, season, episode, imdbId) {
     console.log(`[MyFlixer] Searching for: ${title} (${year})`);
     
-    // Build search query
+    // Build search query - use title instead of TMDB ID
     const query = year ? `${title} ${year}` : title;
     
     return searchContent(query)
@@ -468,7 +468,7 @@ function getStreams(title, year, season, episode, imdbId) {
                 if (link.qualities && link.qualities.length > 0) {
                     link.qualities.forEach(quality => {
                         formattedLinks.push({
-                            name: `MyFlixer [${quality.quality}]`,
+                            name: `MyFlixer - ${quality.quality}`,
                             url: quality.url,
                             quality: quality.quality,
                             size: `${Math.round(quality.bandwidth / 1000)}kbps`,

@@ -69,7 +69,7 @@ function testMyFlixer() {
                     console.log(`   ${index + 1}. ${stream.name}`);
                     console.log(`      Quality: ${stream.quality}`);
                     console.log(`      Size: ${stream.size}`);
-                    console.log(`      URL: ${stream.url.substring(0, 80)}...`);
+                    console.log(`      URL: ${stream.url}`);
                     
                     if (stream.headers && Object.keys(stream.headers).length > 0) {
                         console.log(`      Headers: ${Object.keys(stream.headers).length} headers`);
