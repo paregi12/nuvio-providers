@@ -161,14 +161,14 @@ function parseLinks(html) {
 function invokeDahmerMovies(title, year, season = null, episode = null) {
     console.log(`[DahmerMovies] Searching for: ${title} (${year})${season ? ` Season ${season}` : ''}${episode ? ` Episode ${episode}` : ''}`);
     
-    // Construct URL based on content type
-    const url = season === null 
-        ? `${DAHMER_MOVIES_API}/movies/${title.replace(/:/g, '')} (${year})/`
-        : `${DAHMER_MOVIES_API}/tvs/${title.replace(/:/g, ' -')}/Season ${season}/`;
+    // Construct URL based on content type (with proper encoding)
+    const encodedUrl = season === null 
+        ? `${DAHMER_MOVIES_API}/movies/${encodeURIComponent(title.replace(/:/g, '') + ' (' + year + ')')}/`
+        : `${DAHMER_MOVIES_API}/tvs/${encodeURIComponent(title.replace(/:/g, ' -'))}/Season ${season}/`;
     
-    console.log(`[DahmerMovies] Fetching from: ${url}`);
+    console.log(`[DahmerMovies] Fetching from: ${encodedUrl}`);
     
-    return makeRequest(url).then(function(response) {
+    return makeRequest(encodedUrl).then(function(response) {
         return response.text();
     }).then(function(html) {
         console.log(`[DahmerMovies] Response length: ${html.length}`);
@@ -208,13 +208,23 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
             // Construct proper URL - handle relative paths correctly
             let fullUrl;
             if (path.href.startsWith('http')) {
-                // Already a full URL
-                fullUrl = path.href;
+                // Already a full URL - need to encode it properly
+                try {
+                    // Parse the URL and let the URL constructor handle encoding
+                    const url = new URL(path.href);
+                    // Reconstruct the URL with properly encoded pathname
+                    fullUrl = `${url.protocol}//${url.host}${url.pathname}`;
+                } catch (error) {
+                    // Fallback: manually encode if URL parsing fails
+                    console.log(`[DahmerMovies] URL parsing failed, manually encoding: ${path.href}`);
+                    fullUrl = path.href.replace(/ /g, '%20');
+                }
             } else {
-                // Relative path - combine with base URL
-                const baseUrl = url.endsWith('/') ? url : url + '/';
+                // Relative path - combine with encoded base URL
+                const baseUrl = encodedUrl.endsWith('/') ? encodedUrl : encodedUrl + '/';
                 const relativePath = path.href.startsWith('/') ? path.href.substring(1) : path.href;
-                fullUrl = baseUrl + encodeURIComponent(relativePath);
+                const encodedFilename = encodeURIComponent(relativePath);
+                fullUrl = baseUrl + encodedFilename;
             }
             
             return {
