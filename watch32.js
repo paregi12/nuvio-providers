@@ -375,7 +375,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 return [];
             }
             
-            console.log(`[MyFlixer] Found ${searchResults.length} results`);
+            console.log(`[Watch32] Found ${searchResults.length} results`);
             
             // Try to find exact match first, then partial match
             let selectedResult = searchResults.find(result => 
@@ -396,14 +396,14 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 selectedResult = searchResults[0];
             }
             
-            console.log(`[MyFlixer] Selected: ${selectedResult.title}`);
+            console.log(`[Watch32] Selected: ${selectedResult.title}`);
             
             // Get content details
             return getContentDetails(selectedResult.url).then(contentDetails => ({ contentDetails, tmdbData }));
         })
         .then(({ contentDetails, tmdbData }) => {
             if (!contentDetails) {
-                console.log('[MyFlixer] Could not get content details');
+                console.log('[Watch32] Could not get content details');
                 return [];
             }
             
@@ -425,13 +425,13 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 }
                 
                 if (episodes.length === 0) {
-                    console.log('[MyFlixer] No matching episodes found');
+                    console.log('[Watch32] No matching episodes found');
                     return [];
                 }
                 
                 // Use first matching episode
                 selectedEpisode = episodes[0];
-                console.log(`[MyFlixer] Selected episode: S${selectedEpisode.season}E${selectedEpisode.episode} - ${selectedEpisode.name}`);
+                console.log(`[Watch32] Selected episode: S${selectedEpisode.season}E${selectedEpisode.episode} - ${selectedEpisode.name}`);
                 dataToProcess.push(selectedEpisode.data);
             }
             
@@ -439,7 +439,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
             const allPromises = dataToProcess.map(data => {
                 return getServerLinks(data)
                     .then(serverLinks => {
-                        console.log(`[MyFlixer] Found ${serverLinks.length} servers`);
+                        console.log(`[Watch32] Found ${serverLinks.length} servers`);
                         
                         // Process all server links
                         const linkPromises = serverLinks.map(linkId => {
@@ -447,7 +447,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                                 .then(sourceUrl => {
                                     if (!sourceUrl) return null;
                                     
-                                    console.log(`[MyFlixer] Source URL: ${sourceUrl}`);
+                                    console.log(`[Watch32] Source URL: ${sourceUrl}`);
                                     
                                     // Check if it's a videostr URL
                                     if (sourceUrl.includes('videostr.net')) {
@@ -456,7 +456,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                                     return null;
                                 })
                                 .catch(error => {
-                                    console.error(`[MyFlixer] Error processing link ${linkId}: ${error.message}`);
+                                    console.error(`[Watch32] Error processing link ${linkId}: ${error.message}`);
                                     return null;
                                 });
                         });
@@ -494,7 +494,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 if (link.qualities && link.qualities.length > 0) {
                     link.qualities.forEach(quality => {
                         formattedLinks.push({
-                            name: `MyFlixer - ${quality.quality}`,
+                            name: `Watch32 - ${quality.quality}`,
                             title: formattedTitle,
                             url: quality.url,
                             quality: quality.quality,
@@ -504,19 +504,19 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     });
                 } else {
                     // Skip unknown quality links
-                    console.log('[MyFlixer] Skipping unknown quality link');
+                    console.log('[Watch32] Skipping unknown quality link');
                 }
             });
             
-            console.log(`[MyFlixer] Total found: ${formattedLinks.length} streams`);
+            console.log(`[Watch32] Total found: ${formattedLinks.length} streams`);
             return formattedLinks;
         })
         .catch(error => {
-            console.error(`[MyFlixer] Scraping error: ${error.message}`);
+            console.error(`[Watch32] Scraping error: ${error.message}`);
             return [];
         })
         .catch(error => {
-            console.error(`[MyFlixer] TMDB API error: ${error.message}`);
+            console.error(`[Watch32] TMDB API error: ${error.message}`);
             return [];
         });
 }
@@ -526,5 +526,5 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = { getStreams };
 } else {
     // For React Native environment
-    global.MyFlixerScraperModule = { getStreams };
+    global.Watch32ScraperModule = { getStreams };
 }
