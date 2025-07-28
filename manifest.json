@@ -14,7 +14,7 @@
       "filename": "uhdmovies.js",
       "enabled": true,
       "logo": "https://uhdmovies.cat/wp-content/uploads/2021/03/cropped-output-onlinepngtools-1-32x32.png",
-      "contentLanguage": "en"
+      "contentLanguage": ["en"]
     },
     {
       "id": "moviesmod",
@@ -29,7 +29,7 @@
       "filename": "moviesmod.js",
       "enabled": false,
       "logo": "https://moviesmod.tube/wp-content/uploads/2022/10/moviesmod.png",
-      "contentLanguage": "en"
+      "contentLanguage": ["en"]
     },
     {
       "id": "hdrezka",
@@ -44,7 +44,7 @@
       "filename": "hdrezka.js",
       "enabled": true,
       "logo": "https://hdrezka.ag/templates/hdrezka/images/favicon.ico",
-      "contentLanguage": "ru"
+      "contentLanguage": ["ru", "en"]
     },
     {
       "id": "dahmermovies",
@@ -59,7 +59,7 @@
       "filename": "dahmermovies.js",
       "enabled": true,
       "logo": "https://a.111477.xyz/favicon.ico",
-      "contentLanguage": "en"
+      "contentLanguage": ["en"]
     }
   ]
 }
