@@ -9,9 +9,11 @@ This repository contains local scrapers for the Nuvio streaming application. The
 ├── uhdmovies.js           # UHD Movies scraper
 ├── moviesmod.js           # MoviesMod scraper
 ├── hdrezka.js             # HDRezka scraper
+├── dahmermovies.js        # Dahmer Movies scraper
 ├── test_uhdmovies.js      # Test file for UHD Movies scraper
 ├── test_moviesmod.js      # Test file for MoviesMod scraper
 ├── test_hdrezka.js        # Test file for HDRezka scraper
+├── test_dahmermovies.js   # Test file for Dahmer Movies scraper
 └── README.md              # This file
 ```
 
@@ -49,6 +51,13 @@ This repository contains local scrapers for the Nuvio streaming application. The
 - **Content:** High-quality movies and TV shows with subtitle support
 - **Formats:** 360p, 480p, 720p, 1080p Ultra (premium content requires login)
 - **Features:** Multi-language subtitles (Russian, Ukrainian, English), episode-specific streaming
+- **Status:** Active
+
+### Dahmer Movies
+- **Source:** Dahmer Movies website (a.111477.xyz)
+- **Content:** High-quality movies and TV shows
+- **Formats:** 1080p, 2160p (4K) with various encodings
+- **Features:** Direct file access, episode-specific extraction, quality filtering
 - **Status:** Active
 
 ## Scraper Development

@@ -26,7 +26,7 @@ function makeRequest(url, options = {}) {
             ...BASE_HEADERS,
             ...options.headers
         }
-    }).then(function(response) {
+    }).then(function (response) {
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -152,9 +152,9 @@ function searchAndFindMediaId(media) {
     fullUrl.searchParams.append('q', media.title);
 
     console.log(`[HDRezka] Making search request to: ${fullUrl.toString()}`);
-    return makeRequest(fullUrl.toString()).then(function(response) {
+    return makeRequest(fullUrl.toString()).then(function (response) {
         return response.text();
-    }).then(function(searchData) {
+    }).then(function (searchData) {
         console.log(`[HDRezka] Search response length: ${searchData.length}`);
 
         const movieData = [];
@@ -218,9 +218,9 @@ function getTranslatorId(url, id, media) {
     const fullUrl = url.startsWith('http') ? url : `${REZKA_BASE}${url.startsWith('/') ? url.substring(1) : url}`;
     console.log(`[HDRezka] Making request to: ${fullUrl}`);
 
-    return makeRequest(fullUrl).then(function(response) {
+    return makeRequest(fullUrl).then(function (response) {
         return response.text();
-    }).then(function(responseText) {
+    }).then(function (responseText) {
         console.log(`[HDRezka] Translator page response length: ${responseText.length}`);
 
         // Translator ID 238 represents the Original + subtitles player.
@@ -266,9 +266,9 @@ function getStreamData(id, translatorId, media) {
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
         }
-    }).then(function(response) {
+    }).then(function (response) {
         return response.text();
-    }).then(function(rawText) {
+    }).then(function (rawText) {
         console.log(`[HDRezka] Stream response length: ${rawText.length}`);
 
         try {
@@ -291,13 +291,13 @@ function getStreamData(id, translatorId, media) {
 // Get file size using HEAD request
 function getFileSize(url) {
     console.log(`[HDRezka] Getting file size for: ${url.substring(0, 60)}...`);
-    
+
     return fetch(url, {
         method: 'HEAD',
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-    }).then(function(response) {
+    }).then(function (response) {
         if (response.ok) {
             const contentLength = response.headers.get('content-length');
             if (contentLength) {
@@ -307,10 +307,10 @@ function getFileSize(url) {
                 return sizeFormatted;
             }
         }
-        
+
         console.log(`[HDRezka] Could not determine file size`);
         return null;
-    }).catch(function(error) {
+    }).catch(function (error) {
         console.log(`[HDRezka] Error getting file size: ${error.message}`);
         return null;
     });
@@ -319,11 +319,11 @@ function getFileSize(url) {
 // Format file size in human readable format
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
-    
+
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
+
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
@@ -340,9 +340,9 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
 
     // Get TMDB info
     const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
-    return makeRequest(tmdbUrl).then(function(tmdbResponse) {
+    return makeRequest(tmdbUrl).then(function (tmdbResponse) {
         return tmdbResponse.json();
-    }).then(function(tmdbData) {
+    }).then(function (tmdbData) {
         const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
         const year = mediaType === 'tv' ? tmdbData.first_air_date?.substring(0, 4) : tmdbData.release_date?.substring(0, 4);
 
@@ -366,21 +366,21 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
         }
 
         // Step 1: Search and find media ID
-        return searchAndFindMediaId(media).then(function(searchResult) {
+        return searchAndFindMediaId(media).then(function (searchResult) {
             if (!searchResult || !searchResult.id) {
                 console.log('[HDRezka] No search result found');
                 return [];
             }
 
             // Step 2: Get translator ID
-            return getTranslatorId(searchResult.url, searchResult.id, media).then(function(translatorId) {
+            return getTranslatorId(searchResult.url, searchResult.id, media).then(function (translatorId) {
                 if (!translatorId) {
                     console.log('[HDRezka] No translator ID found');
                     return [];
                 }
 
                 // Step 3: Get stream data
-                return getStreamData(searchResult.id, translatorId, media).then(function(streamData) {
+                return getStreamData(searchResult.id, translatorId, media).then(function (streamData) {
                     if (!streamData || !streamData.qualities) {
                         console.log('[HDRezka] No stream data found');
                         return [];
@@ -392,9 +392,9 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                         .filter(([quality, data]) => data.url && data.url !== 'null')
                         .map(([quality, data]) => {
                             const cleanQuality = quality.replace(/p.*$/, 'p'); // "1080p Ultra" -> "1080p"
-                            
+
                             // Get file size using Promise chain
-                            return getFileSize(data.url).then(function(fileSize) {
+                            return getFileSize(data.url).then(function (fileSize) {
                                 return {
                                     name: "HDRezka",
                                     title: `${title} ${year ? `(${year})` : ''} ${quality}${mediaType === 'tv' ? ` S${seasonNum}E${episodeNum}` : ''}`,
@@ -406,10 +406,10 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                             });
                         });
 
-                    return Promise.all(streamPromises).then(function(streams) {
+                    return Promise.all(streamPromises).then(function (streams) {
                         // Sort by quality (highest first) - optimized
                         if (streams.length > 1) {
-                            streams.sort(function(a, b) {
+                            streams.sort(function (a, b) {
                                 const qualityA = parseQualityForSort(a.quality);
                                 const qualityB = parseQualityForSort(b.quality);
                                 return qualityB - qualityA;
@@ -422,7 +422,7 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                 });
             });
         });
-    }).catch(function(error) {
+    }).catch(function (error) {
         console.error(`[HDRezka] Error in getStreams: ${error.message}`);
         return [];
     });
