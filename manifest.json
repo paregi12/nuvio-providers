@@ -71,9 +71,9 @@
       ]
     },
     {
-      "id": "myflixer",
-      "name": "MyFlixer",
-      "description": "High-quality movie and TV show streams from MyFlixer with M3U8 support and multiple quality options",
+      "id": "watch32",
+      "name": "Watch32",
+      "description": "Lightweight M3U8 Links",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -82,7 +82,7 @@
       ],
       "filename": "myflixer.js",
       "enabled": true,
-      "logo": "https://watch32.sx/favicon.ico",
+      "logo": "https://img.watch32.sx/xxrz/400x400/100/a9/5e/a95e15a880a9df3c045f6a5224daf576/a95e15a880a9df3c045f6a5224daf576.png",
       "contentLanguage": [
         "en"
       ]
