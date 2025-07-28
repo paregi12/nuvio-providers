@@ -12,7 +12,7 @@
         "tv"
       ],
       "filename": "uhdmovies.js",
-      "enabled": true,
+      "enabled": false,
       "logo": "https://uhdmovies.cat/wp-content/uploads/2021/03/cropped-output-onlinepngtools-1-32x32.png",
       "contentLanguage": [
         "en"
