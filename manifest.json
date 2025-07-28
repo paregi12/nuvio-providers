@@ -42,6 +42,20 @@
       "filename": "hdrezka.js",
       "enabled": true,
       "logo": "https://hdrezka.ag/templates/hdrezka/images/favicon.ico"
+    },
+    {
+      "id": "dahmermovies",
+      "name": "DahmerMovies",
+      "description": "High-quality movie and TV show streams from Dahmer Movies",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "dahmermovies.js",
+      "enabled": true,
+      "logo": "https://a.111477.xyz/favicon.ico"
     }
   ]
 }
