@@ -367,9 +367,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
             // Build search query - use title instead of TMDB ID
             const query = year ? `${title} ${year}` : title;
             
-            return searchContent(query).then(searchResults => ({ searchResults, query }));
+            return searchContent(query).then(searchResults => ({ searchResults, query, tmdbData }));
         })
-        .then(({ searchResults, query }) => {
+        .then(({ searchResults, query, tmdbData }) => {
             if (searchResults.length === 0) {
                 console.log('[MyFlixer] No search results found');
                 return [];
@@ -399,15 +399,16 @@ function getStreams(tmdbId, mediaType, season, episode) {
             console.log(`[MyFlixer] Selected: ${selectedResult.title}`);
             
             // Get content details
-            return getContentDetails(selectedResult.url);
+            return getContentDetails(selectedResult.url).then(contentDetails => ({ contentDetails, tmdbData }));
         })
-        .then(contentDetails => {
+        .then(({ contentDetails, tmdbData }) => {
             if (!contentDetails) {
                 console.log('[MyFlixer] Could not get content details');
                 return [];
             }
             
             let dataToProcess = [];
+            let selectedEpisode = null;
             
             if (contentDetails.type === 'movie') {
                 dataToProcess.push(contentDetails.data);
@@ -429,9 +430,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 }
                 
                 // Use first matching episode
-                const targetEpisode = episodes[0];
-                console.log(`[MyFlixer] Selected episode: S${targetEpisode.season}E${targetEpisode.episode} - ${targetEpisode.name}`);
-                dataToProcess.push(targetEpisode.data);
+                selectedEpisode = episodes[0];
+                console.log(`[MyFlixer] Selected episode: S${selectedEpisode.season}E${selectedEpisode.episode} - ${selectedEpisode.name}`);
+                dataToProcess.push(selectedEpisode.data);
             }
             
             // Process all data
@@ -464,9 +465,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     });
             });
             
-            return Promise.all(allPromises);
+            return Promise.all(allPromises).then(results => ({ results, tmdbData, selectedEpisode, contentDetails }));
         })
-        .then(results => {
+        .then(({ results, tmdbData, selectedEpisode, contentDetails }) => {
             // Flatten and filter results
             const allM3u8Links = [];
             for (const serverResults of results) {
@@ -477,6 +478,15 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 }
             }
             
+            // Build title with year and episode info
+            const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
+            const year = mediaType === 'tv' ? tmdbData.first_air_date?.substring(0, 4) : tmdbData.release_date?.substring(0, 4);
+            let formattedTitle = `${title} (${year || 'N/A'})`;
+            
+            if (mediaType === 'tv' && selectedEpisode) {
+                formattedTitle += ` - S${selectedEpisode.season}E${selectedEpisode.episode}`;
+            }
+            
             // Convert to Nuvio format
             const formattedLinks = [];
             
@@ -485,22 +495,16 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     link.qualities.forEach(quality => {
                         formattedLinks.push({
                             name: `MyFlixer - ${quality.quality}`,
+                            title: formattedTitle,
                             url: quality.url,
                             quality: quality.quality,
-                            size: `${Math.round(quality.bandwidth / 1000)}kbps`,
                             headers: link.headers || {},
                             subtitles: []
                         });
                     });
                 } else {
-                    formattedLinks.push({
-                        name: 'MyFlixer',
-                        url: link.m3u8Url,
-                        quality: 'Unknown',
-                        size: 'Unknown',
-                        headers: link.headers || {},
-                        subtitles: []
-                    });
+                    // Skip unknown quality links
+                    console.log('[MyFlixer] Skipping unknown quality link');
                 }
             });
             
