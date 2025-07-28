@@ -1,9 +1,9 @@
-// MyFlixer Scraper for Nuvio Local Scrapers
+// Watch32 Scraper for Nuvio Local Scrapers
 // React Native compatible version - Standalone (no external dependencies)
 
 // Import cheerio-without-node-native for React Native
 const cheerio = require('cheerio-without-node-native');
-console.log('[MyFlixer] Using cheerio-without-node-native for DOM parsing');
+console.log('[Watch32] Using cheerio-without-node-native for DOM parsing');
 
 // Constants
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
@@ -31,7 +31,7 @@ function makeRequest(url, options = {}) {
         return response;
     })
     .catch(error => {
-        console.error(`[MyFlixer] Request failed for ${url}: ${error.message}`);
+        console.error(`[Watch32] Request failed for ${url}: ${error.message}`);
         throw error;
     });
 }
@@ -39,7 +39,7 @@ function makeRequest(url, options = {}) {
 // Search for content
 function searchContent(query) {
     const searchUrl = `${MAIN_URL}/search/${query.replace(/\s+/g, '-')}`;
-    console.log(`[MyFlixer] Searching: ${searchUrl}`);
+    console.log(`[Watch32] Searching: ${searchUrl}`);
     
     return makeRequest(searchUrl)
         .then(response => response.text())
@@ -61,18 +61,18 @@ function searchContent(query) {
                 }
             });
             
-            console.log(`[MyFlixer] Found ${results.length} search results`);
+            console.log(`[Watch32] Found ${results.length} search results`);
             return results;
         })
         .catch(error => {
-            console.error(`[MyFlixer] Search error: ${error.message}`);
+            console.error(`[Watch32] Search error: ${error.message}`);
             return [];
         });
 }
 
 // Get content details (movie or TV series)
 function getContentDetails(url) {
-    console.log(`[MyFlixer] Getting content details: ${url}`);
+    console.log(`[Watch32] Getting content details: ${url}`);
     
     return makeRequest(url)
         .then(response => response.text())
@@ -136,14 +136,14 @@ function getContentDetails(url) {
             }
         })
         .catch(error => {
-            console.error(`[MyFlixer] Content details error: ${error.message}`);
+            console.error(`[Watch32] Content details error: ${error.message}`);
             return null;
         });
 }
 
 // Get server links for content
 function getServerLinks(data) {
-    console.log(`[MyFlixer] Getting server links: ${data}`);
+    console.log(`[Watch32] Getting server links: ${data}`);
     
     return makeRequest(`${MAIN_URL}/ajax/episode/${data}`)
         .then(response => response.text())
@@ -161,27 +161,27 @@ function getServerLinks(data) {
             return servers;
         })
         .catch(error => {
-            console.error(`[MyFlixer] Server links error: ${error.message}`);
+            console.error(`[Watch32] Server links error: ${error.message}`);
             return [];
         });
 }
 
 // Get source URL from link ID
 function getSourceUrl(linkId) {
-    console.log(`[MyFlixer] Getting source URL for linkId: ${linkId}`);
+    console.log(`[Watch32] Getting source URL for linkId: ${linkId}`);
     
     return makeRequest(`${MAIN_URL}/ajax/episode/sources/${linkId}`)
         .then(response => response.json())
         .then(data => data.link)
         .catch(error => {
-            console.error(`[MyFlixer] Source URL error: ${error.message}`);
+            console.error(`[Watch32] Source URL error: ${error.message}`);
             return null;
         });
 }
 
 // Extract M3U8 from Videostr
 function extractVideostrM3u8(url) {
-    console.log(`[MyFlixer] Extracting from Videostr: ${url}`);
+    console.log(`[Watch32] Extracting from Videostr: ${url}`);
     
     const headers = {
         'Accept': '*/*',
@@ -213,11 +213,11 @@ function extractVideostrM3u8(url) {
                 throw new Error('Could not extract nonce');
             }
             
-            console.log(`[MyFlixer] Extracted nonce: ${nonce}`);
+            console.log(`[Watch32] Extracted nonce: ${nonce}`);
             
             // Get sources from API
             const apiUrl = `${VIDEOSTR_URL}/embed-1/v3/e-1/getSources?id=${id}&_k=${nonce}`;
-            console.log(`[MyFlixer] API URL: ${apiUrl}`);
+            console.log(`[Watch32] API URL: ${apiUrl}`);
             
             return makeRequest(apiUrl, { headers })
                 .then(response => response.json())
@@ -230,7 +230,7 @@ function extractVideostrM3u8(url) {
                     
                     // Check if sources is already an M3U8 URL
                     if (!m3u8Url.includes('.m3u8')) {
-                        console.log('[MyFlixer] Sources are encrypted, attempting to decrypt...');
+                        console.log('[Watch32] Sources are encrypted, attempting to decrypt...');
                         
                         // Get decryption key
                         return makeRequest('https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json')
@@ -265,11 +265,11 @@ function extractVideostrM3u8(url) {
                     return Promise.resolve(m3u8Url);
                 })
                 .then(finalM3u8Url => {
-                    console.log(`[MyFlixer] Final M3U8 URL: ${finalM3u8Url}`);
+                    console.log(`[Watch32] Final M3U8 URL: ${finalM3u8Url}`);
                     
                     // Accept both megacdn and other reliable CDN links
                     if (!finalM3u8Url.includes('megacdn.co') && !finalM3u8Url.includes('akmzed.cloud') && !finalM3u8Url.includes('sunnybreeze')) {
-                        console.log('[MyFlixer] Skipping unreliable CDN link');
+                        console.log('[Watch32] Skipping unreliable CDN link');
                         return null;
                     }
                     
@@ -286,7 +286,7 @@ function extractVideostrM3u8(url) {
                 });
         })
         .catch(error => {
-            console.error(`[MyFlixer] Videostr extraction error: ${error.message}`);
+            console.error(`[Watch32] Videostr extraction error: ${error.message}`);
             return null;
         });
 }
@@ -340,14 +340,14 @@ function parseM3U8Qualities(masterUrl) {
         return qualities;
     })
     .catch(error => {
-        console.error(`[MyFlixer] Error parsing M3U8 qualities: ${error.message}`);
+        console.error(`[Watch32] Error parsing M3U8 qualities: ${error.message}`);
         return [];
     });
 }
 
 // Main scraping function
 function getStreams(tmdbId, mediaType, season, episode) {
-    console.log(`[MyFlixer] Searching for: ${tmdbId} (${mediaType})`);
+    console.log(`[Watch32] Searching for: ${tmdbId} (${mediaType})`);
     
     // First, get movie/TV show details from TMDB
     const tmdbUrl = `https://api.themoviedb.org/3/${mediaType}/${tmdbId}?api_key=${TMDB_API_KEY}`;
@@ -362,7 +362,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 throw new Error('Could not extract title from TMDB response');
             }
             
-            console.log(`[MyFlixer] TMDB Info: "${title}" (${year || 'N/A'})`);
+            console.log(`[Watch32] TMDB Info: "${title}" (${year || 'N/A'})`);
             
             // Build search query - use title instead of TMDB ID
             const query = year ? `${title} ${year}` : title;
@@ -371,7 +371,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         })
         .then(({ searchResults, query, tmdbData }) => {
             if (searchResults.length === 0) {
-                console.log('[MyFlixer] No search results found');
+                console.log('[Watch32] No search results found');
                 return [];
             }
             
