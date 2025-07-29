@@ -87,6 +87,23 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "xprime",
+      "name": "Xprime",
+      "description": "High-quality movie and TV show streams from Xprime with multiple servers and parallel processing",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "xprime.js",
+      "enabled": true,
+      "logo": "https://xprime.tv/favicon/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
