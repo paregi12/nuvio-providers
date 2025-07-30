@@ -99,7 +99,7 @@
         "tv"
       ],
       "filename": "providers/xprime.js",
-      "enabled": false,
+      "enabled": true,
       "logo": "https://xprime.tv/favicon/favicon.ico",
       "contentLanguage": [
         "en"

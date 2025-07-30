@@ -376,8 +376,10 @@ function getXprimeServers(api) {
     console.log('[Xprime] Using hardcoded servers...');
     const hardcodedServers = [
         { name: 'primebox', status: 'ok' },
-        { name: 'phoenix', status: 'ok' },
-        { name: 'fox', status: 'ok' }
+        // Temporarily disabled Phoenix server
+        // { name: 'phoenix', status: 'ok' },
+        // Temporarily disabled Fox server
+        // { name: 'fox', status: 'ok' }
     ];
     console.log(`[Xprime] Using ${hardcodedServers.length} hardcoded servers: ${hardcodedServers.map(s => s.name).join(', ')}`);
     return Promise.resolve(hardcodedServers);
