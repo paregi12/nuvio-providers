@@ -351,7 +351,7 @@ function getStreamingLinks(contentId, title, platform) {
         // Platform-specific playlist endpoints
         const playlistEndpoints = {
             'netflix': `${NETMIRROR_BASE}/tv/playlist.php`,
-            'primevideo': `${NETMIRROR_BASE}/tv/pv/playlist.php`,
+            'primevideo': `${NETMIRROR_BASE}/mobile/pv/playlist.php`,
             'disney': `${NETMIRROR_BASE}/mobile/hs/playlist.php`
         };
         

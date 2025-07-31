@@ -109,7 +109,7 @@
       "id": "netmirror",
       "name": "NetMirror",
       "description": "Streaming links from netmirror. iOS is not currently supported, encouraged to disable. Will update when it's working.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
