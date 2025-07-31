@@ -673,7 +673,8 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                                         "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
                                         "Connection": "keep-alive",
                                         "Origin": "https://net2025.cc",
-                                        "Referer": "https://net2025.cc/",
+                                        "Referer": "https://net2025.cc/tv/home",
+                                        "Cookie": "hd=on",
                                         "Sec-Fetch-Dest": "empty",
                                         "Sec-Fetch-Mode": "cors",
                                         "Sec-Fetch-Site": "cross-site",
@@ -687,7 +688,8 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                                     streamHeaders = {
                                         "Accept": "application/vnd.apple.mpegurl, video/mp4, */*",
                                         "Origin": "https://net2025.cc",
-                                        "Referer": "https://net2025.cc/",
+                                        "Referer": "https://net2025.cc/tv/home",
+                                        "Cookie": "hd=on",
                                         "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/138.0.7204.156 Mobile/15E148 Safari/604.1"
                                     };
                                 }
