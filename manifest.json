@@ -116,7 +116,7 @@
         "tv"
       ],
       "filename": "providers/netmirror.js",
-      "enabled": false,
+      "enabled": true,
       "logo": "https://net2025.cc/favicon.ico",
       "contentLanguage": [
         "en"
