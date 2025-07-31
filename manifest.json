@@ -104,6 +104,23 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "netmirror",
+      "name": "NetMirror",
+      "description": "Streaming links from netmirror. iOS is not currently supported, encouraged to disable. Will update when it's working.",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/netmirror.js",
+      "enabled": false,
+      "logo": "https://net2025.cc/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
