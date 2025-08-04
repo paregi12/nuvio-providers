@@ -75,7 +75,7 @@
       "id": "watch32",
       "name": "Watch32",
       "description": "Lightweight M3U8 Links",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
