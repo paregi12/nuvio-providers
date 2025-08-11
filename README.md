@@ -1088,9 +1088,45 @@ function extractFromJavaScript(html) {
 - Test with different content types
 - Ask for help in community discussions
 
-## Legal Notice
+---
 
-This repository is for educational purposes. Users are responsible for ensuring they comply with all applicable laws and terms of service when using these scrapers. The authors are not responsible for any misuse of this software.
+## 🧰 Tools & Technologies
+
+<p align="left">
+  <a href="https://skillicons.dev">
+    <img src="https://skillicons.dev/icons?i=javascript,nodejs,github,githubactions&theme=light&perline=4" />
+  </a>
+</p>
+
+---
+
+## 💬 Feedback
+
+![Feedback](https://github.com/user-attachments/assets/9f7dfe73-f11d-41fe-996c-072de0f6853b)
+
+---
+
+## 📄 License
+
+[![GNU GPLv3 Image](https://www.gnu.org/graphics/gplv3-127x51.png)](http://www.gnu.org/licenses/gpl-3.0.en.html)
+
+These scrapers are **free software**: you can use, study, share, and modify them as you wish.
+
+They are distributed under the terms of the [GNU General Public License](https://www.gnu.org/licenses/gpl.html) version 3 or later, published by the Free Software Foundation.
+
+---
+
+## ⚖️ DMCA Disclaimer
+
+We hereby issue this notice to clarify that these scrapers function similarly to a standard web browser by fetching video files from the internet.
+
+- **No content is hosted by this repository or the Nuvio application.**
+- Any content accessed is hosted by third-party websites.
+- Users are solely responsible for their usage and must comply with their local laws.
+
+If you believe content is violating copyright laws, please contact the **actual file hosts**, **not** the developers of this repository or the Nuvio app.
+
+---
 
 ## Support
 
@@ -1100,3 +1136,5 @@ For issues or questions:
 - Join the community discussions
 
 ---
+
+**Thank You for using Nuvio Local Scrapers!**
