@@ -1100,11 +1100,7 @@ function extractFromJavaScript(html) {
 
 ---
 
-## 💬 Feedback
 
-![Feedback](https://github.com/user-attachments/assets/9f7dfe73-f11d-41fe-996c-072de0f6853b)
-
----
 
 ## 📄 License
 
