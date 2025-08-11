@@ -121,7 +121,7 @@
       "contentLanguage": [
         "en"
       ],
-      "disabledPlatforms": ["ios"]
+      "disabledPlatforms": [""]
     }
   ]
 }
