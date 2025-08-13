@@ -3,6 +3,23 @@
   "version": "1.0.0",
   "scrapers": [
     {
+      "id": "showboxog",
+      "name": "ShowBox (OG)",
+      "description": "ShowBox via FebBox using proxy and fixed cookie",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/showbox.js",
+      "enabled": true,
+      "logo": "https://www.showbox.media/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
       "id": "4khdhub",
       "name": "4KHDHub",
       "description": "4KHDHub direct links",
