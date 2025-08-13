@@ -174,26 +174,27 @@ function findBestMatch(results, query) {
   return scored[0].item;
 }
 
-// URL utils
-function validateUrl(url) {
-  try {
-    var urlObj = new URL(url);
-    var trustedHosts = ['pixeldrain.dev', 'r2.dev'];
-    var isTrusted = trustedHosts.some(function (h) { return urlObj.hostname.indexOf(h) !== -1; });
-    if (isTrusted) return Promise.resolve(true);
-  } catch (e) {
-    return Promise.resolve(false);
-  }
+// URL utils – replicate UHDMovies validation style
+function validateVideoUrl(url, timeout) {
+  console.log('[4KHDHub] Validating URL: ' + (url.substring(0, 100)) + '...');
   return fetch(url, {
     method: 'HEAD',
     headers: {
       'Range': 'bytes=0-1',
       'User-Agent': DEFAULT_HEADERS['User-Agent']
     }
-  }).then(function (res) {
-    var valid = res.ok || (res.status >= 200 && res.status < 400);
-    return valid;
-  }).catch(function () { return false; });
+  }).then(function (response) {
+    if (response.ok || response.status === 206) {
+      console.log('[4KHDHub] ✓ URL validation successful (' + response.status + ')');
+      return true;
+    } else {
+      console.log('[4KHDHub] ✗ URL validation failed with status: ' + response.status);
+      return false;
+    }
+  }).catch(function (error) {
+    console.log('[4KHDHub] ✗ URL validation failed: ' + (error && error.message));
+    return false;
+  });
 }
 
 function getFilenameFromUrl(url) {
@@ -679,10 +680,11 @@ function getTMDBDetails(tmdbId, mediaType) {
 function getStreams(tmdbId, type, season, episode) {
   type = type || 'movie';
   var cacheKey = '4khdhub_resolved_urls_v1_' + tmdbId + '_' + type + (season ? ('_s' + season + 'e' + (episode || '')) : '');
-  var disableValidation = (typeof DISABLE_4KHDHUB_URL_VALIDATION !== 'undefined') && (DISABLE_4KHDHUB_URL_VALIDATION === true);
+  var disableValidation = ((typeof URL_VALIDATION_ENABLED !== 'undefined') && (URL_VALIDATION_ENABLED === false)) ||
+                          ((typeof DISABLE_4KHDHUB_URL_VALIDATION !== 'undefined') && (DISABLE_4KHDHUB_URL_VALIDATION === true));
 
   function finalizeToStreams(links) {
-    var tasks = links.map(function (link) { return disableValidation ? Promise.resolve(true) : validateUrl(link.url); });
+    var tasks = links.map(function (link) { return disableValidation ? Promise.resolve(true) : validateVideoUrl(link.url); });
     return Promise.all(tasks).then(function (vals) {
       var validated = links.filter(function (l, idx) { return !!vals[idx]; });
       return validated.map(function (l) {
