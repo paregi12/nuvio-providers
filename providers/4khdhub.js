@@ -269,17 +269,36 @@ function searchContent(query) {
     return makeRequest(searchUrl).then(function (res) { return res.text(); }).then(function (html) {
       var $ = cheerio.load(html);
       var results = [];
-      $('div.card-grid a').each(function (i, el) {
+      
+      // Primary parsing for new movie-card structure
+      $('a').each(function (i, el) {
         var $el = $(el);
-        var title = $el.find('h3').text().trim();
+        var title = $el.find('h3.movie-card-title').text().trim();
         var href = $el.attr('href');
         var poster = $el.find('img').attr('src') || '';
+        var year = $el.find('p.movie-card-meta').text().trim();
+        
         if (title && href) {
           var absoluteUrl = href.indexOf('http') === 0 ? href : (baseUrl + (href.indexOf('/') === 0 ? '' : '/') + href);
-          results.push({ title: title, url: absoluteUrl, poster: poster });
+          results.push({ title: title, url: absoluteUrl, poster: poster, year: year });
         }
       });
-      // Fallback parsing for alternate layouts (from OG): cards or general anchors
+      
+      // Fallback parsing for legacy card-grid structure
+      if (results.length === 0) {
+        $('div.card-grid a').each(function (i, el) {
+          var $el = $(el);
+          var title = $el.find('h3').text().trim();
+          var href = $el.attr('href');
+          var poster = $el.find('img').attr('src') || '';
+          if (title && href) {
+            var absoluteUrl = href.indexOf('http') === 0 ? href : (baseUrl + (href.indexOf('/') === 0 ? '' : '/') + href);
+            results.push({ title: title, url: absoluteUrl, poster: poster });
+          }
+        });
+      }
+      
+      // Final fallback for general anchors
       if (results.length === 0) {
         $('a[href]').each(function (i, el) {
           var $el2 = $(el);
