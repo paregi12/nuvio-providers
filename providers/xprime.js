@@ -467,12 +467,21 @@ function processOtherServerResponse(data, serverLabel, serverName) {
             data.qualities.forEach(function(q) {
                 if (q && q.url) {
                     const normalizedQuality = getQualityFromName(q.quality);
+                    // Normalize size to a human-readable string
+                    let sizeStr = 'Unknown';
+                    if (typeof q.size === 'number' && isFinite(q.size)) {
+                        const gb = q.size / (1024 * 1024 * 1024);
+                        const mb = q.size / (1024 * 1024);
+                        sizeStr = gb >= 1 ? `${gb.toFixed(2)} GB` : `${mb.toFixed(0)} MB`;
+                    } else if (typeof q.size === 'string' && q.size.trim()) {
+                        sizeStr = q.size.trim();
+                    }
                     links.push({
                         source: serverLabel,
                         name: `XPRIME ${serverName.charAt(0).toUpperCase() + serverName.slice(1)} - ${normalizedQuality}`,
                         url: q.url,
                         quality: normalizedQuality,
-                        size: q.size || 'Unknown',
+                        size: sizeStr,
                         type: 'VIDEO',
                         headers: WORKING_HEADERS,
                         referer: 'https://xprime.tv'
