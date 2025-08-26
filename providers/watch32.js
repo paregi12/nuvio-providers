@@ -187,7 +187,7 @@ function extractVideostrM3u8(url) {
         'Accept': '*/*',
         'X-Requested-With': 'XMLHttpRequest',
         'Referer': VIDEOSTR_URL,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; Win64; x64) AppleWebKit/537.36'
     };
 
     // Extract ID from URL
@@ -222,47 +222,60 @@ function extractVideostrM3u8(url) {
             return makeRequest(apiUrl, { headers })
                 .then(response => response.json())
                 .then(sourcesData => {
-                    if (!sourcesData.sources) {
+                    console.log('[Watch32] Sources data:', JSON.stringify(sourcesData, null, 2));
+                    
+                    if (!sourcesData.sources || sourcesData.sources.length === 0) {
                         throw new Error('No sources found in response');
                     }
                     
-                    let m3u8Url = sourcesData.sources;
+                    // Get the first source file (matching Kotlin logic)
+                    const encoded = sourcesData.sources[0].file;
+                    console.log('[Watch32] Encoded source:', encoded);
                     
                     // Check if sources is already an M3U8 URL
-                    if (!m3u8Url.includes('.m3u8')) {
-                        console.log('[Watch32] Sources are encrypted, attempting to decrypt...');
-                        
-                        // Get decryption key
-                        return makeRequest('https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json')
-                            .then(response => response.json())
-                            .then(keyData => {
-                                const key = keyData.vidstr;
-                                
-                                if (!key) {
-                                    throw new Error('Could not get decryption key');
-                                }
-                                
-                                // Decrypt using Google Apps Script
-                                const decodeUrl = 'https://script.google.com/macros/s/AKfycbxHbYHbrGMXYD2-bC-C43D3njIbU-wGiYQuJL61H4vyy6YVXkybMNNEPJNPPuZrD1gRVA/exec';
-                                const fullUrl = `${decodeUrl}?encrypted_data=${encodeURIComponent(m3u8Url)}&nonce=${encodeURIComponent(nonce)}&secret=${encodeURIComponent(key)}`;
-                                
-                                return makeRequest(fullUrl)
-                                    .then(response => response.text())
-                                    .then(decryptedData => {
-                                        // Extract file URL from decrypted response
-                                        const fileMatch = decryptedData.match(/"file":"(.*?)"/); 
-                                        if (fileMatch) {
-                                            m3u8Url = fileMatch[1];
-                                        } else {
-                                            throw new Error('Could not extract video URL from decrypted response');
-                                        }
-                                        
-                                        return m3u8Url;
-                                    });
-                            });
+                    if (encoded.includes('.m3u8')) {
+                        console.log('[Watch32] Source is already M3U8 URL');
+                        return encoded;
                     }
                     
-                    return Promise.resolve(m3u8Url);
+                    console.log('[Watch32] Sources are encrypted, attempting to decrypt...');
+                    
+                    // Get decryption key - use 'mega' key like Kotlin version
+                    return makeRequest('https://raw.githubusercontent.com/yogesh-hacker/MegacloudKeys/refs/heads/main/keys.json')
+                        .then(response => response.json())
+                        .then(keyData => {
+                            console.log('[Watch32] Key data:', JSON.stringify(keyData, null, 2));
+                            
+                            const key = keyData.mega; // Use 'mega' key like Kotlin
+                            
+                            if (!key) {
+                                throw new Error('Could not get decryption key (mega)');
+                            }
+                            
+                            console.log('[Watch32] Using mega key for decryption');
+                            
+                            // Decrypt using Google Apps Script - exact same logic as Kotlin
+                            const decodeUrl = 'https://script.google.com/macros/s/AKfycbxHbYHbrGMXYD2-bC-C43D3njIbU-wGiYQuJL61H4vyy6YVXkybMNNEPJNPPuZrD1gRVA/exec';
+                            const fullUrl = `${decodeUrl}?encrypted_data=${encodeURIComponent(encoded)}&nonce=${encodeURIComponent(nonce)}&secret=${encodeURIComponent(key)}`;
+                            
+                            console.log('[Watch32] Decryption URL:', fullUrl);
+                            
+                            return makeRequest(fullUrl)
+                                .then(response => response.text())
+                                .then(decryptedData => {
+                                    console.log('[Watch32] Decrypted response:', decryptedData);
+                                    
+                                    // Extract file URL from decrypted response - exact same regex as Kotlin
+                                    const fileMatch = decryptedData.match(/"file":"(.*?)"/); 
+                                    if (fileMatch) {
+                                        const m3u8Url = fileMatch[1];
+                                        console.log('[Watch32] Extracted M3U8 URL:', m3u8Url);
+                                        return m3u8Url;
+                                    } else {
+                                        throw new Error('Video URL not found in decrypted response');
+                                    }
+                                });
+                        });
                 })
                 .then(finalM3u8Url => {
                     console.log(`[Watch32] Final M3U8 URL: ${finalM3u8Url}`);
