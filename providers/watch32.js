@@ -421,11 +421,10 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 return [];
             }
             
-            let dataToProcess = [];
-            let selectedEpisode = null;
+            let itemsToProcess = [];
             
             if (contentDetails.type === 'movie') {
-                dataToProcess.push(contentDetails.data);
+                itemsToProcess.push({ data: contentDetails.data, episodeMeta: null });
             } else {
                 // For TV series, filter by episode/season if specified
                 let episodes = contentDetails.episodes;
@@ -443,15 +442,16 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     return [];
                 }
                 
-                // Use first matching episode
-                selectedEpisode = episodes[0];
-                console.log(`[Watch32] Selected episode: S${selectedEpisode.season}E${selectedEpisode.episode} - ${selectedEpisode.name}`);
-                dataToProcess.push(selectedEpisode.data);
+                // Process all matching episodes in parallel
+                episodes.forEach(ep => {
+                    console.log(`[Watch32] Queue episode: S${ep.season}E${ep.episode} - ${ep.name}`);
+                    itemsToProcess.push({ data: ep.data, episodeMeta: ep });
+                });
             }
             
             // Process all data
-            const allPromises = dataToProcess.map(data => {
-                return getServerLinks(data)
+            const allPromises = itemsToProcess.map(item => {
+                return getServerLinks(item.data)
                     .then(serverLinks => {
                         console.log(`[Watch32] Found ${serverLinks.length} servers`);
                         
@@ -476,18 +476,20 @@ function getStreams(tmdbId, mediaType, season, episode) {
                         });
                         
                         return Promise.all(linkPromises);
-                    });
+                    })
+                    .then(results => ({ results, episodeMeta: item.episodeMeta }));
             });
             
-            return Promise.all(allPromises).then(results => ({ results, tmdbData, selectedEpisode, contentDetails }));
+            return Promise.all(allPromises).then(resultsWithMeta => ({ resultsWithMeta, tmdbData, contentDetails }));
         })
-        .then(({ results, tmdbData, selectedEpisode, contentDetails }) => {
+        .then(({ resultsWithMeta, tmdbData, contentDetails }) => {
             // Flatten and filter results
             const allM3u8Links = [];
-            for (const serverResults of results) {
+            for (const item of resultsWithMeta) {
+                const serverResults = item.results;
                 for (const result of serverResults) {
                     if (result) {
-                        allM3u8Links.push(result);
+                        allM3u8Links.push({ link: result, episodeMeta: item.episodeMeta });
                     }
                 }
             }
@@ -495,21 +497,22 @@ function getStreams(tmdbId, mediaType, season, episode) {
             // Build title with year and episode info
             const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
             const year = mediaType === 'tv' ? tmdbData.first_air_date?.substring(0, 4) : tmdbData.release_date?.substring(0, 4);
-            let formattedTitle = `${title} (${year || 'N/A'})`;
-            
-            if (mediaType === 'tv' && selectedEpisode) {
-                formattedTitle += ` - S${selectedEpisode.season}E${selectedEpisode.episode}`;
-            }
             
             // Convert to Nuvio format
             const formattedLinks = [];
             
-            allM3u8Links.forEach(link => {
+            allM3u8Links.forEach(item => {
+                const link = item.link;
+                const episodeMeta = item.episodeMeta;
+                let perItemTitle = `${title} (${year || 'N/A'})`;
+                if (mediaType === 'tv' && episodeMeta) {
+                    perItemTitle += ` - S${episodeMeta.season}E${episodeMeta.episode}`;
+                }
                 if (link.qualities && link.qualities.length > 0) {
                     link.qualities.forEach(quality => {
                         formattedLinks.push({
                             name: `Watch32 - ${quality.quality}`,
-                            title: formattedTitle,
+                            title: perItemTitle,
                             url: quality.url,
                             quality: quality.quality,
                             headers: link.headers || {},
