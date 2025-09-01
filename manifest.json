@@ -145,6 +145,23 @@
         "en"
       ],
       "disabledPlatforms": ["ios"]
+    },
+    {
+      "id": "vidsrc",
+      "name": "VidSrc",
+      "description": "High-quality M3U8 streaming links from VidSrc with multiple server support",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/vidsrc.js",
+      "enabled": true,
+      "logo": "https://vidsrc.xyz/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
