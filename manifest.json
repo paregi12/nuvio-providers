@@ -158,7 +158,7 @@
       ],
       "filename": "providers/vidsrc.js",
       "enabled": true,
-      "logo": "https://vidsrc.xyz/favicon.ico",
+      "logo": "https://vidsrc.xyz/template/vidsrc-ico.png",
       "contentLanguage": [
         "en"
       ]
