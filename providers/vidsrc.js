@@ -457,11 +457,7 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                             title: `${title || 'Unknown'} - ${stream.quality}`,
                             url: stream.url,
                             quality: stream.quality,
-                            type: 'direct',
-                            headers: {
-                                "Referer": BASEDOM,
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                            }
+                            type: 'direct'
                         }));
                         streams.push(...nuvioStreams);
                     } else {
