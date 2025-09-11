@@ -351,7 +351,7 @@ function getStreamingLinks(contentId, title, platform) {
         // Platform-specific playlist endpoints
         const playlistEndpoints = {
             'netflix': `${NETMIRROR_BASE}/tv/playlist.php`,
-            'primevideo': `${NETMIRROR_BASE}/mobile/pv/playlist.php`,
+            'primevideo': `${NETMIRROR_BASE}/tv/pv/playlist.php`,
             'disney': `${NETMIRROR_BASE}/mobile/hs/playlist.php`
         };
         
@@ -381,14 +381,35 @@ function getStreamingLinks(contentId, title, platform) {
         playlist.forEach(item => {
             if (item.sources) {
                 item.sources.forEach(source => {
-                    // Convert relative URLs to absolute URLs
+                    // Convert URLs similar to Kotlin providers
                     let fullUrl = source.file;
-                    if (source.file.startsWith('/') && !source.file.startsWith('//')) {
-                        fullUrl = NETMIRROR_BASE + source.file;
-                    } else if (source.file.startsWith('//')) {
-                        fullUrl = 'https:' + source.file;
+                    const lowerPlatform = (platform || '').toLowerCase();
+                    const isNfOrPv = lowerPlatform === 'netflix' || lowerPlatform === 'primevideo';
+                    if (isNfOrPv) {
+                        try {
+                            // Normalize to path-only and replace /tv/ -> /
+                            let pathOnly = fullUrl;
+                            if (pathOnly.startsWith('http')) {
+                                const u = new URL(pathOnly);
+                                pathOnly = u.pathname + u.search + u.hash;
+                            }
+                            pathOnly = pathOnly.replace('/tv/', '/');
+                            if (!pathOnly.startsWith('/')) pathOnly = '/' + pathOnly;
+                            fullUrl = 'https://net50.cc' + pathOnly;
+                        } catch (e) {
+                            let pathOnly = fullUrl.replace('/tv/', '/');
+                            if (!pathOnly.startsWith('/')) pathOnly = '/' + pathOnly;
+                            fullUrl = 'https://net50.cc' + pathOnly;
+                        }
+                    } else {
+                        // Default: resolve relative or protocol-relative against net2025
+                        if (fullUrl.startsWith('/') && !fullUrl.startsWith('//')) {
+                            fullUrl = NETMIRROR_BASE + fullUrl;
+                        } else if (fullUrl.startsWith('//')) {
+                            fullUrl = 'https:' + fullUrl;
+                        }
                     }
-                    
+
                     sources.push({
                         url: fullUrl,
                         quality: source.label,
@@ -664,11 +685,13 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                                     }
                                 }
                                 
-                                // Unified headers for all platforms (Netflix, Prime Video, and Disney)
+                                // Platform-specific headers (match Kotlin providers)
+                                const lowerPlatform = (platform || '').toLowerCase();
+                                const isNfOrPv = lowerPlatform === 'netflix' || lowerPlatform === 'primevideo';
                                 const streamHeaders = {
                                     "Accept": "application/vnd.apple.mpegurl, video/mp4, */*",
-                                    "Origin": "https://net2025.cc",
-                                    "Referer": "https://net2025.cc/tv/home",
+                                    "Origin": isNfOrPv ? "https://net50.cc" : "https://net2025.cc",
+                                    "Referer": isNfOrPv ? "https://net50.cc/" : "https://net2025.cc/tv/home",
                                     "Cookie": "hd=on",
                                     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 26_0_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/138.0.7204.156 Mobile/15E148 Safari/604.1"
                                 };
