@@ -144,7 +144,7 @@
       "contentLanguage": [
         "en"
       ],
-      "disabledPlatforms": []
+      "disabledPlatforms": ["ios"]
     },
     {
       "id": "vidsrc",
