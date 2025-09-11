@@ -132,7 +132,7 @@
       "id": "netmirror",
       "name": "NetMirror",
       "description": "Streaming links from netmirror. Automatically disabled on iOS due to compatibility issues.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -144,7 +144,7 @@
       "contentLanguage": [
         "en"
       ],
-      "disabledPlatforms": ["ios"]
+      "disabledPlatforms": []
     },
     {
       "id": "vidsrc",
