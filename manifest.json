@@ -178,7 +178,8 @@
       "formats": ["mkv"],
       "logo": "/Assets/streamflix-1.png",
       "contentLanguage": [
-        "en"
+        "en",
+        "hin"
       ]
     }
   ]
