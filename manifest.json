@@ -162,6 +162,24 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "streamflix",
+      "name": "StreamFlix",
+      "description": "Direct links via StreamFlix API",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/streamflix.js",
+      "enabled": true,
+      "formats": ["mkv"],
+      "logo": "https://streamflix.app/assets/images/streamflix-1.svg",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
