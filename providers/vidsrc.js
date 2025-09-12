@@ -91,6 +91,32 @@ function serversLoad(html) {
     };
 }
 
+// Map resolution like "1920x800" to standard quality labels like "1080p"
+function mapResolutionToQualityP(qualityString) {
+    if (!qualityString) return 'Unknown';
+    const resMatch = qualityString.match(/(\d+)x(\d+)/);
+    if (!resMatch) return qualityString; // keep as-is if not a resolution
+    const height = parseInt(resMatch[2], 10);
+    if (!height || isNaN(height)) return qualityString;
+    if (height >= 2160) return '2160p';
+    if (height >= 1440) return '1440p';
+    if (height >= 1080) return '1080p';
+    if (height >= 720) return '720p';
+    if (height >= 480) return '480p';
+    if (height >= 360) return '360p';
+    return `${height}p`;
+}
+
+// Extract numeric height from either "WxH" or "###p" strings for sorting
+function getQualityHeight(qualityString) {
+    if (!qualityString) return 0;
+    const resMatch = qualityString.match(/(\d+)x(\d+)/);
+    if (resMatch) return parseInt(resMatch[2], 10) || 0;
+    const pMatch = qualityString.match(/(\d{3,4})p/i);
+    if (pMatch) return parseInt(pMatch[1], 10) || 0;
+    return 0;
+}
+
 function parseMasterM3U8(m3u8Content, masterM3U8Url) {
     const lines = m3u8Content.split('\n').map(line => line.trim());
     const streams = [];
@@ -100,7 +126,7 @@ function parseMasterM3U8(m3u8Content, masterM3U8Url) {
             let quality = "unknown";
             const resolutionMatch = infoLine.match(/RESOLUTION=(\d+x\d+)/);
             if (resolutionMatch && resolutionMatch[1]) {
-                quality = resolutionMatch[1];
+                quality = mapResolutionToQualityP(resolutionMatch[1]);
             }
             else {
                 const bandwidthMatch = infoLine.match(/BANDWIDTH=(\d+)/);
@@ -125,14 +151,8 @@ function parseMasterM3U8(m3u8Content, masterM3U8Url) {
     
     // Sort streams by quality (highest first)
     streams.sort((a, b) => {
-        // Extract resolution height from quality (e.g., "1280x720" -> 720)
-        const getHeight = (quality) => {
-            const match = quality.match(/(\d+)x(\d+)/);
-            return match ? parseInt(match[2], 10) : 0;
-        };
-        
-        const heightA = getHeight(a.quality);
-        const heightB = getHeight(b.quality);
+        const heightA = getQualityHeight(a.quality);
+        const heightB = getQualityHeight(b.quality);
         
         // Higher resolution comes first
         return heightB - heightA;
@@ -394,13 +414,8 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
             if (serverIndex >= servers.length) {
                 // All servers processed, sort and return results
                 streams.sort((a, b) => {
-                    const getHeight = (quality) => {
-                        const match = quality.match(/(\d+)x(\d+)/);
-                        return match ? parseInt(match[2], 10) : 0;
-                    };
-                    
-                    const heightA = getHeight(a.quality);
-                    const heightB = getHeight(b.quality);
+                    const heightA = getQualityHeight(a.quality);
+                    const heightB = getQualityHeight(b.quality);
                     
                     return heightB - heightA;
                 });
@@ -452,13 +467,16 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                 .then(streamDetails => {
                     if (streamDetails && streamDetails.length > 0) {
                         // Convert to Nuvio format
-                        const nuvioStreams = streamDetails.map(stream => ({
-                            name: "VidSrc",
-                            title: `${title || 'Unknown'} - ${stream.quality}`,
-                            url: stream.url,
-                            quality: stream.quality,
-                            type: 'direct'
-                        }));
+                        const nuvioStreams = streamDetails.map(stream => {
+                            const mappedQuality = mapResolutionToQualityP(stream.quality);
+                            return {
+                                name: "VidSrc",
+                                title: `${title || 'Unknown'} - ${mappedQuality}`,
+                                url: stream.url,
+                                quality: mappedQuality,
+                                type: 'direct'
+                            };
+                        });
                         streams.push(...nuvioStreams);
                     } else {
                         console.warn(`No stream details from handler for server ${server.name} (${rcpData.data})`);
