@@ -181,6 +181,27 @@
         "en",
         "hin"
       ]
+    },
+    {
+      "id": "moviebox",
+      "name": "MovieBox",
+      "description": "High-quality movie and TV show streams from MovieBox with multiple language support",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/moviebox.js",
+      "enabled": true,
+      "formats": ["mkv"],
+      "logo": "https://h5-static.aoneroom.com/oneroomStatic/public/_nuxt/web-logo.apJjVir2.svg",
+      "contentLanguage": [
+        "en",
+        "hin",
+        "tam",
+        "tel"
+      ]
     }
   ]
 }
