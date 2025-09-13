@@ -176,7 +176,7 @@
       "filename": "providers/streamflix.js",
       "enabled": true,
       "formats": ["mkv"],
-      "logo": "/Assets/streamflix-1.png",
+      "logo": "https://streamflix.app/assets/images/streamflix-1.svg",
       "contentLanguage": [
         "en",
         "hin"
