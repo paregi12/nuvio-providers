@@ -153,6 +153,30 @@ function extractQualityFields(stream) {
     });
 }
 
+function formatQuality(qualityString) {
+    if (!qualityString) return 'Unknown';
+    
+    // If it already contains 'p', return as is
+    if (qualityString.includes('p')) {
+        return qualityString;
+    }
+    
+    // If it's a number (like "1080", "720"), add 'p'
+    const numberMatch = qualityString.match(/^(\d{3,4})$/);
+    if (numberMatch) {
+        return `${numberMatch[1]}p`;
+    }
+    
+    // If it's a resolution like "1920x1080", extract height and add 'p'
+    const resolutionMatch = qualityString.match(/^\d+x(\d{3,4})$/);
+    if (resolutionMatch) {
+        return `${resolutionMatch[1]}p`;
+    }
+    
+    // Return as is for other formats
+    return qualityString;
+}
+
 
 function loadSubject(subjectId) {
     const url = `${BASE_URL}/subject-api/get?subjectId=${subjectId}`;
@@ -302,7 +326,8 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                 // Process each stream for this subject
                 streams.forEach(function(s) {
                     const qualities = extractQualityFields(s);
-                    const quality = qualities.find(function(q) { return q.includes('p') || q.includes('x'); }) || qualities[0] || 'Unknown';
+                    const rawQuality = qualities.find(function(q) { return q.includes('p') || q.includes('x'); }) || qualities[0] || 'Unknown';
+                    const quality = formatQuality(rawQuality);
                     const audioTracks = s.audioTracks || [];
 
                     // Create descriptive title with subject name, quality, and audio information
