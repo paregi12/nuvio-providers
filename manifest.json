@@ -25,7 +25,7 @@
     {
       "id": "uhdmovies",
       "name": "UHDMovies",
-      "description": "High-quality movie and TV show streams from UHD Movies",
+      "description": "UHD Movies streaming with multiple resolution options",
       "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -61,7 +61,7 @@
     {
       "id": "hdrezka",
       "name": "HDRezka",
-      "description": "High-quality movie and TV show streams",
+      "description": "HDRezka streaming platform with multi-language support",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -79,7 +79,7 @@
     {
       "id": "dahmermovies",
       "name": "DahmerMovies",
-      "description": "High-quality movie and TV show streams from Dahmer Movies, Can be slow at times to fetch and stream. Only use if needed.",
+      "description": "Dahmer Movies streaming service. Can be slow at times to fetch and stream. Only use if needed.",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -149,7 +149,7 @@
     {
       "id": "vidsrc",
       "name": "VidSrc",
-      "description": "High-quality M3U8 streaming links from VidSrc with multiple server support",
+      "description": "VidSrc M3U8 streaming with multiple server support",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -185,7 +185,7 @@
     {
       "id": "moviebox",
       "name": "MovieBox",
-      "description": "High-quality movie and TV show streams from MovieBox with multiple language support",
+      "description": "MovieBox streaming with multiple language support",
       "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -201,6 +201,23 @@
         "hin",
         "tam",
         "tel"
+      ]
+    },
+    {
+      "id": "vixsrc",
+      "name": "Vixsrc",
+      "description": "Vixsrc M3U8 streaming with auto quality selection",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/vixsrc.js",
+      "enabled": true,
+      "logo": "https://vixsrc.to/favicon.ico",
+      "contentLanguage": [
+        "en"
       ]
     }
   ]
