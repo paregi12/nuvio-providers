@@ -219,6 +219,26 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "dvdplay",
+      "name": "DVDPlay",
+      "description": "DVDPlay direct download links with HubCloud extraction",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/dvdplay.js",
+      "enabled": true,
+      "formats": ["mkv"],
+      "logo": "https://dvdplay.rodeo/dvdplay-icon.png",
+      "contentLanguage": [
+        "mal",
+        "tam",
+        "hin"
+      ]
     }
   ]
 }
