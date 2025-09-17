@@ -126,7 +126,8 @@
       "logo": "https://xprime.tv/favicon/favicon.ico",
       "contentLanguage": [
         "en"
-      ]
+      ],
+      "supportsExternalPlayer": false
     },
     {
       "id": "netmirror",
