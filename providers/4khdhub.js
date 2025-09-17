@@ -157,7 +157,7 @@ function calculateSimilarity(str1, str2) {
   return (maxLen - matrix[len1][len2]) / maxLen;
 }
 
-function findBestMatch(results, query) {
+function findBestMatch(results, query, targetYear) {
   if (!results || results.length === 0) return null;
   if (results.length === 1) return results[0];
   var scored = results.map(function (r) {
@@ -168,6 +168,19 @@ function findBestMatch(results, query) {
     var lengthDiff = Math.abs(r.title.length - query.length);
     score += Math.max(0, 10 - lengthDiff / 5);
     if (/(19|20)\d{2}/.test(r.title)) score += 5;
+
+    // Year awareness: prefer results matching TMDB year
+    var rYear = null;
+    try {
+      var yMatch = (r.year || '').toString().match(/(19|20)\d{2}/);
+      if (yMatch) rYear = parseInt(yMatch[0], 10);
+    } catch (e) { /* ignore */ }
+    var ty = parseInt(targetYear, 10);
+    if (ty && !isNaN(ty)) {
+      if (rYear === ty) score += 200; // strong boost for exact year match
+      else if (rYear && Math.abs(rYear - ty) <= 1) score += 30; // slight off-by-one boost
+      else if (rYear) score -= 100; // penalize clearly different year
+    }
     return { item: r, score: score };
   });
   scored.sort(function (a, b) { return b.score - a.score; });
@@ -729,9 +742,9 @@ function getStreams(tmdbId, type, season, episode) {
   var tmdbType = (type === 'series' ? 'tv' : type);
   return getTMDBDetails(tmdbId, tmdbType).then(function (tmdb) {
     if (!tmdb || !tmdb.title) return [];
-    return searchContent(tmdb.title).then(function (results) {
+    return searchContent(tmdb.title + (tmdb.year ? (' ' + tmdb.year) : '')).then(function (results) {
       if (!results || results.length === 0) return [];
-      var best = findBestMatch(results, tmdb.title) || results[0];
+      var best = findBestMatch(results, tmdb.title, tmdb.year) || results[0];
       return loadContent(best.url).then(function (content) {
         var downloadLinks = [];
         if (type === 'movie') {
