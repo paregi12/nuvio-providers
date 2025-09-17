@@ -17,12 +17,15 @@ A collection of local scrapers for the Nuvio streaming application. These scrape
 **💡 Tip:** Check existing scrapers in the `providers/` directory for real working examples before starting your own.
 
 ### Core Function
+**⚠️ IMPORTANT:** Your scraper must use Promise-based approach only. **async/await is NOT supported** in this sandboxed environment.
+
 Your scraper must export a `getStreams` function that returns a Promise:
 
 ```javascript
 function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
   return new Promise((resolve, reject) => {
-    // Your scraping logic here
+    // Your scraping logic here - NO async/await allowed
+    // Use .then() and .catch() for all async operations
     // Return array of stream objects or empty array on error
     resolve(streams);
   });
@@ -77,8 +80,9 @@ const WORKING_HEADERS = {
 ```
 
 ### React Native Compatibility
+- **❌ async/await is NOT supported** in this sandboxed environment
+- **✅ Promise-based approach is COMPULSORY** - use `.then()` and `.catch()`
 - Use `fetch()` for HTTP requests (no axios)
-- Use Promise-based approach (no async/await)
 - Use `cheerio-without-node-native` for HTML parsing
 - Avoid Node.js modules (fs, path, crypto)
 
