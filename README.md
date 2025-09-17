@@ -12,25 +12,9 @@ A collection of local scrapers for the Nuvio streaming application. These scrape
    ```
 4. Enable the scrapers you want to use
 
-## Available Scrapers
-
-| Scraper | Description | Types | Languages |
-|---------|-------------|-------|-----------|
-| **4KHDHub** | 4KHDHub direct links | Movie, TV | EN |
-| **UHDMovies** | UHD Movies streaming with multiple resolution options | Movie, TV | EN |
-| **MoviesMod** | Movie and TV show streams from MoviesMod with multiple quality options | Movie, TV | EN |
-| **HDRezka** | HDRezka streaming platform with multi-language support | Movie, TV | RU, EN |
-| **DahmerMovies** | Dahmer Movies streaming service | Movie, TV | EN |
-| **Watch32** | Lightweight M3U8 Links | Movie, TV | EN |
-| **XPrime** | Faster Streaming links from Xprime.tv | Movie, TV | EN |
-| **NetMirror** | Streaming links from netmirror | Movie, TV | EN |
-| **VidSrc** | VidSrc M3U8 streaming with multiple server support | Movie, TV | EN |
-| **StreamFlix** | Direct links via StreamFlix API | Movie, TV | EN, HIN |
-| **MovieBox** | MovieBox streaming with multiple language support | Movie, TV | EN, HIN, TAM, TEL |
-| **Vixsrc** | Vixsrc M3U8 streaming with auto quality selection | Movie, TV | EN |
-| **DVDPlay** | DVDPlay direct download links with HubCloud extraction | Movie, TV | MAL, TAM, HIN |
-
 ## Scraper Development
+
+**💡 Tip:** Check existing scrapers in the `providers/` directory for real working examples before starting your own.
 
 ### Core Function
 Your scraper must export a `getStreams` function that returns a Promise:
@@ -59,38 +43,36 @@ if (typeof module !== 'undefined' && module.exports) {
 - `episodeNum` (number): Episode number (TV only)
 
 ### Stream Object Format
-Each stream must return this exact format:
+Each stream must return this exact format (see `providers/xprime.js` for real examples):
 
 ```javascript
 {
-  name: "ScraperName",           // Provider name
-  title: "Movie 2024 1080p WEB-DL", // Descriptive title
-  url: "https://stream.url",     // Direct stream URL
-  quality: "1080p",              // Quality (720p, 1080p, 4K, etc.)
-  size: "2.5GB",                 // Optional file size
-  type: "direct",                // Always "direct"
-  headers: {                     // Optional headers for playback
-    "Referer": "https://source-site.com",
-    "User-Agent": "Mozilla/5.0..."
-  }
+  name: "XPrime Primebox - 1080p",  // Provider + server name
+  title: "Movie Title (2024)",       // Media title with year
+  url: "https://stream.url",         // Direct stream URL
+  quality: "1080p",                  // Quality (720p, 1080p, 4K, etc.)
+  size: "Unknown",                   // Optional file size
+  headers: WORKING_HEADERS,          // Required headers for playback
+  provider: "xprime"                 // Provider identifier
 }
 ```
 
 ### Headers (When Needed)
-Include headers if the stream requires them for playback:
+Include headers if the stream requires them for playback. Check `providers/xprime.js` for real WORKING_HEADERS example:
 
 ```javascript
-// Example with headers
-return {
-  name: "XPrime",
-  title: "Movie 2024 1080p",
-  url: "https://cdn.example.com/stream.mp4",
-  quality: "1080p",
-  type: "direct",
-  headers: {
-    "Referer": "https://xprime.tv",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-  }
+// From providers/xprime.js - real working headers
+const WORKING_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'identity',
+    'Origin': 'https://xprime.tv',
+    'Referer': 'https://xprime.tv/',
+    'Sec-Fetch-Dest': 'video',
+    'Sec-Fetch-Mode': 'no-cors',
+    'Sec-Fetch-Site': 'cross-site',
+    'DNT': '1'
 };
 ```
 
@@ -101,31 +83,32 @@ return {
 - Avoid Node.js modules (fs, path, crypto)
 
 ### Testing
-Create a test file to verify your scraper:
+Create a test file to verify your scraper (see existing scrapers for examples):
 
 ```javascript
-const { getStreams } = require('./yourscraper.js');
+const { getStreams } = require('./providers/xprime.js');
 
 getStreams('550', 'movie').then(streams => {
   console.log('Found', streams.length, 'streams');
-  streams.forEach(stream => console.log(stream.title));
+  streams.forEach(stream => console.log(`${stream.name}: ${stream.quality}`));
 }).catch(console.error);
 ```
 
 ### Manifest Entry
-Add your scraper to `manifest.json`:
+Add your scraper to `manifest.json` (see existing entries for examples):
 
 ```json
 {
   "id": "yourscraper",
   "name": "Your Scraper",
-  "description": "Brief description",
+  "description": "Brief description of what your scraper does",
   "version": "1.0.0",
   "author": "Your Name",
   "supportedTypes": ["movie", "tv"],
   "filename": "providers/yourscraper.js",
   "enabled": true,
-  "logo": "https://example.com/logo.png",
+  "formats": ["mkv"],
+  "logo": "https://your-logo-url.com/logo.png",
   "contentLanguage": ["en"]
 }
 ```
