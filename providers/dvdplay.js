@@ -6,7 +6,7 @@ const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c"; // This will be replace
 const BASE_URL = 'https://dvdplay.rodeo';
 
 // Temporarily disable URL validation for faster results
-global.URL_VALIDATION_ENABLED = false;
+global.URL_VALIDATION_ENABLED = true;
 
 // === HubCloud Extractor Functions (embedded) ===
 
