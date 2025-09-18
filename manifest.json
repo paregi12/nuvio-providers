@@ -226,7 +226,7 @@
       "id": "dvdplay",
       "name": "DVDPlay",
       "description": "DVDPlay direct download links with HubCloud extraction",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
