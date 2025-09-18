@@ -5,6 +5,9 @@
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c"; // This will be replaced by Nuvio
 const BASE_URL = 'https://dvdplay.rodeo';
 
+// Temporarily disable URL validation for faster results
+global.URL_VALIDATION_ENABLED = false;
+
 // === HubCloud Extractor Functions (embedded) ===
 
 // Utility functions
@@ -195,6 +198,15 @@ function getFilenameFromUrl(url) {
 
 function extractHubCloudLinks(url, referer = 'HubCloud') {
     const baseUrl = getBaseUrl(url);
+
+    // Helper function for absolute URL resolution
+    function toAbsolute(href, base) {
+        try {
+            return new URL(href, base).href;
+        } catch (e) {
+            return href;
+        }
+    }
     
     return makeRequest(url, { parseHTML: true })
         .then(response => {
@@ -214,7 +226,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                         if (altElement.length > 0) {
                             const rawHref = altElement.attr('href');
                             if (rawHref) {
-                                href = rawHref.startsWith('http') ? rawHref : `${baseUrl.replace(/\/$/, '')}/${rawHref.replace(/^\//, '')}`;
+                                href = toAbsolute(rawHref, baseUrl);
                                 found = true;
                                 break;
                             }
@@ -230,222 +242,280 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                         throw new Error('Download href not found');
                     }
                     
-                    href = rawHref.startsWith('http') ? rawHref : `${baseUrl.replace(/\/$/, '')}/${rawHref.replace(/^\//, '')}`;
+                    href = toAbsolute(rawHref, baseUrl);
                 }
             }
             
             return makeRequest(href, { parseHTML: true });
         })
         .then(response => {
-            const $ = response.$;
-            const results = [];
-            
-            const size = $('i#size').text() || '';
-            const header = $('div.card-header').text() || '';
-            const quality = getIndexQuality(header);
-            const headerDetails = cleanTitle(header);
-            
-            const qualityLabel = quality ? ` - ${quality}p` : ' - Unknown';
-            
-            const downloadButtons = $('div.card-body h2 a.btn');
-            
-            const promises = downloadButtons.get().map((button, index) => {
-                return new Promise((resolve) => {
-                    const $button = $(button);
-                    const link = $button.attr('href');
-                    const text = $button.text();
-                    
-                    if (!link) {
-                        resolve(null);
-                        return;
+            const $$ = response.$; // Use $$ for the second cheerio instance like 4KHDHub
+
+    // Helper function to resolve intermediate HubCloud URLs (.fans/?id= and .workers.dev/?id=)
+    function resolveHubCloudUrl(url) {
+        console.log(`[DVDPlay] Resolving HubCloud URL: ${url.substring(0, 50)}...`);
+
+        // If it's already an R2 Cloudflare URL, it's already resolved
+        if (url.includes('r2.cloudflarestorage.com')) {
+            console.log(`[DVDPlay] URL already resolved (R2): ${url.substring(0, 50)}...`);
+            return Promise.resolve(url);
+        }
+
+        // Extract the actual download URL from 360news4u.net/dl.php?link= URLs FIRST
+        if (url.includes('360news4u.net/dl.php?link=')) {
+            console.log(`[DVDPlay] 🔍 Processing 360news4u.net URL: ${url.substring(0, 100)}...`);
+            const linkMatch = url.match(/360news4u\.net\/dl\.php\?link=([^&\s]+)/);
+            console.log(`[DVDPlay] 🔍 Regex match result:`, linkMatch);
+
+            if (linkMatch && linkMatch[1]) {
+                const actualUrl = decodeURIComponent(linkMatch[1]);
+                console.log(`[DVDPlay] ✅ Extracted Google Drive URL from 360news4u.net: ${actualUrl.substring(0, 80)}...`);
+                return Promise.resolve(actualUrl);
+            } else {
+                console.log(`[DVDPlay] ❌ Failed to extract URL from 360news4u.net link`);
+                console.log(`[DVDPlay] ❌ Full URL for debugging: ${url}`);
+            }
+        }
+
+        // If it's a direct Google Drive download URL, it might be final
+        if (url.includes('video-downloads.googleusercontent.com')) {
+            console.log(`[DVDPlay] Google Drive download URL found: ${url.substring(0, 50)}...`);
+            return Promise.resolve(url);
+        }
+
+        return fetch(url, {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            },
+            redirect: 'manual' // Don't follow redirects automatically
+        }).then(response => {
+            if (response.status >= 300 && response.status < 400) {
+                // Follow redirect manually
+                const location = response.headers.get('location');
+                if (location) {
+                    console.log(`[DVDPlay] Following redirect to: ${location.substring(0, 50)}...`);
+                    // Recursively resolve the redirect URL
+                    return resolveHubCloudUrl(location);
+                }
+            }
+
+            // If no redirect, check if this is already a direct file URL
+            if (response.status === 200 && response.headers.get('content-type')?.includes('video/')) {
+                console.log(`[DVDPlay] Direct file URL found: ${url.substring(0, 50)}...`);
+                return url;
+            }
+
+            // Check if it's a direct S3/R2 URL in the response
+            if (response.status === 200) {
+                console.log(`[DVDPlay] Checking for direct URL in response...`);
+                return response.text().then(text => {
+                    // Look for direct download URLs in the response
+                    const directUrlMatch = text.match(/(https?:\/\/[^"'\s]+\.r2\.cloudflarestorage\.com[^"'\s]*)/);
+                    if (directUrlMatch) {
+                        console.log(`[DVDPlay] Found direct URL in response: ${directUrlMatch[1].substring(0, 50)}...`);
+                        return directUrlMatch[1];
                     }
-                    
-                    if (text.includes('FSL Server')) {
-                        getFilenameFromUrl(link)
-                            .then(actualFilename => {
-                                const displayFilename = actualFilename || headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - FSL Server${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            })
-                            .catch(() => {
-                                const displayFilename = headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - FSL Server${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            });
-                    } else if (text.includes('Download File')) {
-                        getFilenameFromUrl(link)
-                            .then(actualFilename => {
-                                const displayFilename = actualFilename || headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - HubCloud${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            })
-                            .catch(() => {
-                                const displayFilename = headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - HubCloud${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            });
-                    } else if (link.includes('pixeldra')) {
-                        let convertedLink = link;
-                        const pixeldrainMatch = link.match(/pixeldrain\.net\/u\/([a-zA-Z0-9]+)/);
-                        if (pixeldrainMatch) {
-                            const fileId = pixeldrainMatch[1];
-                            convertedLink = `https://pixeldrain.net/api/file/${fileId}`;
-                        }
-                        
-                        getFilenameFromUrl(convertedLink)
-                            .then(actualFilename => {
-                                const displayFilename = actualFilename || headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - Pixeldrain${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: convertedLink,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            })
-                            .catch(() => {
-                                const displayFilename = headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - Pixeldrain${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: convertedLink,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            });
-                    } else if (text.includes('S3 Server')) {
-                        getFilenameFromUrl(link)
-                            .then(actualFilename => {
-                                const displayFilename = actualFilename || headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - S3 Server${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            })
-                            .catch(() => {
-                                const displayFilename = headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - S3 Server${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            });
-                    } else {
-                        getFilenameFromUrl(link)
-                            .then(actualFilename => {
-                                const displayFilename = actualFilename || headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - HubCloud${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            })
-                            .catch(() => {
-                                const displayFilename = headerDetails || 'Unknown';
-                                const titleParts = [];
-                                if (displayFilename) titleParts.push(displayFilename);
-                                if (size) titleParts.push(size);
-                                const finalTitle = titleParts.join('\n');
-                                
-                                resolve({
-                                    name: `DVDPlay - HubCloud${qualityLabel}`,
-                                    title: finalTitle,
-                                    url: link,
-                                    quality: quality ? quality + 'p' : 'Unknown',
-                                    size: size,
-                                    type: 'direct'
-                                });
-                            });
+
+                    // Look for other direct download patterns
+                    const otherDirectMatch = text.match(/(https?:\/\/[^"'\s]+\/[^"'\s]*\.(mkv|mp4|avi|m4v)[^"'\s]*)/i);
+                    if (otherDirectMatch) {
+                        console.log(`[DVDPlay] Found direct file URL: ${otherDirectMatch[1].substring(0, 50)}...`);
+                        return otherDirectMatch[1];
                     }
+
+                    // Return original URL if we can't find a direct URL
+                    console.log(`[DVDPlay] No direct URL found, returning original`);
+                    return url;
+                });
+            }
+
+            // Return original URL if we can't resolve it
+            console.log(`[DVDPlay] Could not resolve URL, returning original`);
+            return url;
+        }).catch(error => {
+            console.log(`[DVDPlay] Error resolving URL: ${error.message}`);
+            return url;
+        });
+    }
+
+    function buildTask(buttonText, buttonLink, headerDetails, size, quality) {
+        const qualityLabel = quality ? (' - ' + quality + 'p') : ' - Unknown';
+
+        // Pixeldrain normalization (from 4KHDHub)
+        const pd = buttonLink.match(/pixeldrain\.(?:net|dev)\/u\/([a-zA-Z0-9]+)/);
+        if (pd && pd[1]) buttonLink = 'https://pixeldrain.net/api/file/' + pd[1];
+
+        // Handle intermediate HubCloud URLs (.fans/?id=, .workers.dev/?id=, and Google Drive redirects)
+        if (buttonLink.includes('.fans/?id=') || buttonLink.includes('.workers.dev/?id=') || buttonLink.includes('360news4u.net/dl.php')) {
+            return resolveHubCloudUrl(buttonLink)
+                .then(resolvedUrl => {
+                    // If resolution failed and we still have an intermediate URL, try one more time
+                    if (resolvedUrl.includes('.workers.dev/?id=') &&
+                        !resolvedUrl.includes('r2.cloudflarestorage.com') &&
+                        !resolvedUrl.includes('video-downloads.googleusercontent.com') &&
+                        !resolvedUrl.includes('360news4u.net/dl.php')) {
+                        console.log(`[DVDPlay] Second attempt to resolve: ${resolvedUrl.substring(0, 50)}...`);
+                        return resolveHubCloudUrl(resolvedUrl);
+                    }
+                    return resolvedUrl;
+                })
+                .then(resolvedUrl => {
+                    return getFilenameFromUrl(resolvedUrl)
+                            .then(actualFilename => {
+                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                            let name;
+                            if (buttonText.includes('FSL Server')) name = 'DVDPlay - FSL Server' + qualityLabel;
+                            else if (buttonText.includes('S3 Server')) name = 'DVDPlay - S3 Server' + qualityLabel;
+                            else if (/pixeldra/i.test(buttonText) || /pixeldra/i.test(buttonLink)) name = 'DVDPlay - Pixeldrain' + qualityLabel;
+                            else if (buttonText.includes('Download File')) name = 'DVDPlay - HubCloud' + qualityLabel;
+                            else name = 'DVDPlay - HubCloud' + qualityLabel;
+
+                            return {
+                                name: name,
+                                    title: finalTitle,
+                                url: resolvedUrl,
+                                    quality: quality ? quality + 'p' : 'Unknown',
+                                size: size || null,
+                                fileName: actualFilename || null,
+                                    type: 'direct'
+                            };
+                            })
+                            .catch(() => {
+                                const displayFilename = headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                            const name = 'DVDPlay - HubCloud' + qualityLabel;
+                            return {
+                                name: name,
+                                    title: finalTitle,
+                                url: resolvedUrl,
+                                    quality: quality ? quality + 'p' : 'Unknown',
+                                size: size || null,
+                                fileName: null,
+                                    type: 'direct'
+                            };
+                                });
+                            });
+        }
+
+        return getFilenameFromUrl(buttonLink)
+                            .then(actualFilename => {
+                                const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                let name;
+                if (buttonText.includes('FSL Server')) name = 'DVDPlay - FSL Server' + qualityLabel;
+                else if (buttonText.includes('S3 Server')) name = 'DVDPlay - S3 Server' + qualityLabel;
+                else if (/pixeldra/i.test(buttonText) || /pixeldra/i.test(buttonLink)) name = 'DVDPlay - Pixeldrain' + qualityLabel;
+                else if (buttonText.includes('Download File')) name = 'DVDPlay - HubCloud' + qualityLabel;
+                else name = 'DVDPlay - HubCloud' + qualityLabel;
+
+                return {
+                    name: name,
+                                    title: finalTitle,
+                    url: buttonLink,
+                                    quality: quality ? quality + 'p' : 'Unknown',
+                    size: size || null,
+                    fileName: actualFilename || null,
+                                    type: 'direct'
+                };
+                            })
+                            .catch(() => {
+                                const displayFilename = headerDetails || 'Unknown';
+                                const titleParts = [];
+                                if (displayFilename) titleParts.push(displayFilename);
+                                if (size) titleParts.push(size);
+                                const finalTitle = titleParts.join('\n');
+                                
+                const name = 'DVDPlay - HubCloud' + qualityLabel;
+                return {
+                    name: name,
+                                    title: finalTitle,
+                    url: buttonLink,
+                                    quality: quality ? quality + 'p' : 'Unknown',
+                    size: size || null,
+                    fileName: null,
+                                    type: 'direct'
+                };
+            });
+    }
+
+            // Iterate per card to capture per-quality sections (from 4KHDHub)
+            const tasks = [];
+            const cards = $$('.card');
+            if (cards.length > 0) {
+                cards.each(function (ci, card) {
+                    const $card = $$(card);
+                    const header = $card.find('div.card-header').text() || $$('div.card-header').first().text() || '';
+                    const size = $card.find('i#size').text() || $$('i#size').first().text() || '';
+                    const quality = getIndexQuality(header);
+                    const headerDetails = cleanTitle(header);
+
+                    let localBtns = $card.find('div.card-body h2 a.btn');
+                    if (localBtns.length === 0) localBtns = $card.find('a.btn, .btn, a[href]');
+
+                    localBtns.each(function (i, el) {
+                        const $btn = $$(el);
+                        const text = ($btn.text() || '').trim();
+                        let link = $btn.attr('href');
+
+                        if (!link) return;
+                        link = toAbsolute(link, baseUrl);
+
+                        // Only consider plausible buttons (from 4KHDHub)
+                        const isPlausible = /(hubcloud|hubdrive|pixeldrain|buzz|10gbps|workers\.dev|r2\.dev|download|api\/file)/i.test(link) ||
+                                          text.toLowerCase().includes('download');
+
+                        if (!isPlausible) return;
+
+                        tasks.push(buildTask(text, link, headerDetails, size, quality));
                 });
             });
-            
-            return Promise.all(promises)
-                .then(results => {
-                    const validResults = results.filter(result => result !== null);
-                    return validResults;
+            }
+
+            // Fallback: whole page buttons (from 4KHDHub)
+            if (tasks.length === 0) {
+                let buttons = $$.root().find('div.card-body h2 a.btn');
+                if (buttons.length === 0) {
+                    const altSelectors = ['a.btn', '.btn', 'a[href]'];
+                    for (const selector of altSelectors) {
+                        buttons = $$.root().find(selector);
+                        if (buttons.length > 0) break;
+                    }
+                }
+
+                const size = $$('i#size').first().text() || '';
+                const header = $$('div.card-header').first().text() || '';
+                const quality = getIndexQuality(header);
+                const headerDetails = cleanTitle(header);
+
+                buttons.each(function (i, el) {
+                    const $btn = $$(el);
+                    const text = ($btn.text() || '').trim();
+                    let link = $btn.attr('href');
+
+                    if (!link) return;
+                    link = toAbsolute(link, baseUrl);
+
+                    tasks.push(buildTask(text, link, headerDetails, size, quality));
                 });
+            }
+
+            if (tasks.length === 0) return [];
+            return Promise.all(tasks).then(arr => (arr || []).filter(x => !!x));
         })
         .catch(error => {
             console.error(`[DVDPlay] HubCloud extraction error for ${url}:`, error.message);
