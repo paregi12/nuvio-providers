@@ -145,7 +145,7 @@
       "contentLanguage": [
         "en"
       ],
-      "disabledPlatforms": [],
+      "disabledPlatforms": ["ios"],
       "supportsExternalPlayer": false
     },
     {
