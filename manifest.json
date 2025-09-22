@@ -196,7 +196,7 @@
       ],
       "filename": "providers/moviebox.js",
       "enabled": true,
-      "formats": ["mkv"],
+      "formats": ["mp4"],
       "logo": "https://h5-static.aoneroom.com/oneroomStatic/public/_nuxt/web-logo.apJjVir2.svg",
       "contentLanguage": [
         "en",
