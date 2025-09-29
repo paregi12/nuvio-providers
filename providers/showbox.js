@@ -289,9 +289,8 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
             // Build API URL based on media type
             let apiUrl;
             if (mediaType === 'tv' && seasonNum && episodeNum) {
-                // For TV shows, we might need a different endpoint
-                // For now, using the movie endpoint as the API structure is unclear
-                apiUrl = `${SHOWBOX_API_BASE}/tv/${idForApi}`;
+                // TV format: /tv/:imdbId/:season/:episode
+                apiUrl = `${SHOWBOX_API_BASE}/tv/${idForApi}/${seasonNum}/${episodeNum}`;
             } else {
                 apiUrl = `${SHOWBOX_API_BASE}/movie/${idForApi}`;
             }
