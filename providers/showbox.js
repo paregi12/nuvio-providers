@@ -208,23 +208,7 @@ function processShowBoxResponse(data, mediaInfo) {
 // Main scraping function
 function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = null) {
     console.log(`[ShowBox] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${mediaType === 'tv' ? `, S:${seasonNum}E:${episodeNum}` : ''}`);
-    
-    // Convert TMDB ID to IMDB format for ShowBox API
-    const imdbId = convertTmdbToImdb(tmdbId);
-    console.log(`[ShowBox] Using IMDB ID: ${imdbId}`);
-    
-    // Build API URL based on media type
-    let apiUrl;
-    if (mediaType === 'tv' && seasonNum && episodeNum) {
-        // For TV shows, we might need a different endpoint
-        // For now, using the movie endpoint as the API structure is unclear
-        apiUrl = `${SHOWBOX_API_BASE}/tv/${imdbId}`;
-    } else {
-        apiUrl = `${SHOWBOX_API_BASE}/movie/${imdbId}`;
-    }
-    
-    console.log(`[ShowBox] Requesting: ${apiUrl}`);
-    
+
     // Try to get TMDB details first, but don't fail if it's not available
     return getTMDBDetails(tmdbId, mediaType)
         .then(function(mediaInfo) {
@@ -237,10 +221,28 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
             return {
                 title: `TMDB ID ${tmdbId}`,
                 year: null,
-                imdbId: imdbId
+                imdbId: null
             };
         })
         .then(function(mediaInfo) {
+            // Determine identifier for ShowBox API: prefer real IMDB ID; fallback to raw TMDB ID (no 'tt' prefix)
+            const idForApi = mediaInfo.imdbId && typeof mediaInfo.imdbId === 'string' && mediaInfo.imdbId.startsWith('tt')
+                ? mediaInfo.imdbId
+                : String(tmdbId);
+
+            console.log(`[ShowBox] Using identifier for API: ${idForApi}${mediaInfo.imdbId ? ' (IMDB)' : ' (TMDB fallback)'}`);
+
+            // Build API URL based on media type
+            let apiUrl;
+            if (mediaType === 'tv' && seasonNum && episodeNum) {
+                // For TV shows, we might need a different endpoint
+                // For now, using the movie endpoint as the API structure is unclear
+                apiUrl = `${SHOWBOX_API_BASE}/tv/${idForApi}`;
+            } else {
+                apiUrl = `${SHOWBOX_API_BASE}/movie/${idForApi}`;
+            }
+
+            console.log(`[ShowBox] Requesting: ${apiUrl}`);
             // Make request to ShowBox API
             return makeRequest(apiUrl)
                 .then(function(response) {
