@@ -245,7 +245,7 @@
     {
       "id": "showbox",
       "name": "ShowBox",
-      "description": "ShowBox streaming with multiple quality options via PStream API",
+      "description": "ShowBox streaming with multiple quality options",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -255,7 +255,7 @@
       "filename": "providers/showbox.js",
       "enabled": true,
       "formats": ["mp4","mkv"],
-      "logo": "https://www.showbox.media/static/images/favicon.png",
+      "logo": "https://www.showbox.media/favicon.ico",
       "contentLanguage": [
         "en"
       ]
