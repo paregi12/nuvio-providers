@@ -23,8 +23,21 @@ const WORKING_HEADERS = {
     'DNT': '1'
 };
 
-// UI Token for authentication (this would need to be obtained dynamically in a real implementation)
-const UI_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTUzNjEyMzQsIm5iZiI6MTc1NTM2MTIzNCwiZXhwIjoxNzg2NDY1MjU0LCJkYXRhIjp7InVpZCI6NzgyNDcwLCJ0b2tlbiI6IjdiYTY5MjU1NjUxNTYyMzkwZTg4NzczYzJiYWVhYjc3In19.ZwPLVjnR3w26MxS6NFP6TDEY93XZUfTW5VrggfPg1VU';
+// UI token is provided by the host app via per-scraper settings (Plugin Screen)
+function getUiToken() {
+    try {
+        // Prefer sandbox-injected globals
+        if (typeof global !== 'undefined' && global.SCRAPER_SETTINGS && global.SCRAPER_SETTINGS.uiToken) {
+            return String(global.SCRAPER_SETTINGS.uiToken);
+        }
+        if (typeof window !== 'undefined' && window.SCRAPER_SETTINGS && window.SCRAPER_SETTINGS.uiToken) {
+            return String(window.SCRAPER_SETTINGS.uiToken);
+        }
+    } catch (e) {
+        // ignore and fall through
+    }
+    return '';
+}
 
 // Utility Functions
 function getQualityFromName(qualityStr) {
@@ -86,10 +99,11 @@ function formatFileSize(sizeStr) {
 
 // Helper function to make HTTP requests
 function makeRequest(url, options = {}) {
-    const defaultHeaders = {
-        ...WORKING_HEADERS,
-        'ui-token': UI_TOKEN
-    };
+    const token = getUiToken();
+    const defaultHeaders = { ...WORKING_HEADERS };
+    if (token) {
+        defaultHeaders['ui-token'] = token;
+    }
 
     return fetch(url, {
         method: options.method || 'GET',
