@@ -241,6 +241,24 @@
         "tam",
         "hin"
       ]
+    },
+    {
+      "id": "showbox",
+      "name": "ShowBox",
+      "description": "ShowBox streaming with multiple quality options via PStream API",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/showbox.js",
+      "enabled": true,
+      "formats": ["mp4"],
+      "logo": "https://pstream.mov/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
