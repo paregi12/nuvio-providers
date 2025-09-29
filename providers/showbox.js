@@ -79,7 +79,7 @@ function formatFileSize(sizeStr) {
     if (!sizeStr) return 'Unknown';
     
     // If it's already formatted (like "15.44 GB"), return as is
-    if (typeof sizeStr === 'string' && sizeStr.includes('GB') || sizeStr.includes('MB')) {
+    if (typeof sizeStr === 'string' && (sizeStr.includes('GB') || sizeStr.includes('MB'))) {
         return sizeStr;
     }
     
@@ -282,7 +282,7 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
             // Determine identifier for ShowBox API: prefer real IMDB ID; fallback to raw TMDB ID (no 'tt' prefix)
             const idForApi = mediaInfo.imdbId && typeof mediaInfo.imdbId === 'string' && mediaInfo.imdbId.startsWith('tt')
                 ? mediaInfo.imdbId
-                : String(tmdbId);
+                : `tt${String(tmdbId)}`;
 
             console.log(`[ShowBox] Using identifier for API: ${idForApi}${mediaInfo.imdbId ? ' (IMDB)' : ' (TMDB fallback)'}`);
 

@@ -1,4 +1,9 @@
 // Test file for ShowBox provider
+// Inject UI token for the provider to pick up via SCRAPER_SETTINGS
+global.SCRAPER_SETTINGS = {
+    uiToken: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTUzNjEyMzQsIm5iZiI6MTc1NTM2MTIzNCwiZXhwIjoxNzg2NDY1MjU0LCJkYXRhIjp7InVpZCI6NzgyNDcwLCJ0b2tlbiI6IjdiYTY5MjU1NjUxNTYyMzkwZTg4NzczYzJiYWVhYjc3In19.ZwPLVjnR3w26MxS6NFP6TDEY93XZUfTW5VrggfPg1VU'
+};
+
 const { getStreams } = require('./providers/showbox.js');
 
 console.log('🧪 Testing ShowBox Provider (README stream format)...\n');
