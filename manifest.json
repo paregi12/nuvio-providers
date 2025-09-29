@@ -254,8 +254,8 @@
       ],
       "filename": "providers/showbox.js",
       "enabled": true,
-      "formats": ["mp4"],
-      "logo": "https://pstream.mov/favicon.ico",
+      "formats": ["mp4","mkv"],
+      "logo": "https://www.showbox.media/static/images/favicon.png",
       "contentLanguage": [
         "en"
       ]
