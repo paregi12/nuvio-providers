@@ -97,6 +97,60 @@ function formatFileSize(sizeStr) {
     return sizeStr;
 }
 
+// Issue a HEAD request to get headers (e.g., Content-Length)
+function headRequest(url, options = {}) {
+    const token = getUiToken();
+    const defaultHeaders = { ...WORKING_HEADERS };
+    if (token) {
+        defaultHeaders['ui-token'] = token;
+    }
+    const headers = { ...defaultHeaders, ...options.headers };
+    return fetch(url, {
+        method: 'HEAD',
+        headers
+    }).then(function(response) {
+        // Some servers may not fully support HEAD; still return headers if possible
+        return response;
+    }).catch(function(error) {
+        console.error(`[ShowBox] HEAD failed for ${url}: ${error.message}`);
+        throw error;
+    });
+}
+
+// Try to resolve accurate size via HEAD Content-Length
+function resolveAccurateSizes(streams) {
+    if (!Array.isArray(streams) || streams.length === 0) return Promise.resolve(streams);
+    const tasks = streams.map(function(stream) {
+        if (!stream || !stream.url) return Promise.resolve(stream);
+        return headRequest(stream.url)
+            .then(function(resp) {
+                try {
+                    const len = resp && resp.headers && (resp.headers.get ? resp.headers.get('content-length') : (resp.headers['content-length'] || resp.headers['Content-Length']));
+                    if (len) {
+                        const numeric = parseInt(len, 10);
+                        if (!isNaN(numeric) && numeric > 0) {
+                            stream.size = numeric; // store as number for our formatter below
+                            stream._resolvedSizeFromHead = true;
+                        }
+                    }
+                } catch (e) {
+                    // ignore header parse errors
+                }
+                return stream;
+            })
+            .catch(function() { return stream; });
+    });
+    return Promise.all(tasks).then(function(updated) {
+        // Normalize to formatted strings for UI
+        updated.forEach(function(s) {
+            if (typeof s.size === 'number') {
+                s.size = formatFileSize(s.size);
+            }
+        });
+        return updated;
+    });
+}
+
 // Helper function to make HTTP requests
 function makeRequest(url, options = {}) {
     const token = getUiToken();
@@ -265,9 +319,12 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                         const qualityOrder = { 'Original': 5, '4K': 4, '1440p': 3, '1080p': 2, '720p': 1, '480p': 0, '360p': -1, '240p': -2, 'Unknown': -3 };
                         return (qualityOrder[b.quality] || -3) - (qualityOrder[a.quality] || -3);
                     });
-                    
-                    console.log(`[ShowBox] Returning ${streams.length} streams`);
-                    return streams;
+
+                    // Resolve accurate sizes via HEAD before returning
+                    return resolveAccurateSizes(streams).then(function(finalStreams) {
+                        console.log(`[ShowBox] Returning ${finalStreams.length} streams`);
+                        return finalStreams;
+                    });
                 })
                 .catch(function(error) {
                     console.error(`[ShowBox] API request failed: ${error.message}`);
