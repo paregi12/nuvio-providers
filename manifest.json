@@ -23,6 +23,22 @@
       ]
     },
     {
+      "id": "animekai",
+      "name": "AnimeKai",
+      "description": "AnimeKai TV episodes via AnimeKai servers",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "tv"
+      ],
+      "filename": "providers/animekai.js",
+      "enabled": true,
+      "logo": "https://animekai.to/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
       "id": "uhdmovies",
       "name": "UHDMovies",
       "description": "UHD Movies streaming with multiple resolution options",
