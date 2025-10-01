@@ -131,6 +131,76 @@ function searchKitsuByTitle(animeTitle) {
     });
 }
 
+function filterRelevantKitsuResults(kitsuResults, originalTitle) {
+    if (!kitsuResults || kitsuResults.length === 0) return [];
+
+    // Normalize the original title for comparison
+    var normalizedOriginal = normalizeTitleForComparison(originalTitle);
+
+    // Filter results that have meaningful similarity to the original title
+    var relevantResults = [];
+    for (var i = 0; i < kitsuResults.length; i++) {
+        var entry = kitsuResults[i];
+        var canonicalTitle = entry.attributes.canonicalTitle || '';
+        var englishTitle = entry.attributes.titles && (entry.attributes.titles.en || entry.attributes.titles.en_us || entry.attributes.titles.en_jp) || '';
+        var japaneseTitle = entry.attributes.titles && entry.attributes.titles.ja_jp || '';
+
+        // Check if any of the titles are relevant
+        var titlesToCheck = [canonicalTitle, englishTitle, japaneseTitle].filter(function(t) { return t; });
+
+        var isRelevant = false;
+        for (var j = 0; j < titlesToCheck.length; j++) {
+            var normalizedKitsuTitle = normalizeTitleForComparison(titlesToCheck[j]);
+            if (areTitlesSimilar(normalizedOriginal, normalizedKitsuTitle)) {
+                isRelevant = true;
+                break;
+            }
+        }
+
+        if (isRelevant) {
+            relevantResults.push(entry);
+        }
+    }
+
+    console.log('[AnimeKai] Filtered Kitsu results: ' + relevantResults.length + '/' + kitsuResults.length + ' relevant');
+    return relevantResults;
+}
+
+function normalizeTitleForComparison(title) {
+    return title.toLowerCase()
+        .replace(/[^\w\s]/g, '') // Remove punctuation
+        .replace(/\s+/g, ' ')    // Normalize whitespace
+        .replace(/\b(the|and|or|but|nor|for|yet|so|a|an)\b/g, '') // Remove common words
+        .replace(/\s+/g, ' ')    // Normalize whitespace again
+        .trim();
+}
+
+function areTitlesSimilar(title1, title2) {
+    if (!title1 || !title2) return false;
+
+    // Exact match
+    if (title1 === title2) return true;
+
+    // One title contains the other (for partial matches)
+    if (title1.includes(title2) || title2.includes(title1)) return true;
+
+    // Check for significant word overlap (at least 50% of words)
+    var words1 = title1.split(' ').filter(function(w) { return w.length > 2; });
+    var words2 = title2.split(' ').filter(function(w) { return w.length > 2; });
+
+    if (words1.length === 0 || words2.length === 0) return false;
+
+    var commonWords = 0;
+    for (var i = 0; i < words1.length; i++) {
+        if (words2.includes(words1[i])) {
+            commonWords++;
+        }
+    }
+
+    var similarityRatio = commonWords / Math.max(words1.length, words2.length);
+    return similarityRatio >= 0.5; // At least 50% word overlap
+}
+
 function getAccurateAnimeKaiEntry(animeTitle, season, episode, tmdbId) {
     console.log('[AnimeKai] Searching Kitsu for:', animeTitle, 'S' + season + 'E' + episode);
 
@@ -144,6 +214,20 @@ function getAccurateAnimeKaiEntry(animeTitle, season, episode, tmdbId) {
                 return result;
             });
         }
+
+        // Validate that Kitsu results are actually relevant to our TMDB title
+        var relevantKitsuResults = filterRelevantKitsuResults(kitsuResults, animeTitle);
+        if (!relevantKitsuResults || relevantKitsuResults.length === 0) {
+            console.log('[AnimeKai] Kitsu results not relevant to TMDB title, falling back to direct AnimeKai search');
+            return searchAnimeByName(animeTitle).then(function(results) {
+                return pickResultForSeason(results, season, tmdbId);
+            }).then(function(result) {
+                return result;
+            });
+        }
+
+        // Use the filtered relevant results
+        kitsuResults = relevantKitsuResults;
 
         // Check if we should calculate absolute episode (TMDB has more seasons than Kitsu or continuous series)
         if (shouldCalculateAbsoluteEpisode(kitsuResults, season)) {
@@ -170,13 +254,51 @@ function getAccurateAnimeKaiEntry(animeTitle, season, episode, tmdbId) {
                         console.log('[AnimeKai] Absolute episode not found, trying episode-level data...');
                         return getKitsuEpisodeInfo(mainEntry.id, episode).then(function(originalEpisodeData) {
                             if (originalEpisodeData && originalEpisodeData.attributes.seasonNumber) {
-                                console.log('[AnimeKai] Found episode data - Season:', originalEpisodeData.attributes.seasonNumber);
-                                var actualSeason = originalEpisodeData.attributes.seasonNumber;
+                                console.log('[AnimeKai] Found episode data - Kitsu Season:', originalEpisodeData.attributes.seasonNumber, 'TMDB Season:', season);
+
+                                // For continuous series, Kitsu season numbering may differ from TMDB
+                                // Always prefer TMDB season number, but use Kitsu data to find the right entry
                                 var seasonGroups = groupKitsuEntriesBySeason(kitsuResults);
-                                var seasonEntries = seasonGroups[actualSeason] || [];
+                                var seasonEntries = seasonGroups[season] || []; // Use TMDB season, not Kitsu season
 
                                 if (seasonEntries.length > 0) {
+                                    console.log('[AnimeKai] Using TMDB Season', season, 'entries for episode mapping');
                                     return processKitsuEntries(seasonEntries, episode, kitsuResults, animeTitle, season, tmdbId);
+                                } else {
+                                    console.log('[AnimeKai] No entries for TMDB Season', season, '- TMDB may not have season data yet, trying enhanced search');
+                                    // If no direct season match and TMDB doesn't have season data yet (common for new seasons),
+                                    // try enhanced search with season name
+                                    return getTMDBSeasonInfo(tmdbId, season).then(function(seasonInfo) {
+                                        console.log('[AnimeKai] TMDB season info:', seasonInfo);
+
+                                        // Try enhanced search title first (includes season name)
+                                        var enhancedTitle = animeTitle;
+                                        if (seasonInfo.name && seasonInfo.name !== `Season ${season}`) {
+                                            enhancedTitle = animeTitle + ' ' + seasonInfo.name;
+                                            console.log('[AnimeKai] Trying enhanced search:', enhancedTitle);
+                                            return searchAnimeByName(enhancedTitle).then(function(enhancedResults) {
+                                                if (enhancedResults && enhancedResults.length > 0) {
+                                                    console.log('[AnimeKai] Found results with enhanced search');
+                                                    return pickResultForSeason(enhancedResults, season, tmdbId);
+                                                }
+                                                // Fall back to basic search
+                                                return searchAnimeByName(animeTitle).then(function(basicResults) {
+                                                    return pickResultForSeason(basicResults, season, tmdbId);
+                                                });
+                                            });
+                                        } else {
+                                            // No season name available, use basic search
+                                            return searchAnimeByName(animeTitle).then(function(basicResults) {
+                                                return pickResultForSeason(basicResults, season, tmdbId);
+                                            });
+                                        }
+                                    }).catch(function(err) {
+                                        console.log('[AnimeKai] TMDB season info failed:', err.message, '- using basic search');
+                                        // TMDB season endpoint failed (season doesn't exist yet), use basic search
+                                        return searchAnimeByName(animeTitle).then(function(basicResults) {
+                                            return pickResultForSeason(basicResults, season, tmdbId);
+                                        });
+                                    });
                                 }
                             }
 
