@@ -592,6 +592,120 @@ async function tryInstantDownload(html) {
   }
 }
 
+// Resolve driveseed.org links to get download options
+async function resolveDriveseedLink(driveseedUrl) {
+  try {
+    const response = await makeRequest(driveseedUrl, {
+      headers: {
+        'Referer': 'https://links.modpro.blog/',
+      }
+    });
+    const html = await response.text();
+
+    const redirectMatch = html.match(/window\.location\.replace\("([^"]+)"\)/);
+
+    if (redirectMatch && redirectMatch[1]) {
+      const finalPath = redirectMatch[1];
+      const finalUrl = `https://driveseed.org${finalPath}`;
+
+      const finalResponse = await makeRequest(finalUrl, {
+        headers: {
+          'Referer': driveseedUrl,
+        }
+      });
+      const finalHtml = await finalResponse.text();
+      const $ = cheerio.load(finalHtml);
+
+      const downloadOptions = [];
+      let size = null;
+      let fileName = null;
+
+      // Extract size and filename from the list
+      $('ul.list-group li').each((i, el) => {
+        const text = $(el).text();
+        if (text.includes('Size :')) {
+          size = text.split(':')[1].trim();
+        } else if (text.includes('Name :')) {
+          fileName = text.split(':')[1].trim();
+        }
+      });
+
+      // Find Resume Cloud button (primary)
+      const resumeCloudLink = $('a:contains("Resume Cloud")').attr('href');
+      if (resumeCloudLink) {
+        downloadOptions.push({
+          title: 'Resume Cloud',
+          type: 'resume',
+          url: `https://driveseed.org${resumeCloudLink}`,
+          priority: 1
+        });
+      }
+
+      // Find Resume Worker Bot (fallback)
+      const workerSeedLink = $('a:contains("Resume Worker Bot")').attr('href');
+      if (workerSeedLink) {
+        downloadOptions.push({
+          title: 'Resume Worker Bot',
+          type: 'worker',
+          url: workerSeedLink,
+          priority: 2
+        });
+      }
+
+      // Find any other download links as additional fallbacks
+      $('a[href*="/download/"]').each((i, el) => {
+        const href = $(el).attr('href');
+        const text = $(el).text().trim();
+        if (href && text && !downloadOptions.some(opt => opt.url === href)) {
+          downloadOptions.push({
+            title: text,
+            type: 'generic',
+            url: href.startsWith('http') ? href : `https://driveseed.org${href}`,
+            priority: 4
+          });
+        }
+      });
+
+      // Find Instant Download (final fallback)
+      const instantDownloadLink = $('a:contains("Instant Download")').attr('href');
+      if (instantDownloadLink) {
+        downloadOptions.push({
+          title: 'Instant Download',
+          type: 'instant',
+          url: instantDownloadLink,
+          priority: 3
+        });
+      }
+
+      // Sort by priority
+      downloadOptions.sort((a, b) => a.priority - b.priority);
+      return { downloadOptions, size, fileName };
+    }
+    return { downloadOptions: [], size: null, fileName: null };
+  } catch (error) {
+    console.error(`[UHDMovies] Error resolving Driveseed link: ${error.message}`);
+    return { downloadOptions: [], size: null, fileName: null };
+  }
+}
+
+// Resolve Resume Cloud link to final download URL
+async function resolveResumeCloudLink(resumeUrl) {
+  try {
+    const response = await makeRequest(resumeUrl, {
+      headers: {
+        'Referer': 'https://driveseed.org/',
+      }
+    });
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const downloadLink = $('a:contains("Cloud Resume Download")').attr('href');
+    return downloadLink || null;
+  } catch (error) {
+    console.error(`[UHDMovies] Error resolving Resume Cloud link: ${error.message}`);
+    return null;
+  }
+}
+
 // Function to try Resume Cloud method
 async function tryResumeCloud(html) {
   // Try multiple patterns to match the resume cloud button
@@ -781,31 +895,96 @@ async function resolveDownloadLink(linkInfo) {
   try {
     console.log(`[UHDMovies] Resolving link: ${linkInfo.quality}`);
 
-    // Step 1: Resolve SID link to driveleech URL
-    let driveleechUrl = null;
+    // Step 1: Resolve SID link to driveleech/driveseed URL
+    let resolvedUrl = null;
 
     if (linkInfo.url.includes('tech.unblockedgames.world') ||
       linkInfo.url.includes('tech.examzculture.in') ||
       linkInfo.url.includes('tech.examdegree.site') ||
       linkInfo.url.includes('tech.creativeexpressionsblog.com')) {
-      driveleechUrl = await resolveSidToDriveleech(linkInfo.url);
+      resolvedUrl = await resolveSidToDriveleech(linkInfo.url);
     } else if (linkInfo.url.includes('driveleech.net') || linkInfo.url.includes('driveseed.org')) {
-      driveleechUrl = linkInfo.url;
+      resolvedUrl = linkInfo.url;
     }
 
-    if (!driveleechUrl) {
+    if (!resolvedUrl) {
       console.log(`[UHDMovies] Could not resolve SID link for ${linkInfo.quality}`);
       return null;
     }
 
-    // Filter out non-driveleech/driveseed URLs
-    if (!driveleechUrl.includes('driveleech.net') && !driveleechUrl.includes('driveseed.org')) {
-      console.log(`[UHDMovies] Skipping non-driveleech URL: ${driveleechUrl}`);
+    // Filter out unsupported URLs
+    if (!resolvedUrl.includes('driveleech.net') && !resolvedUrl.includes('driveseed.org')) {
+      console.log(`[UHDMovies] Skipping unsupported URL: ${resolvedUrl}`);
       return null;
     }
 
-    // Step 2: Get final streaming URL from driveleech page
-    const finalLinkInfo = await getFinalLink(driveleechUrl);
+    let finalLinkInfo = null;
+
+    if (resolvedUrl.includes('driveseed.org')) {
+      // Handle driveseed URLs
+      const { downloadOptions, size, fileName } = await resolveDriveseedLink(resolvedUrl);
+
+      if (!downloadOptions || downloadOptions.length === 0) {
+        console.log(`[UHDMovies] No download options found for ${linkInfo.quality} - ${resolvedUrl}`);
+        return null;
+      }
+
+      // Try download methods in order of priority
+      let finalDownloadUrl = null;
+      let usedMethod = null;
+
+      for (const option of downloadOptions) {
+        try {
+          console.log(`[UHDMovies] Trying ${option.title} for ${linkInfo.quality}...`);
+
+          if (option.type === 'resume') {
+            finalDownloadUrl = await resolveResumeCloudLink(option.url);
+          } else if (option.type === 'instant') {
+            // For instant download, we need to simulate the HTML response
+            // First get the page content, then use the existing tryInstantDownload function
+            try {
+              const instantResponse = await makeRequest(option.url);
+              const instantHtml = await instantResponse.text();
+              finalDownloadUrl = await tryInstantDownload(instantHtml);
+            } catch (error) {
+              console.log(`[UHDMovies] Error fetching instant download page: ${error.message}`);
+            }
+          }
+
+          if (finalDownloadUrl) {
+            // Check if URL validation is enabled
+            if (typeof URL_VALIDATION_ENABLED !== 'undefined' && !URL_VALIDATION_ENABLED) {
+              usedMethod = option.title;
+              console.log(`[UHDMovies] ✓ URL validation disabled, accepting ${usedMethod} result`);
+              break;
+            }
+
+            const isValid = await validateVideoUrl(finalDownloadUrl);
+            if (isValid) {
+              usedMethod = option.title;
+              console.log(`[UHDMovies] ✓ Successfully resolved using ${usedMethod}`);
+              break;
+            } else {
+              console.log(`[UHDMovies] ✗ ${option.title} returned invalid URL`);
+              finalDownloadUrl = null;
+            }
+          }
+        } catch (error) {
+          console.log(`[UHDMovies] ✗ ${option.title} failed: ${error.message}`);
+        }
+      }
+
+      if (finalDownloadUrl) {
+        finalLinkInfo = {
+          url: finalDownloadUrl,
+          size: size || linkInfo.size,
+          fileName: fileName
+        };
+      }
+    } else {
+      // Handle driveleech URLs (existing logic)
+      finalLinkInfo = await getFinalLink(resolvedUrl);
+    }
 
     if (!finalLinkInfo) {
       console.log(`[UHDMovies] Could not get final link for ${linkInfo.quality}`);

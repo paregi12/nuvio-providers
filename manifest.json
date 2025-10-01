@@ -41,8 +41,8 @@
     {
       "id": "uhdmovies",
       "name": "UHDMovies",
-      "description": "UHD Movies streaming with multiple resolution options",
-      "version": "1.0.1",
+      "description": "UHD Movies streaming with multiple resolution" ,
+      "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
