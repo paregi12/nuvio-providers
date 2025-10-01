@@ -216,14 +216,14 @@ function searchYflix(query) {
 
       const results = [];
 
-      const itemRegex = /<div[^>]*class="[^"]*item[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*watch\/[^"]*)"[^>]*class="[^"]*poster[^"]*"[\s\S]*?<img[^>]*data-src="([^"]*)"[^>]*>[\s\S]*?<a[^>]*href="[^"]*watch\/[^"]*"[^>]*class="[^"]*title[^"]*"[^>]*>([^<]*)<\/a>[\s\S]*?<div[^>]*class="[^"]*metadata[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
+      // Updated regex to match the actual YFlix search page structure
+      const infoRegex = /<div[^>]*class="[^"]*info[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*watch\/[^"]*)"[^>]*class="[^"]*title[^"]*"[^>]*>([^<]*)<\/a>[\s\S]*?<div[^>]*class="[^"]*metadata[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
 
       let match;
-      while ((match = itemRegex.exec(html)) !== null) {
-        const [, url, posterUrl, title, metadata] = match;
+      while ((match = infoRegex.exec(html)) !== null) {
+        const [, url, title, metadata] = match;
         const cleanTitle = title.trim();
         const cleanUrl = url.startsWith('http') ? url : `${YFLIX_AJAX.replace('/ajax', '')}${url}`;
-        const cleanPoster = posterUrl.trim();
 
         const typeMatch = metadata.match(/<span[^>]*>([^<]*)<\/span>/g) || [];
         const metadataParts = typeMatch.map(span => span.replace(/<\/?span[^>]*>/g, ''));
@@ -231,12 +231,10 @@ function searchYflix(query) {
         const result = {
           title: cleanTitle,
           url: cleanUrl,
-          posterUrl: cleanPoster,
           type: metadataParts[0] || 'Unknown',
-          season: metadataParts[1] ? metadataParts[1].replace('SS ', '') : null,
-          episode: metadataParts[2] ? metadataParts[2].replace('EP ', '') : null,
-          year: metadataParts[1] ? metadataParts[1] : null,
-          duration: metadataParts[2] ? metadataParts[2] : null
+          year: metadataParts[1] && /^\d{4}$/.test(metadataParts[1]) ? parseInt(metadataParts[1]) : null,
+          duration: metadataParts[2] || null,
+          metadata: metadataParts
         };
 
         results.push(result);
@@ -245,6 +243,62 @@ function searchYflix(query) {
       console.log(`[YLFix] Found ${results.length} results using regex parsing`);
       return results;
     });
+}
+
+// Find best matching result based on TMDB title and year
+function findBestMatch(results, tmdbTitle, tmdbYear, mediaType) {
+  if (results.length === 0) return null;
+
+  console.log(`[YLFix] Finding best match for TMDB: "${tmdbTitle}" (${tmdbYear}) - Type: ${mediaType}`);
+
+  // Normalize TMDB title for comparison
+  const normalizedTMDBTitle = tmdbTitle.toLowerCase().replace(/[^\w\s]/g, '').trim();
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const result of results) {
+    const resultTitle = result.title.toLowerCase().replace(/[^\w\s]/g, '').trim();
+    const resultYear = result.year;
+    const resultType = result.type.toLowerCase();
+
+    let score = 0;
+
+    // Exact title match gets high score
+    if (resultTitle === normalizedTMDBTitle) {
+      score += 100;
+    } else if (resultTitle.includes(normalizedTMDBTitle) || normalizedTMDBTitle.includes(resultTitle)) {
+      // Partial match
+      score += 50;
+    } else {
+      // Check for common title variations (e.g., "The Movie" vs "Movie")
+      const tmdbWords = normalizedTMDBTitle.split(/\s+/);
+      const resultWords = resultTitle.split(/\s+/);
+      const commonWords = tmdbWords.filter(word => resultWords.includes(word)).length;
+      score += commonWords * 10;
+    }
+
+    // Year match gets bonus points
+    if (resultYear && tmdbYear && resultYear === tmdbYear) {
+      score += 30;
+    }
+
+    // Type match gets bonus points (Movie vs TV)
+    const expectedType = mediaType === 'tv' ? 'tv' : 'movie';
+    if (resultType.includes(expectedType) || expectedType.includes(resultType)) {
+      score += 20;
+    }
+
+    console.log(`[YLFix] Result: "${result.title}" (${result.year}) [${result.type}] - Score: ${score}`);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = result;
+    }
+  }
+
+  console.log(`[YLFix] Best match: "${bestMatch?.title}" (${bestMatch?.year}) [${bestMatch?.type}] with score ${bestScore}`);
+  return bestMatch;
 }
 
 function getContentInfoFromYflixUrl(yflixUrl) {
@@ -423,8 +477,15 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
               return;
             }
 
-            const selected = results[0];
-            console.log(`[YLFix] Found result: ${selected.title} (${selected.url})`);
+            // Find best matching result based on TMDB title and year
+            const selected = findBestMatch(results, title, year, mediaType);
+            if (!selected) {
+              console.log(`[YLFix] No suitable match found for "${title}" (${year})`);
+              resolve([]);
+              return;
+            }
+
+            console.log(`[YLFix] Selected best match: ${selected.title} (${selected.year}) - ${selected.url}`);
 
             // Extract actual title, year, and contentId from YFlix page
             return getContentInfoFromYflixUrl(selected.url)
