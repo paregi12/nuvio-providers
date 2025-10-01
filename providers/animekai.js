@@ -230,6 +230,52 @@ function searchAnimeByName(animeName) {
         });
 }
 
+// Pick best search result for a given season (AnimeKai splits seasons by page)
+function pickResultForSeason(results, season) {
+    if (!results || results.length === 0) return null;
+    if (!season || !Number.isFinite(season)) return results[0];
+
+    var seasonStr = String(season);
+    var candidates = [];
+
+    // Strong match: title explicitly contains "season {n}" (case-insensitive)
+    for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        var t = (r.title || '').toLowerCase();
+        if (t.indexOf('season ' + seasonStr) !== -1 || t.indexOf('s' + seasonStr) !== -1) {
+            candidates.push({ r: r, score: 3 });
+        }
+    }
+
+    // URL-based hints (e.g., -season-2, -s2)
+    for (var j = 0; j < results.length; j++) {
+        var r2 = results[j];
+        var u = (r2.url || '').toLowerCase();
+        if (u.indexOf('season-' + seasonStr) !== -1 || u.indexOf('-s' + seasonStr) !== -1 || u.indexOf('-season-' + seasonStr) !== -1) {
+            candidates.push({ r: r2, score: 2 });
+        }
+    }
+
+    // Heuristic: if multiple, prefer those whose title starts with the base name (ignoring season suffix)
+    if (candidates.length > 0) {
+        candidates.sort(function(a,b){ return b.score - a.score; });
+        return candidates[0].r;
+    }
+
+    // Fallback: if no explicit season marker found, try to avoid ones with 'season 1' when season > 1
+    if (season > 1) {
+        for (var k = 0; k < results.length; k++) {
+            var r3 = results[k];
+            var t3 = (r3.title || '').toLowerCase();
+            if (t3.indexOf('season 1') === -1 && t3.indexOf('s1') === -1) {
+                return r3;
+            }
+        }
+    }
+
+    return results[0];
+}
+
 function extractContentIdFromSlug(slugUrl) {
     return fetchRequest(slugUrl)
         .then(function(res) { return res.text(); })
@@ -291,7 +337,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
             if (!results || results.length === 0) {
                 throw new Error('No AnimeKai results');
             }
-            var chosen = results[0];
+            var chosen = pickResultForSeason(results, season);
             return extractContentIdFromSlug(chosen.url);
         })
         .then(function(contentId) {
