@@ -1,4 +1,4 @@
-// YLFix Scraper for Nuvio Local Scrapers
+// YFlix Scraper for Nuvio Local Scrapers
 // React Native compatible version - Standalone (no external dependencies)
 
 // TMDB API Configuration
@@ -211,8 +211,8 @@ function searchYflix(query) {
   const searchUrl = `${YFLIX_AJAX.replace('/ajax', '')}/browser?keyword=${encodeURIComponent(query)}`;
   return getText(searchUrl)
     .then(html => {
-      console.log(`[YLFix] Search URL: ${searchUrl}`);
-      console.log(`[YLFix] HTML length: ${html.length} characters`);
+      console.log(`[YFlix] Search URL: ${searchUrl}`);
+      console.log(`[YFlix] HTML length: ${html.length} characters`);
 
       const results = [];
 
@@ -240,7 +240,7 @@ function searchYflix(query) {
         results.push(result);
       }
 
-      console.log(`[YLFix] Found ${results.length} results using regex parsing`);
+      console.log(`[YFlix] Found ${results.length} results using regex parsing`);
       return results;
     });
 }
@@ -249,7 +249,7 @@ function searchYflix(query) {
 function findBestMatch(results, tmdbTitle, tmdbYear, mediaType) {
   if (results.length === 0) return null;
 
-  console.log(`[YLFix] Finding best match for TMDB: "${tmdbTitle}" (${tmdbYear}) - Type: ${mediaType}`);
+  console.log(`[YFlix] Finding best match for TMDB: "${tmdbTitle}" (${tmdbYear}) - Type: ${mediaType}`);
 
   // Normalize TMDB title for comparison
   const normalizedTMDBTitle = tmdbTitle.toLowerCase().replace(/[^\w\s]/g, '').trim();
@@ -289,7 +289,7 @@ function findBestMatch(results, tmdbTitle, tmdbYear, mediaType) {
       score += 20;
     }
 
-    console.log(`[YLFix] Result: "${result.title}" (${result.year}) [${result.type}] - Score: ${score}`);
+    console.log(`[YFlix] Result: "${result.title}" (${result.year}) [${result.type}] - Score: ${score}`);
 
     if (score > bestScore) {
       bestScore = score;
@@ -297,7 +297,7 @@ function findBestMatch(results, tmdbTitle, tmdbYear, mediaType) {
     }
   }
 
-  console.log(`[YLFix] Best match: "${bestMatch?.title}" (${bestMatch?.year}) [${bestMatch?.type}] with score ${bestScore}`);
+  console.log(`[YFlix] Best match: "${bestMatch?.title}" (${bestMatch?.year}) [${bestMatch?.type}] with score ${bestScore}`);
   return bestMatch;
 }
 
@@ -329,14 +329,14 @@ function getContentInfoFromYflixUrl(yflixUrl) {
       const yearMatch = html.match(/<div[^>]*class="[^"]*metadata[^"]*set[^"]*"[^>]*>[\s\S]*?<span[^>]*>(\d{4})<\/span>/);
       const year = yearMatch ? parseInt(yearMatch[1]) : null;
 
-      console.log(`[YLFix] Extracted from YFlix - Title: "${title}", Year: ${year}, ContentID: ${contentId}`);
+      console.log(`[YFlix] Extracted from YFlix - Title: "${title}", Year: ${year}, ContentID: ${contentId}`);
 
       return { contentId, title, year };
     });
 }
 
 function runStreamFetch(contentId, specificEid = null, title, year, mediaType, seasonNum, episodeNum) {
-  console.log(`[YLFix] Fetching episodes and servers for content ID: ${contentId}`);
+  console.log(`[YFlix] Fetching episodes and servers for content ID: ${contentId}`);
 
   return encrypt(contentId)
     .then(encId => getJson(`${YFLIX_AJAX}/episodes/list?id=${contentId}&_=${encId}`))
@@ -345,18 +345,18 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
       let eid;
       if (specificEid) {
         eid = specificEid;
-        console.log(`[YLFix] Using specified episode, eid=${eid}`);
+        console.log(`[YFlix] Using specified episode, eid=${eid}`);
       } else {
         const firstEpKey = Object.keys(episodes)[0];
         eid = episodes[firstEpKey].eid;
-        console.log(`[YLFix] Using episode ${firstEpKey}, eid=${eid}`);
+        console.log(`[YFlix] Using episode ${firstEpKey}, eid=${eid}`);
       }
       return encrypt(eid).then(encEid => ({ eid, encEid }));
     })
     .then(({ eid, encEid }) => getJson(`${YFLIX_AJAX}/links/list?eid=${eid}&_=${encEid}`))
     .then(serversResp => parseHtml(serversResp.result))
     .then(servers => {
-      console.log(`[YLFix] Servers available:`, Object.keys(servers).map(stype => `${stype}: ${Object.keys(servers[stype]).length}`));
+      console.log(`[YFlix] Servers available:`, Object.keys(servers).map(stype => `${stype}: ${Object.keys(servers[stype]).length}`));
 
       const allStreams = [];
       const allSubtitles = [];
@@ -403,17 +403,17 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
           return true;
         });
 
-        console.log(`[YLFix] Found ${dedupedStreams.length} streams`);
+        console.log(`[YFlix] Found ${dedupedStreams.length} streams`);
 
         // Convert to Nuvio format
         const nuvioStreams = dedupedStreams.map(stream => ({
-          name: `YLFix ${stream.serverType || 'Server'} - ${stream.quality || 'Unknown'}`,
+          name: `YFlix ${stream.serverType || 'Server'} - ${stream.quality || 'Unknown'}`,
           title: `${title}${year ? ` (${year})` : ''}${mediaType === 'tv' && seasonNum && episodeNum ? ` S${seasonNum}E${episodeNum}` : ''}`,
           url: stream.url,
           quality: stream.quality || 'Unknown',
           size: 'Unknown',
           headers: HEADERS,
-          provider: 'ylfix'
+          provider: 'yflix'
         }));
 
         return nuvioStreams;
@@ -422,23 +422,23 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
 }
 
 function handleTvShow(yflixUrl, contentId, title, year, seasonNum, episodeNum) {
-  console.log(`[YLFix] Fetching TV show season ${seasonNum}, episode ${episodeNum}`);
+  console.log(`[YFlix] Fetching TV show season ${seasonNum}, episode ${episodeNum}`);
 
   const selectedSeason = seasonNum || 1;
   const selectedEpisode = episodeNum || 1;
 
   const episodeUrl = `${yflixUrl}#ep=${selectedSeason},${selectedEpisode}`;
-  console.log(`[YLFix] Episode URL: ${episodeUrl}`);
+  console.log(`[YFlix] Episode URL: ${episodeUrl}`);
 
   return getText(episodeUrl)
     .then(html => {
       const epMatch = html.match(/data-episode="([^"]*)"/) || html.match(/episode["\s]*:[\s]*["']([^"']+)["']/);
       if (epMatch) {
-        console.log(`[YLFix] Found episode data: ${epMatch[1]}`);
+        console.log(`[YFlix] Found episode data: ${epMatch[1]}`);
         return epMatch[1];
       }
 
-      console.log(`[YLFix] Using main content ID for episode access`);
+      console.log(`[YFlix] Using main content ID for episode access`);
       return contentId;
     })
     .then(episodeId => runStreamFetch(contentId, episodeId, title, year, 'tv', selectedSeason, selectedEpisode));
@@ -460,19 +460,19 @@ function getTMDBDetails(tmdbId, mediaType) {
 // Main getStreams function
 function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
   return new Promise((resolve, reject) => {
-    console.log(`[YLFix] Starting scrape for TMDB ID: ${tmdbId}, type: ${mediaType}`);
+    console.log(`[YFlix] Starting scrape for TMDB ID: ${tmdbId}, type: ${mediaType}`);
 
     // Get TMDB details for search query only
     getTMDBDetails(tmdbId, mediaType)
       .then(({ title, year }) => {
-        console.log(`[YLFix] TMDB search query - Title: ${title}, Year: ${year}`);
+        console.log(`[YFlix] TMDB search query - Title: ${title}, Year: ${year}`);
 
         // Search YFlix
         const searchQuery = title + (year ? ` ${year}` : '');
         return searchYflix(searchQuery)
           .then(results => {
             if (results.length === 0) {
-              console.log(`[YLFix] No results found for "${searchQuery}"`);
+              console.log(`[YFlix] No results found for "${searchQuery}"`);
               resolve([]);
               return;
             }
@@ -480,17 +480,17 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
             // Find best matching result based on TMDB title and year
             const selected = findBestMatch(results, title, year, mediaType);
             if (!selected) {
-              console.log(`[YLFix] No suitable match found for "${title}" (${year})`);
+              console.log(`[YFlix] No suitable match found for "${title}" (${year})`);
               resolve([]);
               return;
             }
 
-            console.log(`[YLFix] Selected best match: ${selected.title} (${selected.year}) - ${selected.url}`);
+            console.log(`[YFlix] Selected best match: ${selected.title} (${selected.year}) - ${selected.url}`);
 
             // Extract actual title, year, and contentId from YFlix page
             return getContentInfoFromYflixUrl(selected.url)
               .then(({ contentId, title: yflixTitle, year: yflixYear }) => {
-                console.log(`[YLFix] Using YFlix data - Title: "${yflixTitle}", Year: ${yflixYear}`);
+                console.log(`[YFlix] Using YFlix data - Title: "${yflixTitle}", Year: ${yflixYear}`);
 
                 if (mediaType === 'tv') {
                   return handleTvShow(selected.url, contentId, yflixTitle, yflixYear, seasonNum, episodeNum);
@@ -502,14 +502,14 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
       })
       .then(streams => {
         if (streams) {
-          console.log(`[YLFix] Returning ${streams.length} streams`);
+          console.log(`[YFlix] Returning ${streams.length} streams`);
           resolve(streams);
         } else {
           resolve([]);
         }
       })
       .catch(error => {
-        console.error(`[YLFix] Error: ${error.message}`);
+        console.error(`[YFlix] Error: ${error.message}`);
         resolve([]); // Return empty array on error, don't reject
       });
   });
