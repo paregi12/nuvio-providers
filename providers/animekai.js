@@ -13,6 +13,15 @@ const HEADERS = {
 const API = 'https://enc-dec.app/api';
 const KAI_AJAX = 'https://animekai.to/ajax';
 
+// Kitsu API Configuration (for accurate season mapping)
+const KITSU_BASE_URL = 'https://kitsu.io/api/edge';
+const KITSU_HEADERS = {
+    'Accept': 'application/vnd.api+json',
+    'Content-Type': 'application/vnd.api+json'
+};
+
+// Dynamic Kitsu search patterns for season mapping
+
 // Generic fetch helper that returns text or json based on caller usage
 function fetchRequest(url, options) {
     const merged = Object.assign({ method: 'GET', headers: HEADERS }, options || {});
@@ -58,6 +67,344 @@ function decryptMegaMedia(embedUrl) {
             }).then(function(res) { return res.json(); });
         })
         .then(function(json) { return json.result; });
+}
+
+// Kitsu API helper functions for accurate season mapping
+function fetchKitsu(url) {
+    return fetchRequest(url, { headers: KITSU_HEADERS })
+        .then(function(res) { return res.json(); });
+}
+
+function getKitsuAnimeInfo(kitsuId) {
+    return fetchKitsu(KITSU_BASE_URL + '/anime/' + kitsuId);
+}
+
+function getKitsuEpisodeInfo(animeId, episodeNumber) {
+    return fetchKitsu(KITSU_BASE_URL + '/anime/' + animeId + '/episodes?filter[number]=' + episodeNumber)
+        .then(function(response) {
+            return response.data && response.data.length > 0 ? response.data[0] : null;
+        });
+}
+
+// Determine if we should calculate absolute episode (TMDB has more seasons than Kitsu)
+function shouldCalculateAbsoluteEpisode(kitsuResults, requestedSeason) {
+    // Check if TMDB likely has more seasons than Kitsu provides
+    // This is a heuristic: if requested season > number of Kitsu season groups, calculate absolute
+    var seasonGroups = groupKitsuEntriesBySeason(kitsuResults);
+    var kitsuSeasons = Object.keys(seasonGroups).map(Number).filter(s => s > 0);
+
+    // If requested season is higher than any Kitsu season, or if we have a main entry but no season match
+    return requestedSeason > Math.max(...kitsuSeasons, 0);
+}
+
+// Calculate absolute episode number for continuous series where TMDB has seasons but Kitsu doesn't
+function calculateAbsoluteEpisodeFromTMDB(tmdbId, season, episode) {
+    var url = TMDB_BASE_URL + '/tv/' + tmdbId + '?api_key=' + TMDB_API_KEY;
+    return fetchRequest(url)
+        .then(function(res) { return res.json(); })
+        .then(function(seriesData) {
+            var seasons = seriesData.seasons || [];
+            var cumulativeEpisodes = 0;
+
+            // Sum up episodes from all seasons before the requested season
+            for (var i = 0; i < seasons.length; i++) {
+                var s = seasons[i];
+                if (s.season_number > 0 && s.season_number < season) {  // Skip specials (season 0)
+                    cumulativeEpisodes += s.episode_count || 0;
+                }
+            }
+
+            // Add the episode number within the requested season
+            return cumulativeEpisodes + episode;
+        })
+        .catch(function(err) {
+            console.log('[AnimeKai] Error calculating absolute episode from TMDB:', err.message);
+            return episode; // Fallback to original episode number
+        });
+}
+
+function searchKitsuByTitle(animeTitle) {
+    // Search Kitsu for anime entries matching the title
+    const searchUrl = KITSU_BASE_URL + '/anime?filter[text]=' + encodeURIComponent(animeTitle);
+    return fetchKitsu(searchUrl).then(function(response) {
+        return response.data || [];
+    });
+}
+
+function getAccurateAnimeKaiEntry(animeTitle, season, episode, tmdbId) {
+    console.log('[AnimeKai] Searching Kitsu for:', animeTitle, 'S' + season + 'E' + episode);
+
+    // First search Kitsu for all related entries
+    return searchKitsuByTitle(animeTitle).then(function(kitsuResults) {
+        if (!kitsuResults || kitsuResults.length === 0) {
+            console.log('[AnimeKai] No Kitsu results, falling back to direct AnimeKai search');
+            return searchAnimeByName(animeTitle).then(function(results) {
+                return pickResultForSeason(results, season, tmdbId);
+            }).then(function(result) {
+                return result;
+            });
+        }
+
+        // Check if we should calculate absolute episode (TMDB has more seasons than Kitsu or continuous series)
+        if (shouldCalculateAbsoluteEpisode(kitsuResults, season)) {
+            console.log('[AnimeKai] Calculating absolute episode for proper TMDB → Kitsu mapping...');
+
+            // Calculate the absolute episode number across all TMDB seasons
+            return calculateAbsoluteEpisodeFromTMDB(tmdbId, season, episode).then(function(absoluteEpisode) {
+                console.log('[AnimeKai] TMDB S' + season + 'E' + episode + ' = Absolute Episode', absoluteEpisode);
+
+                // Find the main entry to use (continuous series or first available)
+                var mainEntry = kitsuResults.find(function(entry) {
+                    return entry.attributes.episodeCount === null && entry.attributes.status === 'current';
+                }) || kitsuResults[0];
+
+                // Check if this absolute episode exists in Kitsu
+                return getKitsuEpisodeInfo(mainEntry.id, absoluteEpisode).then(function(episodeData) {
+                    if (episodeData) {
+                        console.log('[AnimeKai] Found episode in Kitsu - using absolute episode mapping');
+
+                        // Use the main entry with absolute episode number
+                        return processKitsuEntries([mainEntry], absoluteEpisode, kitsuResults, animeTitle, season, tmdbId);
+                    } else {
+                        // Fallback to episode-level season data if absolute episode not found
+                        console.log('[AnimeKai] Absolute episode not found, trying episode-level data...');
+                        return getKitsuEpisodeInfo(mainEntry.id, episode).then(function(originalEpisodeData) {
+                            if (originalEpisodeData && originalEpisodeData.attributes.seasonNumber) {
+                                console.log('[AnimeKai] Found episode data - Season:', originalEpisodeData.attributes.seasonNumber);
+                                var actualSeason = originalEpisodeData.attributes.seasonNumber;
+                                var seasonGroups = groupKitsuEntriesBySeason(kitsuResults);
+                                var seasonEntries = seasonGroups[actualSeason] || [];
+
+                                if (seasonEntries.length > 0) {
+                                    return processKitsuEntries(seasonEntries, episode, kitsuResults, animeTitle, season, tmdbId);
+                                }
+                            }
+
+                            // Final fallback to original logic
+                            console.log('[AnimeKai] Episode data not helpful, using original logic');
+                            return fallbackToOriginalLogic(kitsuResults, season, episode, animeTitle, tmdbId);
+                        });
+                    }
+                });
+            });
+        }
+
+        // Original logic for non-continuous series
+        return fallbackToOriginalLogic(kitsuResults, season, episode, animeTitle, tmdbId);
+    });
+}
+
+function processKitsuEntries(seasonEntries, episode, kitsuResults, animeTitle, originalSeason, tmdbId) {
+    console.log('[AnimeKai] Found', seasonEntries.length, 'entries for episode-season mapping');
+
+    if (seasonEntries.length > 0) {
+        seasonEntries.forEach(function(entry, idx) {
+            console.log('[AnimeKai]  ', idx + 1 + '.', entry.attributes.canonicalTitle, '(' + entry.attributes.episodeCount + ' eps)');
+        });
+    } else {
+        console.log('[AnimeKai] No entries found for episode-season - using all Kitsu results');
+        seasonEntries = kitsuResults;
+    }
+
+    // For split seasons, determine which part contains our episode
+    var targetEntry = null;
+    var translatedEpisode = episode;
+
+    if (seasonEntries.length > 1) {
+        // Handle split seasons (like Season 3 → Part 1 + Part 2)
+        targetEntry = findEntryForEpisode(seasonEntries, episode);
+        translatedEpisode = targetEntry ? targetEntry.translatedEpisode : episode;
+        targetEntry = targetEntry ? targetEntry.entry : seasonEntries[0];
+        console.log('[AnimeKai] Split season detected, using:', targetEntry.attributes.canonicalTitle, 'episode:', translatedEpisode);
+    } else {
+        // Single entry season
+        targetEntry = seasonEntries[0];
+    }
+
+    // Search AnimeKai using the target Kitsu entry
+    // Prefer English title (matches AnimeKai naming) with fallback to canonical title
+    var kitsuTitle = targetEntry.attributes.titles &&
+                    (targetEntry.attributes.titles.en ||
+                     targetEntry.attributes.titles.en_us ||
+                     targetEntry.attributes.titles.en_jp) ||
+                    targetEntry.attributes.canonicalTitle;
+    console.log('[AnimeKai] Searching AnimeKai for:', kitsuTitle);
+
+    return searchAnimeByName(kitsuTitle).then(function(animeKaiResults) {
+        if (!animeKaiResults || animeKaiResults.length === 0) {
+            console.log('[AnimeKai] No AnimeKai results for:', kitsuTitle);
+            return null;
+        }
+
+        // Find exact title match (normalize punctuation and whitespace)
+        var normalizedKitsuTitle = kitsuTitle.toLowerCase()
+            .replace(/[^\w\s]/g, '') // Remove punctuation
+            .replace(/\s+/g, ' ')    // Normalize whitespace
+            .trim();
+
+        var exactMatch = animeKaiResults.find(function(r) {
+            var normalizedResultTitle = r.title.toLowerCase()
+                .replace(/[^\w\s]/g, '') // Remove punctuation
+                .replace(/\s+/g, ' ')    // Normalize whitespace
+                .trim();
+            return normalizedResultTitle === normalizedKitsuTitle;
+        });
+
+        if (exactMatch) {
+            console.log('[AnimeKai] Found exact match:', kitsuTitle);
+            // Store translated episode for later use
+            exactMatch.translatedEpisode = translatedEpisode;
+            return exactMatch;
+        }
+
+        // Try partial matches
+        var partialMatch = animeKaiResults.find(function(r) {
+            return kitsuTitle.toLowerCase().includes(r.title.toLowerCase()) ||
+                   r.title.toLowerCase().includes(kitsuTitle.toLowerCase());
+        });
+
+        if (partialMatch) {
+            console.log('[AnimeKai] Found partial match:', kitsuTitle, '→', partialMatch.title);
+            partialMatch.translatedEpisode = translatedEpisode;
+            return partialMatch;
+        }
+
+        return null;
+    }).then(function(selectedEntry) {
+        if (selectedEntry) {
+            return selectedEntry;
+        }
+
+        // Final fallback to original pattern matching
+        console.log('[AnimeKai] No Kitsu matches found, falling back to pattern matching');
+        return searchAnimeByName(animeTitle).then(function(results) {
+            return pickResultForSeason(results, originalSeason, tmdbId);
+        }).then(function(result) {
+            return result;
+        });
+    });
+}
+
+function fallbackToOriginalLogic(kitsuResults, season, episode, animeTitle, tmdbId) {
+    // Group all Kitsu results by season and filter for requested season
+    var seasonGroups = groupKitsuEntriesBySeason(kitsuResults);
+    var seasonEntries = seasonGroups[season] || [];
+
+    console.log('[AnimeKai] Kitsu season groups found:', Object.keys(seasonGroups));
+    console.log('[AnimeKai] Found', seasonEntries.length, 'entries for season', season, ':');
+
+    if (seasonEntries.length > 0) {
+        seasonEntries.forEach(function(entry, idx) {
+            console.log('[AnimeKai]  ', idx + 1 + '.', entry.attributes.canonicalTitle, '(' + entry.attributes.episodeCount + ' eps)');
+        });
+    } else {
+        console.log('[AnimeKai] No entries found for season', season, '- using all Kitsu results as fallback');
+        seasonEntries = kitsuResults;
+    }
+
+    return processKitsuEntries(seasonEntries, episode, kitsuResults, animeTitle, season, tmdbId);
+}
+
+function findEntryForEpisode(seasonEntries, episode) {
+    // Prioritize main season entries over specials
+    var mainEntries = seasonEntries.filter(function(entry) {
+        var title = entry.attributes.canonicalTitle.toLowerCase();
+        return !title.includes('special') && !title.includes('ova');
+    });
+
+    var cumulativeEpisodes = 0;
+
+    // First try main season entries only
+    for (var i = 0; i < mainEntries.length; i++) {
+        var entry = mainEntries[i];
+        var episodeCount = entry.attributes.episodeCount || 0;
+        var startEpisode = cumulativeEpisodes + 1;
+        var endEpisode = cumulativeEpisodes + episodeCount;
+
+        console.log('[AnimeKai] Checking', entry.attributes.canonicalTitle, 'episodes', startEpisode + '-' + endEpisode);
+
+        if (episode >= startEpisode && episode <= endEpisode) {
+            // Found the entry that contains this episode
+            var translatedEpisode = episode - cumulativeEpisodes;
+            console.log('[AnimeKai] Found episode', episode, 'as episode', translatedEpisode, 'in', entry.attributes.canonicalTitle);
+            return {
+                entry: entry,
+                translatedEpisode: translatedEpisode,
+                episodeRange: startEpisode + '-' + endEpisode
+            };
+        }
+
+        cumulativeEpisodes += episodeCount;
+    }
+
+    console.log('[AnimeKai] Episode', episode, 'not found in main entries, using first entry');
+    // Episode not found in main entries, return first main entry with original episode
+    return {
+        entry: mainEntries[0] || seasonEntries[0],
+        translatedEpisode: episode,
+        episodeRange: 'unknown'
+    };
+}
+
+function groupKitsuEntriesBySeason(kitsuResults) {
+    // Filter out specials/OVAs and movies - only keep TV series with multiple episodes
+    var mainSeries = kitsuResults.filter(function(entry) {
+        var episodeCount = entry.attributes.episodeCount || 0;
+        var subtype = entry.attributes.subtype || '';
+        var title = entry.attributes.canonicalTitle.toLowerCase();
+
+        // Keep entries with >1 episode that are TV series (not movies/specials)
+        return episodeCount > 1 &&
+               subtype === 'TV' &&
+               !title.includes('movie') &&
+               !title.includes('ova') &&
+               !title.includes('special');
+    });
+
+    // Sort by start date to determine chronological order
+    mainSeries.sort(function(a, b) {
+        var dateA = a.attributes.startDate || '9999-99-99';
+        var dateB = b.attributes.startDate || '9999-99-99';
+        return dateA.localeCompare(dateB);
+    });
+
+    // Group by chronological order as seasons
+    var seasonGroups = {};
+    mainSeries.forEach(function(entry, index) {
+        var seasonNum = index + 1; // 1-based season numbering
+        if (!seasonGroups[seasonNum]) {
+            seasonGroups[seasonNum] = [];
+        }
+        seasonGroups[seasonNum].push(entry);
+    });
+
+    return seasonGroups;
+}
+
+function extractSeasonNumberFromTitle(title) {
+    // Extract season number from various title formats
+    var patterns = [
+        /season\s*(\d+)/i,
+        /s(\d+)/i,
+        /final season/i,  // Treat "Final Season" as season 4
+        /^(.+)$/i         // Fallback: if no season indicators, treat as season 1
+    ];
+
+    for (var i = 0; i < patterns.length; i++) {
+        var match = title.match(patterns[i]);
+        if (match) {
+            if (i === 2) return 4; // Final Season = season 4
+            if (i === 3) return 1; // No season indicators = season 1
+            return parseInt(match[1]);
+        }
+    }
+
+    return null;
+}
+
+function filterKitsuResultsBySeason(kitsuResults, season) {
+    var seasonGroups = groupKitsuEntriesBySeason(kitsuResults);
+    return seasonGroups[season] || [];
 }
 
 // Quality helpers
@@ -169,7 +516,19 @@ function resolveMultipleM3U8(m3u8Links) {
     });
 }
 
-function buildMediaTitle(info, mediaType, season, episode) {
+function buildMediaTitle(info, mediaType, season, episode, episodeInfo) {
+    // Use extracted episode and season name if available
+    if (episodeInfo && episodeInfo.seasonName) {
+        if (episodeInfo.episode) {
+            var e = String(episodeInfo.episode).padStart(2, '0');
+            return episodeInfo.seasonName + ' E' + e;
+        } else {
+            // If we have season name but no episode, use the provided episode
+            var e = String(episode).padStart(2, '0');
+            return episodeInfo.seasonName + ' E' + e;
+        }
+    }
+
     if (!info || !info.title) return '';
     if (mediaType === 'tv' && season && episode) {
         var s = String(season).padStart(2, '0');
@@ -205,24 +564,66 @@ function searchAnimeByName(animeName) {
         .then(function(res) { return res.text(); })
         .then(function(html) {
             var results = [];
-            var pattern = /href="(\/watch\/[^\"]*)"[^>]*>[\s\S]*?<a[^>]*class="[^"]*title[^"]*"[^>]*>([^<]*)<\/a>/g;
+            // Updated pattern to capture more info including episode count
+            var pattern = /<div class="aitem">[\s\S]*?href="(\/watch\/[^\"]*)"[\s\S]*?<a[^>]*class="[^"]*title[^"]*"[^>]*>([^<]*)<\/a>[\s\S]*?<div class="info">[\s\S]*?<span[^>]*class="[^"]*sub[^"]*"[^>]*>([^<]*?)<\/span>[\s\S]*?<span[^>]*class="[^"]*dub[^"]*"[^>]*>([^<]*?)<\/span>[\s\S]*?<span[^>]*>([^<]*?)<\/span>[\s\S]*?<\/div>/g;
             var m;
             while ((m = pattern.exec(html)) !== null) {
                 var href = m[1];
                 var title = (m[2] || '').trim();
+                var subCount = (m[3] || '').trim();
+                var dubCount = (m[4] || '').trim();
+                var type = (m[5] || '').trim();
+
+                // Extract episode count from sub/dub spans
+                var episodeCount = 0;
+                if (subCount) {
+                    var subMatch = subCount.match(/(\d+)/);
+                    if (subMatch) episodeCount = Math.max(episodeCount, parseInt(subMatch[1]));
+                }
+                if (dubCount) {
+                    var dubMatch = dubCount.match(/(\d+)/);
+                    if (dubMatch) episodeCount = Math.max(episodeCount, parseInt(dubMatch[1]));
+                }
+
+
                 if (href && title) {
                     results.push({
                         title: title,
-                        url: (href.indexOf('http') === 0 ? href : KAI_AJAX.replace('/ajax', '') + href)
+                        url: (href.indexOf('http') === 0 ? href : KAI_AJAX.replace('/ajax', '') + href),
+                        episodeCount: episodeCount,
+                        type: type
                     });
                 }
             }
+
             if (results.length === 0) {
-                // Fallback: grab any watch URL
-                var pattern2 = /href="(\/watch\/[^\"]*)"/g;
+                // Fallback: simpler pattern
+                var pattern2 = /href="(\/watch\/[^\"]*)"[^>]*>[\s\S]*?<a[^>]*class="[^"]*title[^"]*"[^>]*>([^<]*)<\/a>/g;
                 while ((m = pattern2.exec(html)) !== null) {
+                    var href = m[1];
+                    var title = (m[2] || '').trim();
+                    if (href && title) {
+                        results.push({
+                            title: title,
+                            url: (href.indexOf('http') === 0 ? href : KAI_AJAX.replace('/ajax', '') + href),
+                            episodeCount: 0,
+                            type: 'TV'
+                        });
+                    }
+                }
+            }
+
+            if (results.length === 0) {
+                // Final fallback: grab any watch URL
+                var pattern3 = /href="(\/watch\/[^\"]*)"/g;
+                while ((m = pattern3.exec(html)) !== null) {
                     var h = m[1];
-                    results.push({ title: 'Anime ' + h.split('/').pop(), url: KAI_AJAX.replace('/ajax', '') + h });
+                    results.push({
+                        title: 'Anime ' + h.split('/').pop(),
+                        url: KAI_AJAX.replace('/ajax', '') + h,
+                        episodeCount: 0,
+                        type: 'TV'
+                    });
                     if (results.length >= 3) break;
                 }
             }
@@ -230,10 +631,27 @@ function searchAnimeByName(animeName) {
         });
 }
 
+// Get TMDB season info for better mapping
+function getTMDBSeasonInfo(tmdbId, season) {
+    var url = TMDB_BASE_URL + '/tv/' + tmdbId + '/season/' + season + '?api_key=' + TMDB_API_KEY;
+    return fetchRequest(url)
+        .then(function(res) { return res.json(); })
+        .then(function(seasonData) {
+            return {
+                name: seasonData.name,
+                episodeCount: seasonData.episodes ? seasonData.episodes.length : 0,
+                seasonNumber: seasonData.season_number
+            };
+        })
+        .catch(function() {
+            return { name: null, episodeCount: 0, seasonNumber: season };
+        });
+}
+
 // Pick best search result for a given season (AnimeKai splits seasons by page)
-function pickResultForSeason(results, season) {
-    if (!results || results.length === 0) return null;
-    if (!season || !Number.isFinite(season)) return results[0];
+function pickResultForSeason(results, season, tmdbId) {
+    if (!results || results.length === 0) return Promise.resolve(null);
+    if (!season || !Number.isFinite(season)) return Promise.resolve(results[0]);
 
     var seasonStr = String(season);
     var candidates = [];
@@ -256,24 +674,130 @@ function pickResultForSeason(results, season) {
         }
     }
 
-    // Heuristic: if multiple, prefer those whose title starts with the base name (ignoring season suffix)
-    if (candidates.length > 0) {
-        candidates.sort(function(a,b){ return b.score - a.score; });
-        return candidates[0].r;
+    // Try to match by episode count if we can get TMDB season info
+    if (tmdbId && season > 1) {
+        return getTMDBSeasonInfo(tmdbId, season).then(function(seasonInfo) {
+            console.log('[AnimeKai] TMDB season info:', seasonInfo);
+
+            if (seasonInfo.episodeCount > 0) {
+                // First, try exact episode count match
+                for (var k = 0; k < results.length; k++) {
+                    var r3 = results[k];
+                    if (r3.episodeCount === seasonInfo.episodeCount) {
+                        console.log('[AnimeKai] Found exact episode count match:', r3.title, 'for', seasonInfo.episodeCount, 'episodes');
+                        return r3;
+                    }
+                }
+
+                // If no exact match, try close matches (±1 episode, for specials or variations)
+                for (var m = 0; m < results.length; m++) {
+                    var r4 = results[m];
+                    if (Math.abs(r4.episodeCount - seasonInfo.episodeCount) <= 1 && r4.episodeCount > 0) {
+                        console.log('[AnimeKai] Found close episode count match:', r4.title, '(', r4.episodeCount, 'vs', seasonInfo.episodeCount, 'episodes)');
+                        return r4;
+                    }
+                }
+            }
+
+            // Fallback to existing logic
+            if (candidates.length > 0) {
+                candidates.sort(function(a,b){ return b.score - a.score; });
+                return candidates[0].r;
+            }
+
+            // Fallback: if no explicit season marker found, try to avoid ones with 'season 1' when season > 1
+            if (season > 1) {
+                for (var l = 0; l < results.length; l++) {
+                    var r5 = results[l];
+                    var t5 = (r5.title || '').toLowerCase();
+                    if (t5.indexOf('season 1') === -1 && t5.indexOf('s1') === -1) {
+                        return r5;
+                    }
+                }
+            }
+
+            return results[0];
+        }).catch(function() {
+            // Fallback if TMDB call fails - still try episode count matching with available data
+            for (var n = 0; n < results.length; n++) {
+                var r6 = results[n];
+                if (r6.episodeCount > 0) {
+                    // Prefer results with episode count data
+                    return r6;
+                }
+            }
+
+            if (candidates.length > 0) {
+                candidates.sort(function(a,b){ return b.score - a.score; });
+                return candidates[0].r;
+            }
+            return results[0];
+        });
     }
 
-    // Fallback: if no explicit season marker found, try to avoid ones with 'season 1' when season > 1
-    if (season > 1) {
-        for (var k = 0; k < results.length; k++) {
-            var r3 = results[k];
-            var t3 = (r3.title || '').toLowerCase();
-            if (t3.indexOf('season 1') === -1 && t3.indexOf('s1') === -1) {
-                return r3;
+    // Return a promise for consistency
+    return Promise.resolve(candidates.length > 0 ? candidates.sort(function(a,b){ return b.score - a.score; })[0].r : results[0]);
+}
+
+function extractEpisodeAndTitleFromHtml(html) {
+    var episodeInfo = {
+        episode: null,
+        title: null,
+        seasonName: null
+    };
+
+    // Extract episode number - multiple patterns for different HTML structures
+    var episodePatterns = [
+        /You are watching <b>Episode (\d+)<\/b>/i,
+        /watching.*?Episode (\d+)/i,
+        /Episode (\d+)/i,
+        /<b>Episode\s*(\d+)<\/b>/i,
+        /episode.*?(\d+)/i
+    ];
+
+    for (var i = 0; i < episodePatterns.length; i++) {
+        var match = html.match(episodePatterns[i]);
+        if (match) {
+            episodeInfo.episode = parseInt(match[1]);
+            break;
+        }
+    }
+
+    // Extract season/title name - multiple patterns for different HTML structures
+    var titlePatterns = [
+        // Main title patterns
+        /<h1[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)<\/h1>/i,
+        /<h1[^>]*>([^<]+)<\/h1>/i,
+        // Alternative patterns with itemprop or data attributes
+        /<h1[^>]*itemprop="name"[^>]*>([^<]+)<\/h1>/i,
+        /<h1[^>]*data-jp="[^"]*"[^>]*>([^<]+)<\/h1>/i,
+        // Look for title in meta tags
+        /<title>([^<]+)<\/title>/i,
+        // Look for title in other heading tags
+        /<h2[^>]*class="[^"]*title[^"]*"[^>]*>([^<]+)<\/h2>/i,
+        /<h2[^>]*>([^<]+)<\/h2>/i,
+        // Look for specific patterns in the content
+        /"title"\s*:\s*"([^"]+)"/i,
+        /title['"]?\s*[:=]\s*['"]([^'"]+)['"]/i
+    ];
+
+    for (var j = 0; j < titlePatterns.length; j++) {
+        var titleMatch = html.match(titlePatterns[j]);
+        if (titleMatch) {
+            var title = titleMatch[1].trim();
+            // Clean up the title - remove extra whitespace and common artifacts
+            title = title.replace(/\s+/g, ' ');
+            title = title.replace(/\\n/g, '');
+            title = title.replace(/&[^;]+;/g, ''); // Remove HTML entities
+
+            if (title && title.length > 3) { // Filter out very short titles
+                episodeInfo.seasonName = title;
+                break;
             }
         }
     }
 
-    return results[0];
+    return episodeInfo;
 }
 
 function extractContentIdFromSlug(slugUrl) {
@@ -281,10 +805,25 @@ function extractContentIdFromSlug(slugUrl) {
         .then(function(res) { return res.text(); })
         .then(function(html) {
             var m1 = html.match(/<div[^>]*class="[^"]*rate-box[^"]*"[^>]*data-id="([^"]*)"/);
-            if (m1) return m1[1];
-            var m2 = html.match(/data-id="([^"]*)"/);
-            if (m2) return m2[1];
-            throw new Error('Could not find content ID');
+            var contentId = null;
+            if (m1) {
+                contentId = m1[1];
+            } else {
+                var m2 = html.match(/data-id="([^"]*)"/);
+                if (m2) contentId = m2[1];
+            }
+
+            if (!contentId) {
+                throw new Error('Could not find content ID');
+            }
+
+            // Extract episode and title information from the HTML
+            var episodeInfo = extractEpisodeAndTitleFromHtml(html);
+
+            return {
+                contentId: contentId,
+                episodeInfo: episodeInfo
+            };
         });
 }
 
@@ -331,16 +870,47 @@ function getStreams(tmdbId, mediaType, season, episode) {
         .then(function(info) {
             mediaInfo = info || { title: null, year: null };
             var titleToSearch = mediaInfo.title || '';
-            return searchAnimeByName(titleToSearch);
-        })
-        .then(function(results) {
-            if (!results || results.length === 0) {
-                throw new Error('No AnimeKai results');
+            console.log('[AnimeKai] TMDB title:', titleToSearch, 'Season:', season, 'Episode:', episode);
+
+            // For series with multiple seasons/arcs, search with season info to get better results
+            var searchTitle = titleToSearch;
+            if (season > 1) {
+                // Get season name from TMDB to improve search
+                return getTMDBSeasonInfo(tmdbId, season).then(function(seasonInfo) {
+                    if (seasonInfo.name && seasonInfo.name !== `Season ${season}`) {
+                        // Use season name in search for better matching (e.g., "Demon Slayer Mugen Train Arc")
+                        searchTitle = titleToSearch + ' ' + seasonInfo.name;
+                        console.log('[AnimeKai] Enhanced search with season name:', searchTitle);
+                    }
+                    return getAccurateAnimeKaiEntry(searchTitle, season, episode, tmdbId);
+                });
             }
-            var chosen = pickResultForSeason(results, season);
-            return extractContentIdFromSlug(chosen.url);
+
+            // Use new Kitsu-powered accurate mapping
+            return getAccurateAnimeKaiEntry(titleToSearch, season, episode, tmdbId);
         })
-        .then(function(contentId) {
+        .then(function(chosen) {
+            if (!chosen || !chosen.url) {
+                throw new Error('No AnimeKai entry found via Kitsu mapping');
+            }
+            console.log('[AnimeKai] Selected entry:', chosen.title, 'URL:', chosen.url);
+
+            // Use translated episode number if available (for split seasons)
+            var actualEpisode = chosen.translatedEpisode || episode;
+            console.log('[AnimeKai] Using episode number:', actualEpisode, '(original:', episode + ')');
+
+            return extractContentIdFromSlug(chosen.url).then(function(result) {
+                return {
+                    contentId: result.contentId,
+                    episode: actualEpisode,
+                    episodeInfo: result.episodeInfo
+                };
+            });
+        })
+        .then(function(result) {
+            var contentId = result.contentId;
+            var actualEpisode = result.episode;
+
             return encryptKai(contentId).then(function(encId) {
                 var url = KAI_AJAX + '/episodes/list?ani_id=' + contentId + '&_=' + encId;
                 return fetchRequest(url).then(function(res) { return res.json(); });
@@ -351,8 +921,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
             .then(function(episodes) {
                 var keys = Object.keys(episodes || {}).sort(function(a,b){ return parseInt(a) - parseInt(b); });
                 if (keys.length === 0) throw new Error('No episodes');
-                if (typeof episode === 'number' && episodes[String(episode)]) {
-                    selectedEpisodeKey = String(episode);
+                if (typeof actualEpisode === 'number' && episodes[String(actualEpisode)]) {
+                    selectedEpisodeKey = String(actualEpisode);
                 } else {
                     selectedEpisodeKey = keys[0];
                 }
@@ -430,7 +1000,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                             var su = allSubs[j];
                             if (su && su.url && !seen[su.url]) { seen[su.url] = true; uniqueSubs.push(su); }
                         }
-                        var mediaTitle = buildMediaTitle(mediaInfo, 'tv', season, episode || parseInt(selectedEpisodeKey));
+                        var mediaTitle = buildMediaTitle(mediaInfo, 'tv', season, actualEpisode || parseInt(selectedEpisodeKey), result.episodeInfo);
                         var formatted = formatToNuvioStreams({ streams: combined, subtitles: uniqueSubs }, mediaTitle);
                         // Sort by quality roughly
                         var order = { '4K': 7, '2160p': 7, '1440p': 6, '1080p': 5, '720p': 4, '480p': 3, '360p': 2, '240p': 1, 'Unknown': 0 };
