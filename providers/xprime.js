@@ -371,6 +371,38 @@ function makeRequest(url, options = {}) {
     });
 }
 
+// Decrypt encrypted Xprime response using enc-dec.app API
+function decryptXprimeResponse(encryptedData) {
+    console.log(`[Xprime] Decrypting encrypted response (${encryptedData.length} bytes)...`);
+    
+    return fetch('https://enc-dec.app/api/dec-xprime', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9'
+        },
+        body: JSON.stringify({ text: encryptedData })
+    }).then(function(response) {
+        if (!response.ok) {
+            throw new Error(`Decryption API error: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    }).then(function(decryptedResponse) {
+        if (decryptedResponse.status === 200 && decryptedResponse.result) {
+            console.log(`[Xprime] Successfully decrypted response`);
+            
+            return decryptedResponse.result;
+        } else {
+            throw new Error(`Decryption failed: ${decryptedResponse.error || 'Unknown error'}`);
+        }
+    }).catch(function(error) {
+        console.error(`[Xprime] Decryption failed: ${error.message}`);
+        throw error;
+    });
+}
+
 // Hardcoded Server List
 function getXprimeServers(api) {
     console.log('[Xprime] Using hardcoded servers...');
@@ -653,22 +685,52 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
                 
                 return makeRequest(serverUrl, {
                     headers: {
-                        'Origin': server.name === 'rage' ? 'https://xprime.tv' : api,
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+                        'Connection': 'keep-alive',
+                        'Origin': 'https://xprime.tv',
                         'Referer': server.name === 'rage' ? 'https://xprime.tv/' : api
                     }
                 }).then(function(response) {
-                    return response.json().then(function(data) {
-                        const serverLabel = `Xprime ${server.name.charAt(0).toUpperCase() + server.name.slice(1)}`;
-                        let result;
-                        
-                        if (server.name === 'primebox') {
-                            result = processPrimeBoxResponse(data, serverLabel, server.name);
+                    return response.text().then(function(responseText) {
+                        // Check if response is encrypted (starts with common encrypted patterns)
+                        let data;
+                        if (responseText.startsWith('AQAA') || responseText.startsWith('UklGR') || responseText.length > 100 && !responseText.includes('{')) {
+                            console.log(`[Xprime] Server ${server.name}: Detected encrypted response, decrypting...`);
+                            return decryptXprimeResponse(responseText).then(function(decryptedData) {
+                                data = decryptedData;
+                                const serverLabel = `Xprime ${server.name.charAt(0).toUpperCase() + server.name.slice(1)}`;
+                                let result;
+                                
+                                if (server.name === 'primebox') {
+                                    result = processPrimeBoxResponse(data, serverLabel, server.name);
+                                } else {
+                                    result = processOtherServerResponse(data, serverLabel, server.name);
+                                }
+                                
+                                console.log(`[Xprime] Server ${server.name}: Found ${result.links.length} links, ${result.subtitles.length} subtitles`);
+                                return result;
+                            });
                         } else {
-                            result = processOtherServerResponse(data, serverLabel, server.name);
+                            // Try to parse as JSON (non-encrypted response)
+                            try {
+                                data = JSON.parse(responseText);
+                            } catch (parseError) {
+                                console.error(`[Xprime] Server ${server.name}: Invalid JSON response`);
+                                return { links: [], subtitles: [] };
+                            }
+                            
+                            const serverLabel = `Xprime ${server.name.charAt(0).toUpperCase() + server.name.slice(1)}`;
+                            let result;
+                            
+                            if (server.name === 'primebox') {
+                                result = processPrimeBoxResponse(data, serverLabel, server.name);
+                            } else {
+                                result = processOtherServerResponse(data, serverLabel, server.name);
+                            }
+                            
+                            console.log(`[Xprime] Server ${server.name}: Found ${result.links.length} links, ${result.subtitles.length} subtitles`);
+                            return result;
                         }
-                        
-                        console.log(`[Xprime] Server ${server.name}: Found ${result.links.length} links, ${result.subtitles.length} subtitles`);
-                        return result;
                     });
                 }).catch(function(error) {
                     console.error(`[Xprime] Error on server ${server.name}: ${error.message}`);

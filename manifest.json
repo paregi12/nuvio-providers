@@ -115,14 +115,14 @@
       "id": "xprime",
       "name": "Xprime",
       "description": "Faster Streaming links from Xprime.tv",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
         "tv"
       ],
       "filename": "providers/xprime.js",
-      "enabled": false,
+      "enabled": true,
       "logo": "https://xprime.tv/favicon/favicon.ico",
       "contentLanguage": [
         "en"
