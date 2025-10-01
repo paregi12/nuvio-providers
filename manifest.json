@@ -275,6 +275,24 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "ylfix",
+      "name": "YLFix",
+      "description": "YLFix streaming",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/ylfix.js",
+      "enabled": true,
+      "formats": ["m3u8", "mp4"],
+      "logo": "https://yflix.to/assets/uploads/2f505f3de3c99889c1a72557f3e3714fc0c457b0.png",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
