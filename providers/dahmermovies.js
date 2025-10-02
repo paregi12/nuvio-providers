@@ -141,31 +141,57 @@ function formatFileSize(sizeText) {
 // Parse HTML using basic string manipulation (React Native compatible)
 function parseLinks(html) {
     const links = [];
-    
+
     // Parse table rows to get both links and file sizes
     const rowRegex = /<tr[^>]*>(.*?)<\/tr>/gis;
     let rowMatch;
-    
+
     while ((rowMatch = rowRegex.exec(html)) !== null) {
         const rowContent = rowMatch[1];
-        
+
         // Extract link from the row
         const linkMatch = rowContent.match(/<a[^>]*href=["']([^"']*)["'][^>]*>([^<]*)<\/a>/i);
         if (!linkMatch) continue;
-        
+
         const href = linkMatch[1];
         const text = linkMatch[2].trim();
-        
+
         // Skip parent directory and empty links
         if (!text || href === '../' || text === '../') continue;
-        
-        // Extract file size from the same row
+
+        // Extract file size from the same row - try multiple patterns
         let size = null;
-        const sizeMatch = rowContent.match(/<td[^>]*class=["']filesize["'][^>]*[^>]*>([^<]+)<\/td>/i);
-        if (sizeMatch) {
-            size = sizeMatch[1].trim();
+
+        // Pattern 1: DahmerMovies specific - data-sort attribute with byte size
+        const sizeMatch1 = rowContent.match(/<td[^>]*data-sort=["']?(\d+)["']?[^>]*>(\d+)<\/td>/i);
+        if (sizeMatch1) {
+            size = sizeMatch1[2]; // Use the displayed number (already in bytes)
         }
-        
+
+        // Pattern 2: Standard Apache directory listing with filesize class
+        if (!size) {
+            const sizeMatch2 = rowContent.match(/<td[^>]*class=["']filesize["'][^>]*[^>]*>([^<]+)<\/td>/i);
+            if (sizeMatch2) {
+                size = sizeMatch2[1].trim();
+            }
+        }
+
+        // Pattern 3: Look for size in any td element after the link (formatted sizes)
+        if (!size) {
+            const sizeMatch3 = rowContent.match(/<\/a><\/td>\s*<td[^>]*>([^<]+(?:GB|MB|KB|B|\d+\s*(?:GB|MB|KB|B)))<\/td>/i);
+            if (sizeMatch3) {
+                size = sizeMatch3[1].trim();
+            }
+        }
+
+        // Pattern 4: Look for size anywhere in the row (more permissive)
+        if (!size) {
+            const sizeMatch4 = rowContent.match(/(\d+(?:\.\d+)?\s*(?:GB|MB|KB|B|bytes?))/i);
+            if (sizeMatch4) {
+                size = sizeMatch4[1].trim();
+            }
+        }
+
         links.push({ text, href, size });
     }
     
@@ -263,7 +289,8 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
                 url: fullUrl,
                 quality: qualityWithCodecs, // Use enhanced quality with codecs
                 size: formatFileSize(path.size), // Format file size
-                type: 'direct',
+                headers: {}, // No special headers needed for direct downloads
+                provider: "dahmermovies", // Provider identifier
                 filename: path.text
             };
         });
