@@ -14,6 +14,29 @@ const HEADERS = {
 const API = 'https://enc-dec.app/api';
 const YFLIX_AJAX = 'https://yflix.to/ajax';
 
+// Debug helpers
+function createRequestId() {
+  try {
+    const rand = Math.random().toString(36).slice(2, 8);
+    const ts = Date.now().toString(36).slice(-6);
+    return `${rand}${ts}`;
+  } catch (e) {
+    return String(Date.now());
+  }
+}
+
+function logRid(rid, msg, extra) {
+  try {
+    if (extra !== undefined) {
+      console.log(`[YFlix][rid:${rid}] ${msg}`, extra);
+    } else {
+      console.log(`[YFlix][rid:${rid}] ${msg}`);
+    }
+  } catch (e) {
+    // ignore logging errors
+  }
+}
+
 // Helper functions for HTTP requests (React Native compatible)
 function getText(url) {
   return fetch(url, { headers: HEADERS })
@@ -335,42 +358,61 @@ function getContentInfoFromYflixUrl(yflixUrl) {
     });
 }
 
-function runStreamFetch(contentId, specificEid = null, title, year, mediaType, seasonNum, episodeNum) {
-  console.log(`[YFlix] Fetching episodes and servers for content ID: ${contentId}`);
+function runStreamFetch(contentId, specificEid = null, title, year, mediaType, seasonNum, episodeNum, rid) {
+  logRid(rid, `runStreamFetch: start contentId=${contentId}`);
 
   return encrypt(contentId)
-    .then(encId => getJson(`${YFLIX_AJAX}/episodes/list?id=${contentId}&_=${encId}`))
+    .then(encId => {
+      logRid(rid, 'episodes/list: enc(contentId) ready');
+      return getJson(`${YFLIX_AJAX}/episodes/list?id=${contentId}&_=${encId}`);
+    })
     .then(episodesResp => parseHtml(episodesResp.result))
     .then(episodes => {
+      const episodeKeys = Object.keys(episodes || {});
+      logRid(rid, `episodes parsed: totalKeys=${episodeKeys.length}`);
       let eid;
       if (specificEid) {
         eid = specificEid;
-        console.log(`[YFlix] Using specified episode, eid=${eid}`);
+        logRid(rid, `using specified episode eid=${eid}`);
       } else {
-        const firstEpKey = Object.keys(episodes)[0];
+        const firstEpKey = episodeKeys[0];
         eid = episodes[firstEpKey].eid;
-        console.log(`[YFlix] Using episode ${firstEpKey}, eid=${eid}`);
+        logRid(rid, `using first episode ${firstEpKey}, eid=${eid}`);
       }
-      return encrypt(eid).then(encEid => ({ eid, encEid }));
+      return encrypt(eid).then(encEid => {
+        logRid(rid, 'links/list: enc(eid) ready');
+        return ({ eid, encEid });
+      });
     })
     .then(({ eid, encEid }) => getJson(`${YFLIX_AJAX}/links/list?eid=${eid}&_=${encEid}`))
     .then(serversResp => parseHtml(serversResp.result))
     .then(servers => {
-      console.log(`[YFlix] Servers available:`, Object.keys(servers).map(stype => `${stype}: ${Object.keys(servers[stype]).length}`));
+      const serverTypes = Object.keys(servers || {});
+      const byTypeCounts = serverTypes.map(stype => ({ type: stype, count: Object.keys(servers[stype] || {}).length }));
+      logRid(rid, 'servers available', byTypeCounts);
 
       const allStreams = [];
       const allSubtitles = [];
       const allThumbnails = [];
 
       const serverPromises = [];
+      const lids = [];
       Object.keys(servers).forEach(serverType => {
         Object.keys(servers[serverType]).forEach(serverKey => {
           const lid = servers[serverType][serverKey].lid;
+          lids.push(lid);
           const p = encrypt(lid)
-            .then(encLid => getJson(`${YFLIX_AJAX}/links/view?id=${lid}&_=${encLid}`))
-            .then(embedResp => decrypt(embedResp.result))
+            .then(encLid => {
+              logRid(rid, `links/view: enc(lid) ready`, { serverType, serverKey, lid });
+              return getJson(`${YFLIX_AJAX}/links/view?id=${lid}&_=${encLid}`);
+            })
+            .then(embedResp => {
+              logRid(rid, `decrypt(embed)`, { serverType, serverKey, lid });
+              return decrypt(embedResp.result);
+            })
             .then(decrypted => {
               if (decrypted && typeof decrypted === 'object' && decrypted.url && decrypted.url.includes('rapidshare.cc')) {
+                logRid(rid, `rapid.media → dec-rapid`, { lid });
                 return decryptRapidMedia(decrypted.url)
                   .then(rapidData => formatStreamsData(rapidData))
                   .then(formatted => enhanceStreamsWithQuality(formatted.streams)
@@ -392,6 +434,8 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
           serverPromises.push(p);
         });
       });
+      const uniqueLids = Array.from(new Set(lids));
+      logRid(rid, `fan-out: lids`, { total: lids.length, unique: uniqueLids.length });
 
       return Promise.all(serverPromises).then(() => {
         // Deduplicate streams by URL
@@ -402,8 +446,7 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
           seen.add(s.url);
           return true;
         });
-
-        console.log(`[YFlix] Found ${dedupedStreams.length} streams`);
+        logRid(rid, `streams: deduped`, { count: dedupedStreams.length });
 
         // Convert to Nuvio format
         const nuvioStreams = dedupedStreams.map(stream => ({
@@ -421,27 +464,27 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
     });
 }
 
-function handleTvShow(yflixUrl, contentId, title, year, seasonNum, episodeNum) {
-  console.log(`[YFlix] Fetching TV show season ${seasonNum}, episode ${episodeNum}`);
+function handleTvShow(yflixUrl, contentId, title, year, seasonNum, episodeNum, rid) {
+  logRid(rid, `handleTvShow: S${seasonNum || 1}E${episodeNum || 1}`);
 
   const selectedSeason = seasonNum || 1;
   const selectedEpisode = episodeNum || 1;
 
   const episodeUrl = `${yflixUrl}#ep=${selectedSeason},${selectedEpisode}`;
-  console.log(`[YFlix] Episode URL: ${episodeUrl}`);
+  logRid(rid, `episode URL ${episodeUrl}`);
 
   return getText(episodeUrl)
     .then(html => {
       const epMatch = html.match(/data-episode="([^"]*)"/) || html.match(/episode["\s]*:[\s]*["']([^"']+)["']/);
       if (epMatch) {
-        console.log(`[YFlix] Found episode data: ${epMatch[1]}`);
+        logRid(rid, `found episode data ${epMatch[1]}`);
         return epMatch[1];
       }
 
-      console.log(`[YFlix] Using main content ID for episode access`);
+      logRid(rid, 'no episode data in hash page; using main contentId');
       return contentId;
     })
-    .then(episodeId => runStreamFetch(contentId, episodeId, title, year, 'tv', selectedSeason, selectedEpisode));
+    .then(episodeId => runStreamFetch(contentId, episodeId, title, year, 'tv', selectedSeason, selectedEpisode, rid));
 }
 
 // Get TMDB details for search
@@ -460,19 +503,20 @@ function getTMDBDetails(tmdbId, mediaType) {
 // Main getStreams function
 function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
   return new Promise((resolve, reject) => {
-    console.log(`[YFlix] Starting scrape for TMDB ID: ${tmdbId}, type: ${mediaType}`);
+    const rid = createRequestId();
+    logRid(rid, `getStreams start tmdbId=${tmdbId} type=${mediaType} S=${seasonNum||''} E=${episodeNum||''}`);
 
     // Get TMDB details for search query only
     getTMDBDetails(tmdbId, mediaType)
       .then(({ title, year }) => {
-        console.log(`[YFlix] TMDB search query - Title: ${title}, Year: ${year}`);
+        logRid(rid, `TMDB query`, { title, year });
 
         // Search YFlix
         const searchQuery = title + (year ? ` ${year}` : '');
         return searchYflix(searchQuery)
           .then(results => {
             if (results.length === 0) {
-              console.log(`[YFlix] No results found for "${searchQuery}"`);
+              logRid(rid, `no results for ${searchQuery}`);
               resolve([]);
               return;
             }
@@ -480,36 +524,36 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
             // Find best matching result based on TMDB title and year
             const selected = findBestMatch(results, title, year, mediaType);
             if (!selected) {
-              console.log(`[YFlix] No suitable match found for "${title}" (${year})`);
+              logRid(rid, `no suitable match for title/year`);
               resolve([]);
               return;
             }
 
-            console.log(`[YFlix] Selected best match: ${selected.title} (${selected.year}) - ${selected.url}`);
+            logRid(rid, `selected match`, { title: selected.title, year: selected.year, url: selected.url });
 
             // Extract actual title, year, and contentId from YFlix page
             return getContentInfoFromYflixUrl(selected.url)
               .then(({ contentId, title: yflixTitle, year: yflixYear }) => {
-                console.log(`[YFlix] Using YFlix data - Title: "${yflixTitle}", Year: ${yflixYear}`);
+                logRid(rid, `yflix page info`, { contentId, title: yflixTitle, year: yflixYear });
 
                 if (mediaType === 'tv') {
-                  return handleTvShow(selected.url, contentId, yflixTitle, yflixYear, seasonNum, episodeNum);
+                  return handleTvShow(selected.url, contentId, yflixTitle, yflixYear, seasonNum, episodeNum, rid);
                 } else {
-                  return runStreamFetch(contentId, null, yflixTitle, yflixYear, mediaType, seasonNum, episodeNum);
+                  return runStreamFetch(contentId, null, yflixTitle, yflixYear, mediaType, seasonNum, episodeNum, rid);
                 }
               });
           });
       })
       .then(streams => {
         if (streams) {
-          console.log(`[YFlix] Returning ${streams.length} streams`);
+          logRid(rid, `returning streams`, { count: streams.length });
           resolve(streams);
         } else {
           resolve([]);
         }
       })
       .catch(error => {
-        console.error(`[YFlix] Error: ${error.message}`);
+        logRid(rid, `ERROR ${error && error.message ? error.message : String(error)}`);
         resolve([]); // Return empty array on error, don't reject
       });
   });

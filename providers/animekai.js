@@ -69,6 +69,22 @@ function decryptMegaMedia(embedUrl) {
         .then(function(json) { return json.result; });
 }
 
+// Debug helpers (match yflix style)
+function createRequestId() {
+    try {
+        var rand = Math.random().toString(36).slice(2, 8);
+        var ts = Date.now().toString(36).slice(-6);
+        return rand + ts;
+    } catch (e) { return String(Date.now()); }
+}
+
+function logRid(rid, msg, extra) {
+    try {
+        if (typeof extra !== 'undefined') console.log('[AnimeKai][rid:' + rid + '] ' + msg, extra);
+        else console.log('[AnimeKai][rid:' + rid + '] ' + msg);
+    } catch(e) {}
+}
+
 // Simplified Kitsu search - just get the most relevant result
 function searchKitsu(animeTitle) {
     const searchUrl = KITSU_BASE_URL + '/anime?filter[text]=' + encodeURIComponent(animeTitle);
@@ -485,6 +501,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
     var mediaInfo = null;
     var selectedEpisodeKey = null;
     var token = null;
+    var rid = createRequestId();
+    logRid(rid, 'getStreams start', { tmdbId: tmdbId, mediaType: mediaType, season: season, episode: episode });
 
     return getTMDBDetails(tmdbId, 'tv')
         .then(function(info) {
@@ -515,7 +533,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
             // Use translated episode number if available (for split seasons)
             var actualEpisode = chosen.translatedEpisode || episode;
 
+            logRid(rid, 'chosen', { title: chosen.title, url: chosen.url, season: season, episode: actualEpisode });
             return extractContentIdFromSlug(chosen.url).then(function(result) {
+                logRid(rid, 'content page parsed', { contentId: result.contentId, episodeInfo: result.episodeInfo });
                 return {
                     contentId: result.contentId,
                     episode: actualEpisode,
@@ -529,12 +549,14 @@ function getStreams(tmdbId, mediaType, season, episode) {
 
             return encryptKai(contentId).then(function(encId) {
                 var url = KAI_AJAX + '/episodes/list?ani_id=' + contentId + '&_=' + encId;
+                logRid(rid, 'episodes/list enc(contentId) ready');
                 return fetchRequest(url).then(function(res) { return res.json(); });
             })
             .then(function(episodesResp) {
                 return parseHtmlViaApi(episodesResp.result);
             })
             .then(function(episodes) {
+                logRid(rid, 'episodes parsed', { totalKeys: Object.keys(episodes||{}).length });
                 var keys = Object.keys(episodes || {}).sort(function(a,b){ return parseInt(a) - parseInt(b); });
                 if (keys.length === 0) throw new Error('No episodes');
                 if (typeof actualEpisode === 'number' && episodes[String(actualEpisode)]) {
@@ -547,22 +569,30 @@ function getStreams(tmdbId, mediaType, season, episode) {
             })
             .then(function(encToken) {
                 var url = KAI_AJAX + '/links/list?token=' + token + '&_=' + encToken;
+                logRid(rid, 'links/list enc(token) ready', { selectedEpisodeKey: selectedEpisodeKey });
                 return fetchRequest(url).then(function(res) { return res.json(); });
             })
             .then(function(serversResp) { return parseHtmlViaApi(serversResp.result); })
             .then(function(servers) {
+                var serverTypes = Object.keys(servers || {});
+                var byTypeCounts = serverTypes.map(function(st){ return { type: st, count: Object.keys(servers[st]||{}).length }; });
+                logRid(rid, 'servers available', byTypeCounts);
                 var serverPromises = [];
+                var lids = [];
                 Object.keys(servers || {}).forEach(function(serverType) {
                     Object.keys(servers[serverType] || {}).forEach(function(serverKey) {
                         var lid = servers[serverType][serverKey].lid;
+                        lids.push(lid);
                         var p = encryptKai(lid)
                             .then(function(encLid) {
                                 var url = KAI_AJAX + '/links/view?id=' + lid + '&_=' + encLid;
+                                logRid(rid, 'links/view enc(lid) ready', { serverType: serverType, serverKey: serverKey, lid: lid });
                                 return fetchRequest(url).then(function(res) { return res.json(); });
                             })
-                            .then(function(embedResp) { return decryptKai(embedResp.result); })
+                            .then(function(embedResp) { logRid(rid, 'decrypt(embed)', { lid: lid, serverType: serverType, serverKey: serverKey }); return decryptKai(embedResp.result); })
                             .then(function(decrypted) {
                                 if (decrypted && decrypted.url) {
+                                    logRid(rid, 'mega.media → dec-mega', { lid: lid });
                                     return decryptMegaMedia(decrypted.url)
                                         .then(function(mediaData) {
                                             // Attach server type metadata
@@ -592,6 +622,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
                         serverPromises.push(p);
                     });
                 });
+                var uniqueLids = Array.from(new Set(lids));
+                logRid(rid, 'fan-out lids', { total: lids.length, unique: uniqueLids.length });
 
                 return Promise.allSettled(serverPromises).then(function(results) {
                     var allStreams = [];
@@ -609,6 +641,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
 
                     return resolveMultipleM3U8(m3u8Links).then(function(resolved) {
                         var combined = directLinks.concat(resolved);
+                        logRid(rid, 'streams resolved', { direct: directLinks.length, m3u8: m3u8Links.length, combined: combined.length });
                         // Deduplicate subtitles by URL
                         var uniqueSubs = [];
                         var seen = {};
@@ -621,12 +654,14 @@ function getStreams(tmdbId, mediaType, season, episode) {
                         // Sort by quality roughly
                         var order = { '4K': 7, '2160p': 7, '1440p': 6, '1080p': 5, '720p': 4, '480p': 3, '360p': 2, '240p': 1, 'Unknown': 0 };
                         formatted.sort(function(a, b) { return (order[b.quality] || 0) - (order[a.quality] || 0); });
+                        logRid(rid, 'returning streams', { count: formatted.length });
                         return formatted;
                     });
                 });
             });
         })
         .catch(function(err) {
+            logRid(rid, 'ERROR ' + (err && err.message ? err.message : String(err)));
             return [];
         });
 }
