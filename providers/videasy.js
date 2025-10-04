@@ -430,7 +430,7 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
       const title = `${mediaDetails.title} (${mediaDetails.year})`;
 
       streams.push({
-        name: `VideoEasy ${serverName} (${serverConfig.language}) - ${quality}`,
+        name: `VIDEASY ${serverName} (${serverConfig.language}) - ${quality}`,
         title: title,
         url: source.url,
         quality: quality,
