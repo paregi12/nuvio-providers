@@ -368,7 +368,7 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
         }
 
         // Clean up language names that might be mistaken for quality
-        const languageNames = ['english', 'hindi', 'german', 'italian', 'spanish', 'portuguese', 'french', 'arabic', 'chinese', 'japanese', 'korean'];
+        const languageNames = ['english', 'hindi', 'german', 'italian', 'spanish', 'portuguese', 'french', 'arabic', 'chinese', 'japanese', 'korean', 'bengali', 'tamil', 'telugu', 'malayalam', 'kannada', 'marathi', 'gujarati', 'punjabi', 'urdu', 'persian', 'turkish', 'vietnamese', 'thai', 'indonesian'];
         const isLanguageName = languageNames.some(lang =>
           quality.toLowerCase().includes(lang.toLowerCase())
         );
