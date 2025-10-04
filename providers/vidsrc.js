@@ -342,7 +342,7 @@ function SRCRCPhandler(srcrcpPath, refererForSrcrcp) {
                 // Assuming direct links if no .m3u8 found in the sources array
                 console.log(`[VidSrc - SRCRCP] Assuming direct links from script sources:`, sourcesFound);
                 return sourcesFound.map(s => ({
-                    quality: s.quality || s.label || 'auto',
+                    quality: s.quality || s.label || 'Auto',
                     url: s.url.startsWith('http') ? s.url : new URL(s.url, srcrcpUrl).href
                 }));
             }

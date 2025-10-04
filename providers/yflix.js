@@ -190,7 +190,7 @@ function enhanceStreamsWithQuality(streams) {
         .catch(() => {
           enhancedStreams.push({
             ...s,
-            quality: s.quality || 'adaptive'
+            quality: s.quality || 'Adaptive'
           });
         });
     } else {
@@ -212,7 +212,7 @@ function formatStreamsData(rapidResult) {
       if (fileUrl) {
         streams.push({
           url: fileUrl,
-          quality: fileUrl.includes('.m3u8') ? 'adaptive' : 'unknown',
+          quality: fileUrl.includes('.m3u8') ? 'Adaptive' : 'unknown',
           type: fileUrl.includes('.m3u8') ? 'hls' : 'file',
           provider: 'rapidshare',
         });

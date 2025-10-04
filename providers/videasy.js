@@ -338,7 +338,7 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
       // If quality is still unknown and it's an HLS stream, try to parse it
       if (quality === 'unknown' && source.url.includes('.m3u8')) {
         parseHlsPlaylist(source.url).then((parsedQuality) => {
-          quality = parsedQuality;
+          quality = parsedQuality === 'adaptive' ? 'Adaptive' : parsedQuality;
         });
       }
 
@@ -355,7 +355,7 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
           quality = extractQualityFromUrl(source.url);
           if (quality === 'unknown') {
             // Default for HLS streams with unknown quality
-            quality = 'adaptive';
+            quality = 'Adaptive';
           }
         }
 
@@ -363,7 +363,7 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
         if (quality.includes('GB') || quality.includes('MB') || quality.includes('|')) {
           quality = extractQualityFromUrl(source.url);
           if (quality === 'unknown') {
-            quality = 'adaptive';
+            quality = 'Adaptive';
           }
         }
 
@@ -376,7 +376,7 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
         if (isLanguageName) {
           quality = extractQualityFromUrl(source.url);
           if (quality === 'unknown') {
-            quality = 'adaptive';
+            quality = 'Adaptive';
           }
         }
 
@@ -395,11 +395,11 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
           quality = '480p'; // Default SD to 480p
         }
 
-        if (quality.toLowerCase() === 'auto' || quality.toLowerCase() === 'adaptive') {
-          // Keep as is for HLS streams
-          if (!source.url.includes('.m3u8')) {
-            quality = 'unknown';
-          }
+        if (quality.toLowerCase() === 'auto') {
+          quality = 'Auto';
+        }
+        if (quality.toLowerCase() === 'adaptive') {
+          quality = 'Adaptive';
         }
       }
 
@@ -531,7 +531,7 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
               if (q === '240') return 240;
 
               // Handle adaptive/auto streams (put them first)
-              if (q === 'adaptive' || q === 'auto') return 4000;
+              if (q === 'Adaptive' || q === 'Auto') return 4000;
 
               // Handle unknown quality (put at end)
               if (q === 'unknown') return 0;
