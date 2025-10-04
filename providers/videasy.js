@@ -2,10 +2,6 @@
 // React Native compatible version - Promise-based (no async/await)
 // Extracts streaming links using TMDB ID for all VideoEasy servers
 
-const https = require('https');
-const http = require('http');
-const { URL } = require('url');
-
 const HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
   'Connection': 'keep-alive'
@@ -93,41 +89,24 @@ const SERVERS = {
   }
 };
 
-// HTTP request helper
+// HTTP request helper using fetch (React Native compatible)
 function requestRaw(method, urlString, options) {
-  return new Promise((resolve, reject) => {
-    try {
-      const url = new URL(urlString);
-      const isHttps = url.protocol === 'https:';
-      const lib = isHttps ? https : http;
-      const req = lib.request(
-        {
-          method,
-          hostname: url.hostname,
-          port: url.port || (isHttps ? 443 : 80),
-          path: url.pathname + (url.search || ''),
-          headers: (options && options.headers) || {}
-        },
-        (res) => {
-          let data = '';
-          res.on('data', (chunk) => (data += chunk));
-          res.on('end', () => {
-            if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-              resolve({ status: res.statusCode, headers: res.headers, body: data });
-            } else {
-              reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-            }
-          });
-        }
-      );
-      req.on('error', reject);
-      if (options && options.body) {
-        req.write(options.body);
+  return fetch(urlString, {
+    method: method,
+    headers: (options && options.headers) || {},
+    body: (options && options.body) || undefined
+  }).then(response => {
+    return response.text().then(body => {
+      if (response.ok) {
+        return { 
+          status: response.status, 
+          headers: response.headers, 
+          body: body 
+        };
+      } else {
+        throw new Error(`HTTP ${response.status}: ${body}`);
       }
-      req.end();
-    } catch (e) {
-      reject(e);
-    }
+    });
   });
 }
 
@@ -153,7 +132,7 @@ function postJson(url, jsonBody, extraHeaders) {
   const headers = Object.assign(
     {},
     HEADERS,
-    { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    { 'Content-Type': 'application/json' },
     extraHeaders || {}
   );
   return requestRaw('POST', url, { headers, body }).then((res) => {
@@ -220,28 +199,33 @@ function fetchMediaDetails(tmdbId, mediaType = null) {
 
 // Build VideoEasy API URL
 function buildVideoEasyUrl(serverConfig, mediaType, title, year, tmdbId, imdbId, seasonId = null, episodeId = null) {
-  const params = new URLSearchParams({
+  const params = {
     title: title,
     mediaType: mediaType,
     year: year,
     tmdbId: tmdbId,
     imdbId: imdbId
-  });
+  };
 
   // Add server-specific parameters
   if (serverConfig.params) {
     Object.keys(serverConfig.params).forEach(key => {
-      params.append(key, serverConfig.params[key]);
+      params[key] = serverConfig.params[key];
     });
   }
 
   // Add TV show specific parameters
   if (mediaType === 'tv' && seasonId && episodeId) {
-    params.append('seasonId', seasonId);
-    params.append('episodeId', episodeId);
+    params.seasonId = seasonId;
+    params.episodeId = episodeId;
   }
 
-  return `${serverConfig.url}?${params.toString()}`;
+  // Build query string manually for React Native compatibility
+  const queryString = Object.keys(params)
+    .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(params[key]))
+    .join('&');
+
+  return `${serverConfig.url}?${queryString}`;
 }
 
 // Extract quality from URL
