@@ -293,6 +293,30 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "videasy",
+      "name": "VideoEasy",
+      "description": "VideoEasy streaming with multiple server support and languages",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/videasy.js",
+      "enabled": true,
+      "formats": ["m3u8", "mp4", "mkv"],
+      "logo": "https://cineby.app/favicon.ico",
+      "contentLanguage": [
+        "en",
+        "de",
+        "it",
+        "fr",
+        "hi",
+        "es",
+        "pt"
+      ]
     }
   ]
 }
