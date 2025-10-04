@@ -33,6 +33,7 @@
       ],
       "filename": "providers/animekai.js",
       "enabled": true,
+      "limited": true,
       "logo": "https://animekai.to/assets/uploads/37585a39fe8c8d8fafaa2c7bfbf5374ecac859ea6a0288a6da2c61f5.png",
       "contentLanguage": [
         "en"
@@ -288,6 +289,7 @@
       ],
       "filename": "providers/yflix.js",
       "enabled": true,
+      "limited": true,
       "formats": ["m3u8", "mp4"],
       "logo": "https://yflix.to/assets/uploads/2f505f3de3c99889c1a72557f3e3714fc0c457b0.png",
       "contentLanguage": [
@@ -306,6 +308,7 @@
       ],
       "filename": "providers/videasy.js",
       "enabled": true,
+      "limited": true,
       "formats": ["m3u8", "mp4", "mkv"],
       "logo": "https://www.videasy.net/logo.png",
       "contentLanguage": [
