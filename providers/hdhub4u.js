@@ -497,20 +497,23 @@ function hubCloudExtractor(url, referer) {
             const links = [];
             const elements = $('div.card-body h2 a.btn').get();
 
-            // Process each element, converting async operations to promises
+                // Process each element, converting async operations to promises
             const processElements = elements.map(element => {
                 const link = $(element).attr('href');
                 const text = $(element).text();
                 const sourceName = text.trim();
 
+                // Use the actual file name from the HubCloud page header (full name, not cleaned)
+                const fileName = header || headerDetails || 'Unknown';
+
                 if (text.includes("Download File")) {
-                    links.push({ source: `HubCloud ${labelExtras}`, quality, url: link, size: sizeInBytes });
+                    links.push({ source: `HubCloud ${labelExtras}`, quality, url: link, size: sizeInBytes, fileName });
                     return Promise.resolve();
                 } else if (text.includes("FSL Server")) {
-                    links.push({ source: `HubCloud - FSL Server ${labelExtras}`, quality, url: link, size: sizeInBytes });
+                    links.push({ source: `HubCloud - FSL Server ${labelExtras}`, quality, url: link, size: sizeInBytes, fileName });
                     return Promise.resolve();
                 } else if (text.includes("S3 Server")) {
-                    links.push({ source: `HubCloud - S3 Server ${labelExtras}`, quality, url: link, size: sizeInBytes });
+                    links.push({ source: `HubCloud - S3 Server ${labelExtras}`, quality, url: link, size: sizeInBytes, fileName });
                     return Promise.resolve();
                 } else if (text.includes("BuzzServer")) {
                     return fetch(`${link}/download`, {
@@ -526,7 +529,7 @@ function hubCloudExtractor(url, referer) {
                                 const hxRedirectMatch = location.match(/hx-redirect=([^&]+)/);
                                 if (hxRedirectMatch) {
                                     const dlink = decodeURIComponent(hxRedirectMatch[1]);
-                                    links.push({ source: `HubCloud - BuzzServer ${labelExtras}`, quality, url: dlink, size: sizeInBytes });
+                                    links.push({ source: `HubCloud - BuzzServer ${labelExtras}`, quality, url: dlink, size: sizeInBytes, fileName });
                                 }
                             }
                         }
@@ -535,7 +538,7 @@ function hubCloudExtractor(url, referer) {
                         console.error("[HubCloud] BuzzServer redirect failed for", link, e.message);
                     });
                 } else if (link.includes("pixeldra")) {
-                    links.push({ source: `Pixeldrain ${labelExtras}`, quality, url: link, size: sizeInBytes });
+                    links.push({ source: `Pixeldrain ${labelExtras}`, quality, url: link, size: sizeInBytes, fileName });
                     return Promise.resolve();
                 } else if (text.includes("10Gbps")) {
                     let currentRedirectUrl = link;
@@ -570,7 +573,7 @@ function hubCloudExtractor(url, referer) {
 
                     return processRedirects(0).then(finalLink => {
                         if (finalLink) {
-                            links.push({ source: `HubCloud - 10Gbps ${labelExtras}`, quality, url: finalLink, size: sizeInBytes });
+                            links.push({ source: `HubCloud - 10Gbps ${labelExtras}`, quality, url: finalLink, size: sizeInBytes, fileName });
                         }
                     });
                 } else {
@@ -1135,12 +1138,13 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
                         return true;
                     })
                     .map(function(link) {
-                        let mediaTitle = mediaInfo.title;
-                        if (mediaType === 'tv' && season && episode && link.episode) {
+                        // Use the actual file name from HubCloud page if available, otherwise fallback to TMDB title
+                        let mediaTitle = link.fileName && link.fileName !== 'Unknown' ? link.fileName : mediaInfo.title;
+                        if (mediaType === 'tv' && season && episode && link.episode && !link.fileName) {
                             mediaTitle = `${mediaInfo.title} S${String(season).padStart(2, '0')}E${String(link.episode).padStart(2, '0')}`;
-                        } else if (mediaType === 'tv' && season && episode) {
+                        } else if (mediaType === 'tv' && season && episode && !link.fileName) {
                             mediaTitle = `${mediaInfo.title} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`;
-                        } else if (mediaInfo.year) {
+                        } else if (mediaInfo.year && !link.fileName) {
                             mediaTitle = `${mediaInfo.title} (${mediaInfo.year})`;
                         }
 
@@ -1161,7 +1165,7 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
                         }
 
                         return {
-                            name: `HDHub4u ${formattedSize} - ${serverName}`,
+                            name: `HDHub4u ${serverName}`,
                             title: mediaTitle,
                             url: link.url,
                             quality: qualityStr,
