@@ -65,24 +65,55 @@ function rot13(value) {
     });
 }
 
-/**
- * Base64 encodes a string.
- * Replicates `encode()` from Utils.kt.
- * @param {string} value The string to encode.
- * @returns {string} The base64 encoded string.
- */
-function btoa(value) {
-    return Buffer.from(value).toString('base64');
+// React Native-safe Base64 polyfill (no Buffer dependency)
+const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+
+function atob(value) {
+    if (!value) return '';
+    let input = String(value).replace(/=+$/, '');
+    let output = '';
+    let bc = 0, bs, buffer, idx = 0;
+    while ((buffer = input.charAt(idx++))) {
+        buffer = BASE64_CHARS.indexOf(buffer);
+        if (~buffer) {
+            bs = bc % 4 ? bs * 64 + buffer : buffer;
+            if (bc++ % 4) {
+                output += String.fromCharCode(255 & (bs >> ((-2 * bc) & 6)));
+            }
+        }
+    }
+    return output;
 }
 
-/**
- * Base64 decodes a string.
- * Replicates `base64Decode()` from cloudstream's utils.
- * @param {string} value The base64 string.
- * @returns {string} The decoded string.
- */
-function atob(value) {
-    return Buffer.from(value, 'base64').toString('utf-8');
+function btoa(value) {
+    if (value == null) return '';
+    let str = String(value);
+    let output = '';
+    let i = 0;
+    while (i < str.length) {
+        const chr1 = str.charCodeAt(i++);
+        const chr2 = str.charCodeAt(i++);
+        const chr3 = str.charCodeAt(i++);
+
+        const enc1 = chr1 >> 2;
+        const enc2 = ((chr1 & 3) << 4) | (chr2 >> 4);
+        let enc3 = ((chr2 & 15) << 2) | (chr3 >> 6);
+        let enc4 = chr3 & 63;
+
+        if (isNaN(chr2)) {
+            enc3 = 64;
+            enc4 = 64;
+        } else if (isNaN(chr3)) {
+            enc4 = 64;
+        }
+
+        output +=
+            BASE64_CHARS.charAt(enc1) +
+            BASE64_CHARS.charAt(enc2) +
+            BASE64_CHARS.charAt(enc3) +
+            BASE64_CHARS.charAt(enc4);
+    }
+    return output;
 }
 
 /**
