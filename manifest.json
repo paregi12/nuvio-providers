@@ -112,6 +112,25 @@
       ]
     },
     {
+      "id": "hdhub4u",
+      "name": "HDHub4u",
+      "description": "HDHub4u direct download links with multiple hoster support",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/hdhub4u.js",
+      "enabled": true,
+      "formats": ["mkv"],
+      "logo": "https://hdhub4u.frl/wp-content/uploads/2021/03/HDHUB4U-LOGO-300x300.png",
+      "contentLanguage": [
+        "en",
+        "hi"
+      ]
+    },
+    {
       "id": "watch32",
       "name": "Watch32",
       "description": "Lightweight M3U8 Links",
