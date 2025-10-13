@@ -269,59 +269,111 @@ function searchYflix(query) {
 }
 
 // Find best matching result based on TMDB title and year
+/**
+ * Improved title matching utilities for YFlix
+ */
+
+/**
+ * Normalizes a title for better matching
+ * @param {string} title The title to normalize
+ * @returns {string} Normalized title
+ */
+function normalizeTitle(title) {
+    if (!title) return '';
+
+    return title
+        // Convert to lowercase
+        .toLowerCase()
+        // Remove common articles
+        .replace(/\b(the|a|an)\b/g, '')
+        // Normalize punctuation and spaces
+        .replace(/[:\-_]/g, ' ')
+        .replace(/\s+/g, ' ')
+        // Remove special characters but keep alphanumeric and spaces
+        .replace(/[^\w\s]/g, '')
+        .trim();
+}
+
+/**
+ * Calculates similarity score between two titles
+ * @param {string} title1 First title
+ * @param {string} title2 Second title
+ * @returns {number} Similarity score (0-1)
+ */
+function calculateTitleSimilarity(title1, title2) {
+    const norm1 = normalizeTitle(title1);
+    const norm2 = normalizeTitle(title2);
+
+    // Exact match after normalization
+    if (norm1 === norm2) return 1.0;
+
+    // Substring matches
+    if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.9;
+
+    // Word-based similarity
+    const words1 = new Set(norm1.split(/\s+/).filter(w => w.length > 2));
+    const words2 = new Set(norm2.split(/\s+/).filter(w => w.length > 2));
+
+    if (words1.size === 0 || words2.size === 0) return 0;
+
+    const intersection = new Set([...words1].filter(w => words2.has(w)));
+    const union = new Set([...words1, ...words2]);
+
+    return intersection.size / union.size;
+}
+
+/**
+ * Finds the best title match from search results
+ * @param {Array} results Search results array
+ * @param {string} tmdbTitle TMDB title
+ * @param {number} tmdbYear TMDB year
+ * @param {string} mediaType "movie" or "tv"
+ * @returns {Object|null} Best matching result
+ */
+function findBestTitleMatch(results, tmdbTitle, tmdbYear, mediaType) {
+    if (!results || results.length === 0) return null;
+
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const result of results) {
+        let score = calculateTitleSimilarity(tmdbTitle, result.title);
+
+        // Year matching bonus/penalty
+        if (tmdbYear && result.year) {
+            const yearDiff = Math.abs(tmdbYear - result.year);
+            if (yearDiff === 0) {
+                score += 0.2; // Exact year match bonus
+            } else if (yearDiff <= 1) {
+                score += 0.1; // Close year match bonus
+            } else if (yearDiff > 5) {
+                score -= 0.3; // Large year difference penalty
+            }
+        }
+
+        // Media type matching
+        const expectedType = mediaType === 'tv' ? 'tv' : 'movie';
+        const resultType = (result.type || '').toLowerCase();
+        if (resultType.includes(expectedType) || expectedType.includes(resultType)) {
+            score += 0.1; // Type match bonus
+        }
+
+        if (score > bestScore && score > 0.3) { // Minimum threshold
+            bestScore = score;
+            bestMatch = result;
+        }
+    }
+
+    if (bestMatch) {
+        console.log(`[YFlix] Best title match: "${bestMatch.title}" (${bestMatch.year}) [${bestMatch.type}] - Score: ${bestScore.toFixed(2)}`);
+    }
+
+    return bestMatch;
+}
+
+// Backward compatibility - keep old function name
 function findBestMatch(results, tmdbTitle, tmdbYear, mediaType) {
-  if (results.length === 0) return null;
-
-  console.log(`[YFlix] Finding best match for TMDB: "${tmdbTitle}" (${tmdbYear}) - Type: ${mediaType}`);
-
-  // Normalize TMDB title for comparison
-  const normalizedTMDBTitle = tmdbTitle.toLowerCase().replace(/[^\w\s]/g, '').trim();
-
-  let bestMatch = null;
-  let bestScore = 0;
-
-  for (const result of results) {
-    const resultTitle = result.title.toLowerCase().replace(/[^\w\s]/g, '').trim();
-    const resultYear = result.year;
-    const resultType = result.type.toLowerCase();
-
-    let score = 0;
-
-    // Exact title match gets high score
-    if (resultTitle === normalizedTMDBTitle) {
-      score += 100;
-    } else if (resultTitle.includes(normalizedTMDBTitle) || normalizedTMDBTitle.includes(resultTitle)) {
-      // Partial match
-      score += 50;
-    } else {
-      // Check for common title variations (e.g., "The Movie" vs "Movie")
-      const tmdbWords = normalizedTMDBTitle.split(/\s+/);
-      const resultWords = resultTitle.split(/\s+/);
-      const commonWords = tmdbWords.filter(word => resultWords.includes(word)).length;
-      score += commonWords * 10;
-    }
-
-    // Year match gets bonus points
-    if (resultYear && tmdbYear && resultYear === tmdbYear) {
-      score += 30;
-    }
-
-    // Type match gets bonus points (Movie vs TV)
-    const expectedType = mediaType === 'tv' ? 'tv' : 'movie';
-    if (resultType.includes(expectedType) || expectedType.includes(resultType)) {
-      score += 20;
-    }
-
-    console.log(`[YFlix] Result: "${result.title}" (${result.year}) [${result.type}] - Score: ${score}`);
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = result;
-    }
-  }
-
-  console.log(`[YFlix] Best match: "${bestMatch?.title}" (${bestMatch?.year}) [${bestMatch?.type}] with score ${bestScore}`);
-  return bestMatch;
+    return findBestTitleMatch(results, tmdbTitle, tmdbYear, mediaType);
 }
 
 function getContentInfoFromYflixUrl(yflixUrl) {

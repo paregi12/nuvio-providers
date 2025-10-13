@@ -115,7 +115,7 @@
       "id": "hdhub4u",
       "name": "HDHub4u",
       "description": "HDHub4u direct download links with multiple hoster support",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -134,7 +134,7 @@
       "id": "watch32",
       "name": "Watch32",
       "description": "Lightweight M3U8 Links",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -300,7 +300,7 @@
       "id": "yflix",
       "name": "YFlix",
       "description": "YFlix streaming",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
