@@ -667,10 +667,17 @@ function search(query) {
             const $ = cheerio.load(data);
             return $('.recent-movies > li.thumb').map((i, el) => {
                 const element = $(el);
+                const title = element.find('figcaption:nth-child(2) > a:nth-child(1) > p:nth-child(1)').text().trim();
+
+                // Extract year from title (look for 4-digit numbers in parentheses or after title)
+                const yearMatch = title.match(/\((\d{4})\)|\b(\d{4})\b/);
+                const year = yearMatch ? parseInt(yearMatch[1] || yearMatch[2]) : null;
+
                 return {
-                    title: element.find('figcaption:nth-child(2) > a:nth-child(1) > p:nth-child(1)').text().trim(),
+                    title: title,
                     url: element.find('figure:nth-child(1) > a:nth-child(2)').attr('href'),
                     poster: element.find('figure:nth-child(1) > img:nth-child(1)').attr('src'),
+                    year: year
                 };
             }).get();
         });
@@ -1081,6 +1088,120 @@ function getTMDBDetails(tmdbId, mediaType) {
 }
 
 /**
+ * Improved title matching utilities
+ */
+
+/**
+ * Normalizes a title for better matching
+ * @param {string} title The title to normalize
+ * @returns {string} Normalized title
+ */
+function normalizeTitle(title) {
+    if (!title) return '';
+
+    return title
+        // Convert to lowercase
+        .toLowerCase()
+        // Remove common articles
+        .replace(/\b(the|a|an)\b/g, '')
+        // Normalize punctuation and spaces
+        .replace(/[:\-_]/g, ' ')
+        .replace(/\s+/g, ' ')
+        // Remove special characters but keep alphanumeric and spaces
+        .replace(/[^\w\s]/g, '')
+        .trim();
+}
+
+/**
+ * Calculates similarity score between two titles
+ * @param {string} title1 First title
+ * @param {string} title2 Second title
+ * @returns {number} Similarity score (0-1)
+ */
+function calculateTitleSimilarity(title1, title2) {
+    const norm1 = normalizeTitle(title1);
+    const norm2 = normalizeTitle(title2);
+
+    // Exact match after normalization
+    if (norm1 === norm2) return 1.0;
+
+    // Substring matches
+    if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.9;
+
+    // Word-based similarity
+    const words1 = new Set(norm1.split(/\s+/).filter(w => w.length > 2));
+    const words2 = new Set(norm2.split(/\s+/).filter(w => w.length > 2));
+
+    if (words1.size === 0 || words2.size === 0) return 0;
+
+    const intersection = new Set([...words1].filter(w => words2.has(w)));
+    const union = new Set([...words1, ...words2]);
+
+    return intersection.size / union.size;
+}
+
+/**
+ * Finds the best title match from search results
+ * @param {Object} mediaInfo TMDB media info
+ * @param {Array} searchResults Search results array
+ * @param {string} mediaType "movie" or "tv"
+ * @param {number} season Season number for TV shows
+ * @returns {Object|null} Best matching result
+ */
+function findBestTitleMatch(mediaInfo, searchResults, mediaType, season) {
+    if (!searchResults || searchResults.length === 0) return null;
+
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const result of searchResults) {
+        let score = calculateTitleSimilarity(mediaInfo.title, result.title);
+
+        // Year matching bonus/penalty
+        if (mediaInfo.year && result.year) {
+            const yearDiff = Math.abs(mediaInfo.year - result.year);
+            if (yearDiff === 0) {
+                score += 0.2; // Exact year match bonus
+            } else if (yearDiff <= 1) {
+                score += 0.1; // Close year match bonus
+            } else if (yearDiff > 5) {
+                score -= 0.3; // Large year difference penalty
+            }
+        }
+
+        // TV show season matching
+        if (mediaType === 'tv' && season) {
+            const titleLower = result.title.toLowerCase();
+            const hasSeason = titleLower.includes(`season ${season}`) ||
+                             titleLower.includes(`s${season}`) ||
+                             titleLower.includes(`season ${season.toString().padStart(2, '0')}`);
+            if (hasSeason) {
+                score += 0.3; // Season match bonus
+            } else {
+                score -= 0.2; // No season match penalty
+            }
+        }
+
+        // Prefer results with higher quality indicators
+        if (result.title.toLowerCase().includes('2160p') ||
+            result.title.toLowerCase().includes('4k')) {
+            score += 0.05;
+        }
+
+        if (score > bestScore && score > 0.3) { // Minimum threshold
+            bestScore = score;
+            bestMatch = result;
+        }
+    }
+
+    if (bestMatch) {
+        console.log(`[HDHub4u] Best title match: "${bestMatch.title}" (score: ${bestScore.toFixed(2)})`);
+    }
+
+    return bestMatch;
+}
+
+/**
  * Main function for Nuvio integration
  * @param {string} tmdbId TMDB ID
  * @param {string} mediaType "movie" or "tv"
@@ -1109,17 +1230,8 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
                 return [];
             }
 
-            // Find best match
-            const lowerSearchQuery = searchQuery.toLowerCase();
-            const bestMatch = searchResults.find(function(r) {
-                const title = r.title.toLowerCase();
-                if (mediaType === 'tv' && season) {
-                    return title.includes(mediaInfo.title.toLowerCase()) &&
-                           (title.includes(`season ${season}`) || title.includes(`s${season}`));
-                } else {
-                    return title.includes(mediaInfo.title.toLowerCase());
-                }
-            });
+            // Find best match using improved title matching
+            const bestMatch = findBestTitleMatch(mediaInfo, searchResults, mediaType, season);
 
             const selectedMedia = bestMatch || searchResults[0];
             console.log(`[HDHub4u] Selected: "${selectedMedia.title}" (${selectedMedia.url})`);
@@ -1128,8 +1240,17 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
             return getDownloadLinks(selectedMedia.url).then(function(result) {
                 const { finalLinks, isMovie } = result;
 
+                // Filter by episode if specified for TV shows
+                let filteredLinks = finalLinks;
+                if (mediaType === 'tv' && episode !== null) {
+                    filteredLinks = finalLinks.filter(function(link) {
+                        return link.episode === episode;
+                    });
+                    console.log(`[HDHub4u] Filtered to ${filteredLinks.length} links for episode ${episode}`);
+                }
+
                 // Convert to Nuvio format, filtering out unknown quality links
-                const streams = finalLinks
+                const streams = filteredLinks
                     .filter(function(link) {
                         // Skip links with unknown quality - these are usually just redirects
                         if (typeof link.quality !== 'number' || link.quality === 0) {
