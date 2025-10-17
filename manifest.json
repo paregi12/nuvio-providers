@@ -341,4 +341,22 @@
       ]
     }
   ]
+},
+{
+  "id": "hianimez",
+  "name": "HiAnimeZ",
+  "description": "HiAnimeZ anime streaming with multi-server support and quality options",
+  "version": "1.0.0",
+  "author": "Nuvio Team",
+  "supportedTypes": [
+    "tv"
+  ],
+  "filename": "providers/hianimez.js",
+  "enabled": true,
+  "formats": ["m3u8", "mp4"],
+  "logo": "https://hianimez.to/favicon.ico",
+  "contentLanguage": [
+    "en",
+    "ja"
+  ]
 }
