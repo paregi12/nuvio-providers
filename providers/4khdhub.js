@@ -212,26 +212,38 @@ function validateVideoUrl(url, timeout) {
 
 function getFilenameFromUrl(url) {
   try {
-    return fetch(url, {
-      method: 'HEAD',
-      headers: { 'User-Agent': DEFAULT_HEADERS['User-Agent'] }
-    }).then(function (res) {
-      var cd = res.headers.get('content-disposition');
-      var filename = null;
-      if (cd) {
-        var match = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
-        if (match && match[1]) filename = (match[1] || '').replace(/["']/g, '');
-      }
-      if (!filename) {
-        try {
-          var uo = new URL(url);
-          filename = uo.pathname.split('/').pop() || '';
-          if (filename && filename.indexOf('.') !== -1) filename = filename.replace(/\.[^.]+$/, '');
-        } catch (e) { /* ignore */ }
-      }
+    // Commented out HEAD request for filename fetch
+    // return fetch(url, {
+    //   method: 'HEAD',
+    //   headers: { 'User-Agent': DEFAULT_HEADERS['User-Agent'] }
+    // }).then(function (res) {
+    //   var cd = res.headers.get('content-disposition');
+    //   var filename = null;
+    //   if (cd) {
+    //     var match = cd.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+    //     if (match && match[1]) filename = (match[1] || '').replace(/["']/g, '');
+    //   }
+    //   if (!filename) {
+    //     try {
+    //       var uo = new URL(url);
+    //       filename = uo.pathname.split('/').pop() || '';
+    //       if (filename && filename.indexOf('.') !== -1) filename = filename.replace(/\.[^.]+$/, '');
+    //     } catch (e) { /* ignore */ }
+    //   }
+    //   var decoded = decodeFilename(filename || '');
+    //   return decoded || null;
+    // }).catch(function () { return null; });
+    
+    // Fallback to URL-based filename extraction without HEAD request
+    try {
+      var uo = new URL(url);
+      var filename = uo.pathname.split('/').pop() || '';
+      if (filename && filename.indexOf('.') !== -1) filename = filename.replace(/\.[^.]+$/, '');
       var decoded = decodeFilename(filename || '');
-      return decoded || null;
-    }).catch(function () { return null; });
+      return Promise.resolve(decoded || null);
+    } catch (e) { 
+      return Promise.resolve(null); 
+    }
   } catch (e) {
     return Promise.resolve(null);
   }
