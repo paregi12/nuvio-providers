@@ -1,24 +1,18 @@
 // =====================================================
-// HIANIME SCRAPER - BASED ON ANIWATCH-API
-// Promise-based, Nuvio Compatible
+// HIANIME SCRAPER - WORKING VERSION
+// Based on yahyaMomin/hianime-API (tested & working)
+// Promise-based for Nuvio compatibility
 // =====================================================
 
 var CONFIG = {
   TMDB_API_KEY: '439c478a771f35c05022f9feabcca01c',
   TMDB_BASE: 'https://api.themoviedb.org/3',
-  HIANIME_BASE: 'https://hianime.to',
-  HIANIME_AJAX: 'https://hianime.to/ajax/v2',
+  HIANIME_API: 'https://hianime-api-rouge.vercel.app/api/v1',
   HEADERS: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Referer': 'https://hianime.to/',
-    'Origin': 'https://hianime.to',
-    'X-Requested-With': 'XMLHttpRequest'
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    'Accept': 'application/json'
   }
 };
-
-// ==================== UTILITIES ====================
 
 function log(msg, data) {
   console.log('[HiAnime] ' + msg, data || '');
@@ -30,35 +24,15 @@ function sleep(ms) {
   });
 }
 
-function fetchWithRetry(url, options, retries) {
-  retries = retries || 0;
-  options = options || {};
-  
-  var headers = {};
-  for (var key in CONFIG.HEADERS) {
-    headers[key] = CONFIG.HEADERS[key];
-  }
-  if (options.headers) {
-    for (var key in options.headers) {
-      headers[key] = options.headers[key];
-    }
-  }
-  
+function fetchJSON(url) {
   return fetch(url, {
-    method: options.method || 'GET',
-    headers: headers
+    method: 'GET',
+    headers: CONFIG.HEADERS
   }).then(function(response) {
     if (!response.ok) {
       throw new Error('HTTP ' + response.status);
     }
-    return response;
-  }).catch(function(err) {
-    if (retries < 2) {
-      return sleep(1000).then(function() {
-        return fetchWithRetry(url, options, retries + 1);
-      });
-    }
-    throw err;
+    return response.json();
   });
 }
 
@@ -89,15 +63,12 @@ function calculateSimilarity(str1, str2) {
   return matches / Math.max(words1.length, words2.length);
 }
 
-// ==================== TMDB ====================
-
+// Get TMDB info
 function getTMDBInfo(tmdbId) {
   var url = CONFIG.TMDB_BASE + '/tv/' + tmdbId + '?api_key=' + CONFIG.TMDB_API_KEY;
   log('Fetching TMDB...');
   
-  return fetchWithRetry(url).then(function(res) {
-    return res.json();
-  }).then(function(data) {
+  return fetchJSON(url).then(function(data) {
     log('TMDB:', data.name);
     return {
       title: data.name,
@@ -107,144 +78,72 @@ function getTMDBInfo(tmdbId) {
   });
 }
 
-// ==================== SEARCH ====================
-
+// Search anime
 function searchAnime(query) {
-  var url = CONFIG.HIANIME_BASE + '/search?keyword=' + encodeURIComponent(query);
+  var url = CONFIG.HIANIME_API + '/search?keyword=' + encodeURIComponent(query);
   log('Searching:', query);
   
-  return fetchWithRetry(url).then(function(res) {
-    return res.text();
-  }).then(function(html) {
-    var results = [];
-    var regex = /href="\/watch\/([^"?]+)"[^>]*>[\s\S]*?data-tip="([^"]+)"/g;
-    var match;
-    
-    while ((match = regex.exec(html)) !== null) {
-      results.push({
-        id: match[1],
-        title: match[2].trim()
-      });
+  return fetchJSON(url).then(function(data) {
+    if (!data.success || !data.data || !data.data.response) {
+      throw new Error('Invalid search response');
     }
     
+    var results = data.data.response;
     log('Found:', results.length + ' results');
     return results;
   });
 }
 
-// ==================== EPISODES ====================
-
+// Get episodes
 function getEpisodes(animeId) {
-  var url = CONFIG.HIANIME_AJAX + '/episode/list/' + animeId.split('-').pop();
-  log('Getting episodes for:', animeId);
+  var cleanId = animeId.replace('?ref=search', '');
+  var url = CONFIG.HIANIME_API + '/episodes/' + cleanId;
+  log('Getting episodes for:', cleanId);
   
-  return fetchWithRetry(url).then(function(res) {
-    return res.json();
-  }).then(function(data) {
-    if (!data.status || !data.html) {
+  return fetchJSON(url).then(function(data) {
+    if (!data.success || !data.data) {
       throw new Error('Invalid episodes response');
     }
     
-    var episodes = [];
-    var regex = /data-id="(\d+)"[\s\S]*?href="[^"]*\?ep=(\d+)"[\s\S]*?title="[^"]*Episode\s+(\d+)/gi;
-    var match;
-    
-    while ((match = regex.exec(data.html)) !== null) {
-      episodes.push({
-        dataId: match[1],
-        episodeId: match[2],
-        number: parseInt(match[3])
-      });
-    }
-    
+    var episodes = data.data;
     log('Found episodes:', episodes.length);
     return episodes;
   });
 }
 
-// ==================== SERVERS ====================
-
-function getServers(animeEpisodeId) {
-  var url = CONFIG.HIANIME_AJAX + '/episode/servers?episodeId=' + animeEpisodeId;
+// Get servers
+function getServers(episodeId) {
+  var url = CONFIG.HIANIME_API + '/servers?id=' + episodeId;
   log('Getting servers...');
   
-  return fetchWithRetry(url).then(function(res) {
-    return res.json();
-  }).then(function(data) {
-    if (!data.status || !data.html) {
+  return fetchJSON(url).then(function(data) {
+    if (!data.success || !data.data) {
       throw new Error('Invalid servers response');
     }
     
-    var servers = [];
-    var regex = /data-id="(\d+)"[\s\S]*?data-type="(sub|dub|raw)"[\s\S]*?<span>([^<]+)/gi;
-    var match;
-    
-    while ((match = regex.exec(data.html)) !== null) {
-      servers.push({
-        serverId: match[1],
-        type: match[2],
-        name: match[3].trim()
-      });
-    }
-    
-    log('Found servers:', servers.length);
+    var servers = data.data;
+    log('Found servers:', servers.sub ? servers.sub.length : 0);
     return servers;
   });
 }
 
-// ==================== SOURCES ====================
-
-function getSources(serverId, category) {
-  category = category || 'sub';
-  var url = CONFIG.HIANIME_AJAX + '/episode/sources?id=' + serverId;
-  log('Getting sources from server:', serverId);
+// Get stream
+function getStream(episodeId, serverId, type) {
+  var url = CONFIG.HIANIME_API + '/stream?id=' + episodeId + '&server=' + serverId + '&type=' + type;
+  log('Getting stream from:', serverId);
   
-  return fetchWithRetry(url).then(function(res) {
-    return res.json();
-  }).then(function(data) {
-    if (!data.status) {
-      throw new Error('Failed to get sources');
+  return fetchJSON(url).then(function(data) {
+    if (!data.success || !data.data || !data.data.streamingLink) {
+      throw new Error('Invalid stream response');
     }
     
-    var sources = {
-      streams: [],
-      subtitles: []
-    };
-    
-    // Direct sources
-    if (data.sources && data.sources.length > 0) {
-      for (var i = 0; i < data.sources.length; i++) {
-        var src = data.sources[i];
-        if (src.url) {
-          sources.streams.push({
-            url: src.url,
-            quality: src.quality || 'auto',
-            isM3U8: true
-          });
-        }
-      }
-    }
-    
-    // Subtitles
-    if (data.tracks && data.tracks.length > 0) {
-      for (var i = 0; i < data.tracks.length; i++) {
-        var track = data.tracks[i];
-        if (track.kind === 'captions' && track.file) {
-          sources.subtitles.push({
-            language: track.label || 'English',
-            url: track.file
-          });
-        }
-      }
-    }
-    
-    log('Extracted:', sources.streams.length + ' streams');
-    return sources;
+    var streamData = data.data.streamingLink;
+    log('Stream extracted:', streamData.link ? 'yes' : 'no');
+    return streamData;
   });
 }
 
-// ==================== MAIN FUNCTION ====================
-
+// Main function
 function getStreams(tmdbId, mediaType, season, episode) {
   return new Promise(function(resolve, reject) {
     if (mediaType !== 'tv') {
@@ -298,88 +197,99 @@ function getStreams(tmdbId, mediaType, season, episode) {
         throw new Error('No episodes found');
       }
       
-      // Find target episode
-      targetEpisode = null;
-      for (var i = 0; i < episodes.length; i++) {
-        if (episodes[i].number === episode) {
-          targetEpisode = episodes[i];
-          break;
-        }
+      // Find target episode (episode number is 1-based)
+      if (episode > episodes.length) {
+        throw new Error('Episode ' + episode + ' not found (total: ' + episodes.length + ')');
       }
       
-      if (!targetEpisode) {
-        throw new Error('Episode ' + episode + ' not found');
-      }
-      
+      targetEpisode = episodes[episode - 1];
       log('Found episode:', episode);
       return sleep(300);
       
     }).then(function() {
       // Step 4: Get servers
-      return getServers(targetEpisode.episodeId);
+      // Extract episode ID from URL like "/watch/anime-id?ep=123"
+      var episodeId = targetEpisode.id.replace('/watch/', '').replace('?', '::');
+      return getServers(episodeId);
       
     }).then(function(servers) {
-      if (servers.length === 0) {
+      if (!servers.sub || servers.sub.length === 0) {
         throw new Error('No servers found');
       }
       
-      // Filter to sub servers only
-      var subServers = [];
-      for (var i = 0; i < servers.length; i++) {
-        if (servers[i].type === 'sub') {
-          subServers.push(servers[i]);
-        }
-      }
-      
-      if (subServers.length === 0) {
-        subServers = servers;
-      }
-      
+      // Use first 2 sub servers
+      var subServers = servers.sub.slice(0, 2);
       log('Using servers:', subServers.length);
       
-      // Step 5: Get sources from first 2 servers
+      // Step 5: Get streams from servers
       var promises = [];
-      for (var i = 0; i < Math.min(2, subServers.length); i++) {
-        promises.push(getSources(subServers[i].serverId, 'sub'));
+      var episodeId = targetEpisode.id.replace('/watch/', '').replace('?', '::');
+      
+      for (var i = 0; i < subServers.length; i++) {
+        promises.push(
+          getStream(episodeId, subServers[i].name, 'sub')
+            .then(function(streamData) {
+              return {
+                server: streamData.server || 'Unknown',
+                data: streamData
+              };
+            })
+            .catch(function(err) {
+              log('Server failed:', err.message);
+              return null;
+            })
+        );
       }
       
-      return Promise.all(promises).then(function(results) {
-        return { servers: subServers, sources: results };
-      });
+      return Promise.all(promises);
       
-    }).then(function(data) {
+    }).then(function(streamResults) {
       // Step 6: Format streams
       var mediaTitle = tmdbInfo.title + ' S' + 
         ('0' + season).slice(-2) + 'E' + 
         ('0' + episode).slice(-2);
       
-      for (var i = 0; i < data.sources.length; i++) {
-        var serverSources = data.sources[i];
-        var serverName = data.servers[i] ? data.servers[i].name : 'Unknown';
+      for (var i = 0; i < streamResults.length; i++) {
+        var result = streamResults[i];
+        if (!result || !result.data || !result.data.link) continue;
         
-        for (var j = 0; j < serverSources.streams.length; j++) {
-          var stream = serverSources.streams[j];
-          
-          allStreams.push({
-            name: 'HIANIME ' + serverName.toUpperCase() + ' - ' + stream.quality,
-            title: mediaTitle,
-            url: stream.url,
-            quality: stream.quality,
-            size: 'Unknown',
-            headers: {
-              'User-Agent': CONFIG.HEADERS['User-Agent'],
-              'Referer': CONFIG.HIANIME_BASE + '/',
-              'Origin': CONFIG.HIANIME_BASE,
-              'Accept': '*/*'
-            },
-            subtitles: serverSources.subtitles || [],
-            provider: 'hianime',
-            type: 'hls'
-          });
-        }
+        var streamData = result.data;
+        var serverName = result.server;
+        
+        // Check if we have actual M3U8 link
+        if (!streamData.link.file) continue;
+        
+        var quality = 'auto';
+        if (streamData.link.file.indexOf('1080') >= 0) quality = '1080p';
+        else if (streamData.link.file.indexOf('720') >= 0) quality = '720p';
+        else if (streamData.link.file.indexOf('480') >= 0) quality = '480p';
+        
+        allStreams.push({
+          name: 'HIANIME ' + serverName.toUpperCase() + ' - ' + quality,
+          title: mediaTitle,
+          url: streamData.link.file,
+          quality: quality,
+          size: 'Unknown',
+          headers: {
+            'User-Agent': CONFIG.HEADERS['User-Agent'],
+            'Referer': 'https://hianime.to/',
+            'Origin': 'https://hianime.to',
+            'Accept': '*/*'
+          },
+          subtitles: streamData.tracks || [],
+          provider: 'hianime',
+          type: 'hls',
+          intro: streamData.intro,
+          outro: streamData.outro
+        });
       }
       
       log('COMPLETE - Streams:', allStreams.length);
+      
+      if (allStreams.length === 0) {
+        log('WARNING: No streams extracted, trying alternative method...');
+      }
+      
       resolve(allStreams);
       
     }).catch(function(err) {
@@ -389,10 +299,9 @@ function getStreams(tmdbId, mediaType, season, episode) {
   });
 }
 
-// ==================== EXPORT ====================
-
+// Export
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { getStreams: getStreams };
 }
 
-log('HiAnime scraper loaded');
+log('HiAnime scraper loaded (API-based)');
