@@ -52,7 +52,7 @@
       "filename": "providers/uhdmovies.js",
       "enabled": true,
       "formats": ["mkv"],
-      "logo": "https://uhdmovies.cat/wp-content/uploads/2021/03/cropped-output-onlinepngtools-1-32x32.png",
+      "logo": "https://uhdmovies.rip/wp-content/uploads/2021/03/cropped-output-onlinepngtools-1-32x32.png",
       "contentLanguage": [
         "en"
       ]
@@ -70,7 +70,7 @@
       "filename": "providers/moviesmod.js",
       "enabled": true,
       "formats": ["mkv"],
-      "logo": "https://moviesmod.tube/wp-content/uploads/2022/10/moviesmod.png",
+      "logo": "https://moviesmod.plus/wp-content/uploads/2022/10/moviesmod.png",
       "contentLanguage": [
         "en"
       ]
@@ -214,7 +214,7 @@
       "filename": "providers/streamflix.js",
       "enabled": true,
       "formats": ["mkv"],
-      "logo": "https://streamflix.app/assets/images/streamflix-1.svg",
+      "logo": "https://streamflix.app/assets/images/logo-text-148x72.png",
       "contentLanguage": [
         "en",
         "hin"
@@ -338,6 +338,27 @@
         "hi",
         "es",
         "pt"
+      ]
+    },
+    {
+      "id": "mallumv",
+      "name": "MalluMV",
+      "description": "MalluMV direct links with support for Tamil, Telugu, Hindi, Malayalam, and Kannada movies",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie"
+      ],
+      "filename": "providers/mallumv.js",
+      "enabled": true,
+      "formats": ["mkv", "mp4"],
+      "logo": "https://mallumv.fit/favicon.ico",
+      "contentLanguage": [
+        "ta",
+        "te",
+        "hi",
+        "ml",
+        "kn"
       ]
     }
   ]
