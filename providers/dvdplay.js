@@ -3,7 +3,7 @@
 
 // Constants
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c"; // This will be replaced by Nuvio
-const BASE_URL = 'https://dvdplay.rodeo';
+const BASE_URL = 'https://dvdplay.skin';
 
 // Temporarily disable URL validation for faster results
 global.URL_VALIDATION_ENABLED = true;
