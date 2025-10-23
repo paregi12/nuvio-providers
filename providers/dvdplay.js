@@ -197,7 +197,8 @@ function getFilenameFromUrl(url) {
 }
 
 function extractHubCloudLinks(url, referer = 'HubCloud') {
-    const baseUrl = getBaseUrl(url);
+    var origin;
+    try { origin = new URL(url).origin; } catch (e) { origin = ''; }
 
     // Helper function for absolute URL resolution
     function toAbsolute(href, base) {
@@ -212,44 +213,42 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
         .then(response => {
             const $ = response.$;
             
-            let href;
-            if (url.includes('hubcloud.php')) {
+            var href;
+            if (url.indexOf('hubcloud.php') !== -1) {
                 href = url;
             } else {
-                const downloadElement = $('#download');
-                if (downloadElement.length === 0) {
-                    const alternatives = ['a[href*="hubcloud.php"]', '.download-btn', 'a[href*="download"]'];
-                    let found = false;
-                    
-                    for (const selector of alternatives) {
-                        const altElement = $(selector).first();
-                        if (altElement.length > 0) {
-                            const rawHref = altElement.attr('href');
-                            if (rawHref) {
-                                href = toAbsolute(rawHref, baseUrl);
-                                found = true;
-                                break;
-                            }
+                // Check for token-based HubCloud URLs (newer format)
+                var tokenMatch = url.match(/\/video\/([^\/\?]+)(\?token=([^&\s]+))?/);
+                if (tokenMatch) {
+                    var videoId = tokenMatch[1];
+                    var token = tokenMatch[3];
+                    if (token) {
+                        // Use the token-based URL format
+                        href = origin + '/video/' + videoId + '?token=' + token;
+                    } else {
+                        // Try to find token in the page
+                        var tokenFromPage = $.html().match(/token=([^"'\s&]+)/);
+                        if (tokenFromPage) {
+                            href = origin + '/video/' + videoId + '?token=' + tokenFromPage[1];
+                        } else {
+                            href = url; // Use original URL as fallback
                         }
                     }
-                    
-                    if (!found) {
-                        throw new Error('Download element not found with any selector');
-                    }
                 } else {
-                    const rawHref = downloadElement.attr('href');
-                    if (!rawHref) {
-                        throw new Error('Download href not found');
-                    }
-                    
-                    href = toAbsolute(rawHref, baseUrl);
+                    // Traditional approach for older HubCloud formats
+                    var rawHref = $('#download').attr('href') || $('a[href*="hubcloud.php"]').attr('href') || $('.download-btn').attr('href') || $('a[href*="download"]').attr('href');
+                    if (!rawHref) throw new Error('Download element not found');
+                    href = toAbsolute(rawHref, origin);
                 }
             }
             
-            return makeRequest(href, { parseHTML: true });
+            return makeRequest(href, { parseHTML: true }).then(function(secondResponse) {
+                return { firstResponse: response, secondResponse: secondResponse, href: href };
+            });
         })
         .then(response => {
-            const $$ = response.$; // Use $$ for the second cheerio instance like 4KHDHub
+            const $$ = response.secondResponse.$; // Use $$ for the second cheerio instance like 4KHDHub
+            const href = response.href;
 
     // Helper function to resolve intermediate HubCloud URLs (.fans/?id= and .workers.dev/?id=)
     function resolveHubCloudUrl(url) {
@@ -473,7 +472,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                         let link = $btn.attr('href');
 
                         if (!link) return;
-                        link = toAbsolute(link, baseUrl);
+                        link = toAbsolute(link, href);
 
                         // Only consider plausible buttons (from 4KHDHub)
                         const isPlausible = /(hubcloud|hubdrive|pixeldrain|buzz|10gbps|workers\.dev|r2\.dev|download|api\/file)/i.test(link) ||
@@ -508,7 +507,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                     let link = $btn.attr('href');
 
                     if (!link) return;
-                    link = toAbsolute(link, baseUrl);
+                    link = toAbsolute(link, href);
 
                     tasks.push(buildTask(text, link, headerDetails, size, quality));
                 });
@@ -853,8 +852,13 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                 return Promise.all(streamPromises).then(nestedStreams => {
                     let allStreams = nestedStreams.flat();
 
-                    // 5. Filter out unwanted links (e.g., Google AMP links)
-                    allStreams = allStreams.filter(stream => !stream.url.includes('cdn.ampproject.org'));
+                    // 5. Filter out unwanted links (e.g., Google AMP links, suspicious domains)
+                    allStreams = allStreams.filter(stream => {
+                        const url = stream.url.toLowerCase();
+                        return !url.includes('cdn.ampproject.org') && 
+                               !url.includes('bloggingvector.shop') &&
+                               !url.includes('winexch.com');
+                    });
 
                     // 6. Remove duplicates based on URL
                     const uniqueStreams = Array.from(new Map(allStreams.map(stream => [stream.url, stream])).values());
@@ -910,8 +914,11 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
 
 // Export for React Native
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { getStreams, extractHubCloudLinks };
+    module.exports = { getStreams, extractHubCloudLinks, searchContent, extractDownloadLinks, processDownloadLink };
 } else {
     global.getStreams = getStreams;
     global.extractHubCloudLinks = extractHubCloudLinks;
+    global.searchContent = searchContent;
+    global.extractDownloadLinks = extractDownloadLinks;
+    global.processDownloadLink = processDownloadLink;
 }

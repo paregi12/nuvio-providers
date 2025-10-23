@@ -8,6 +8,9 @@ console.log('[4KHDHub] Using cheerio-without-node-native for DOM parsing');
 const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
 const DOMAINS_URL = 'https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json';
 
+// Disable URL validation for faster results
+global.DISABLE_4KHDHUB_URL_VALIDATION = true;
+
 // Caches (in-memory only)
 let domainsCache = null;
 let resolvedUrlsCache = {}; // key -> array of resolved file-host URLs
