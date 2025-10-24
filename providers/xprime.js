@@ -7,10 +7,11 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
 // Working headers for Cloudflare Workers URLs
 const WORKING_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
     'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
     'Origin': 'https://xprime.tv',
     'Referer': 'https://xprime.tv/',
     'Sec-Fetch-Dest': 'video',
@@ -371,6 +372,35 @@ function makeRequest(url, options = {}) {
     });
 }
 
+// Get turnstile token for Xprime authentication
+function getTurnstileToken() {
+    console.log('[Xprime] Fetching turnstile token...');
+    
+    return fetch('https://enc-dec.app/api/enc-xprime', {
+        method: 'GET',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'Accept-Language': 'en-US,en;q=0.9'
+        }
+    }).then(function(response) {
+        if (!response.ok) {
+            throw new Error(`Turnstile token API error: ${response.status} ${response.statusText}`);
+        }
+        return response.json();
+    }).then(function(data) {
+        if (data && data.result) {
+            console.log('[Xprime] Successfully obtained turnstile token');
+            return data.result;
+        } else {
+            throw new Error('Invalid turnstile token response format');
+        }
+    }).catch(function(error) {
+        console.error(`[Xprime] Failed to get turnstile token: ${error.message}`);
+        throw error;
+    });
+}
+
 // Decrypt encrypted Xprime response using enc-dec.app API
 function decryptXprimeResponse(encryptedData) {
     console.log(`[Xprime] Decrypting encrypted response (${encryptedData.length} bytes)...`);
@@ -653,32 +683,33 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
              const type = mediaType; // Keep the original mediaType
      
              return getXprimeDomain().then(function(api) {
-        return getXprimeServers(api).then(function(servers) {
-            if (servers.length === 0) {
-                console.log('[Xprime] No active servers found');
-                return [];
-            }
-            
-            console.log(`[Xprime] Processing ${servers.length} servers in parallel`);
-            
-            const allLinks = [];
-            const allSubtitles = [];
-            
-            // Process servers in parallel for better performance
-            const serverPromises = servers.map(function(server) {
+        return getTurnstileToken().then(function(turnstileToken) {
+            return getXprimeServers(api).then(function(servers) {
+                if (servers.length === 0) {
+                    console.log('[Xprime] No active servers found');
+                    return [];
+                }
+                
+                console.log(`[Xprime] Processing ${servers.length} servers in parallel with turnstile token`);
+                
+                const allLinks = [];
+                const allSubtitles = [];
+                
+                // Process servers in parallel for better performance
+                const serverPromises = servers.map(function(server) {
                 console.log(`[Xprime] Processing server: ${server.name}`);
                 
                 // Rage server requires a different endpoint (backend.xprime.tv) and TMDB id param
                 let serverUrl;
                 if (server.name === 'rage') {
                     if (type === 'tv' && season && episode) {
-                        serverUrl = `https://backend.xprime.tv/rage?id=${encodeURIComponent(tmdbId)}&season=${encodeURIComponent(season)}&episode=${encodeURIComponent(episode)}`;
+                        serverUrl = `https://backend.xprime.tv/rage?id=${encodeURIComponent(tmdbId)}&season=${encodeURIComponent(season)}&episode=${encodeURIComponent(episode)}&turnstile=${encodeURIComponent(turnstileToken)}`;
                     } else {
-                        serverUrl = `https://backend.xprime.tv/rage?id=${encodeURIComponent(tmdbId)}`;
+                        serverUrl = `https://backend.xprime.tv/rage?id=${encodeURIComponent(tmdbId)}&turnstile=${encodeURIComponent(turnstileToken)}`;
                     }
                 } else {
                     const queryParams = buildQueryParams(server.name, title, year, imdbId, season, episode);
-                    serverUrl = `${api}/${server.name}?${queryParams}`;
+                    serverUrl = `https://backend.xprime.tv/${server.name}?${queryParams}&turnstile=${encodeURIComponent(turnstileToken)}`;
                 }
                 
                 console.log(`[Xprime] Request URL: ${serverUrl}`);
@@ -688,7 +719,7 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
                         'Connection': 'keep-alive',
                         'Origin': 'https://xprime.tv',
-                        'Referer': server.name === 'rage' ? 'https://xprime.tv/' : api
+                        'Referer': 'https://xprime.tv/'
                     }
                 }).then(function(response) {
                     return response.text().then(function(responseText) {
@@ -841,6 +872,7 @@ function getStreams(tmdbId, mediaType = 'movie', season = null, episode = null) 
                     return formattedLinks;
                 }
             });
+        });
         });
     }).catch(function(error) {
         console.error(`[Xprime] Scraping error: ${error.message}`);
