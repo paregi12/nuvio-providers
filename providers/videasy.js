@@ -228,6 +228,94 @@ function buildVideoEasyUrl(serverConfig, mediaType, title, year, tmdbId, imdbId,
   return `${serverConfig.url}?${queryString}`;
 }
 
+// Normalize language codes/names to readable format
+function normalizeLanguageName(language) {
+  if (!language || typeof language !== 'string') {
+    return '';
+  }
+  
+  const languageMap = {
+    'en': 'English',
+    'eng': 'English',
+    'english': 'English',
+    'hi': 'Hindi',
+    'hin': 'Hindi',
+    'hindi': 'Hindi',
+    'de': 'German',
+    'ger': 'German',
+    'german': 'German',
+    'it': 'Italian',
+    'ita': 'Italian',
+    'italian': 'Italian',
+    'fr': 'French',
+    'fre': 'French',
+    'french': 'French',
+    'es': 'Spanish',
+    'spa': 'Spanish',
+    'spanish': 'Spanish',
+    'pt': 'Portuguese',
+    'por': 'Portuguese',
+    'portuguese': 'Portuguese',
+    'ar': 'Arabic',
+    'ara': 'Arabic',
+    'arabic': 'Arabic',
+    'zh': 'Chinese',
+    'chi': 'Chinese',
+    'chinese': 'Chinese',
+    'ja': 'Japanese',
+    'jpn': 'Japanese',
+    'japanese': 'Japanese',
+    'ko': 'Korean',
+    'kor': 'Korean',
+    'korean': 'Korean',
+    'bn': 'Bengali',
+    'ben': 'Bengali',
+    'bengali': 'Bengali',
+    'ta': 'Tamil',
+    'tam': 'Tamil',
+    'tamil': 'Tamil',
+    'te': 'Telugu',
+    'tel': 'Telugu',
+    'telugu': 'Telugu',
+    'ml': 'Malayalam',
+    'mal': 'Malayalam',
+    'malayalam': 'Malayalam',
+    'kn': 'Kannada',
+    'kan': 'Kannada',
+    'kannada': 'Kannada',
+    'mr': 'Marathi',
+    'mar': 'Marathi',
+    'marathi': 'Marathi',
+    'gu': 'Gujarati',
+    'guj': 'Gujarati',
+    'gujarati': 'Gujarati',
+    'pa': 'Punjabi',
+    'pan': 'Punjabi',
+    'punjabi': 'Punjabi',
+    'ur': 'Urdu',
+    'urd': 'Urdu',
+    'urdu': 'Urdu',
+    'fa': 'Persian',
+    'per': 'Persian',
+    'persian': 'Persian',
+    'tr': 'Turkish',
+    'tur': 'Turkish',
+    'turkish': 'Turkish',
+    'vi': 'Vietnamese',
+    'vie': 'Vietnamese',
+    'vietnamese': 'Vietnamese',
+    'th': 'Thai',
+    'tha': 'Thai',
+    'thai': 'Thai',
+    'id': 'Indonesian',
+    'ind': 'Indonesian',
+    'indonesian': 'Indonesian'
+  };
+  
+  const normalized = language.toLowerCase().trim();
+  return languageMap[normalized] || language; // Return mapped name or original if not found
+}
+
 // Extract quality from URL
 function extractQualityFromUrl(url) {
   const qualityPatterns = [
@@ -334,6 +422,7 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
   mediaData.sources.forEach((source) => {
     if (source.url) {
       let quality = source.quality || extractQualityFromUrl(source.url);
+      let detectedLanguage = '';
 
       // If quality is still unknown and it's an HLS stream, try to parse it
       if (quality === 'unknown' && source.url.includes('.m3u8')) {
@@ -367,13 +456,16 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
           }
         }
 
-        // Clean up language names that might be mistaken for quality
+        // Check if quality field contains language information (common in Vyse server)
         const languageNames = ['english', 'hindi', 'german', 'italian', 'spanish', 'portuguese', 'french', 'arabic', 'chinese', 'japanese', 'korean', 'bengali', 'tamil', 'telugu', 'malayalam', 'kannada', 'marathi', 'gujarati', 'punjabi', 'urdu', 'persian', 'turkish', 'vietnamese', 'thai', 'indonesian'];
         const isLanguageName = languageNames.some(lang =>
           quality.toLowerCase().includes(lang.toLowerCase())
         );
 
         if (isLanguageName) {
+          // Extract language from quality field
+          detectedLanguage = normalizeLanguageName(quality);
+          // Try to extract actual quality from URL
           quality = extractQualityFromUrl(source.url);
           if (quality === 'unknown') {
             quality = 'Adaptive';
@@ -429,8 +521,20 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
 
       const title = `${mediaDetails.title} (${mediaDetails.year})`;
 
+      // Extract and normalize language information if available
+      let languageInfo = '';
+      if (source.language) {
+        const normalizedLanguage = normalizeLanguageName(source.language);
+        if (normalizedLanguage) {
+          languageInfo = ` [${normalizedLanguage}]`;
+        }
+      } else if (detectedLanguage) {
+        // Use detected language from quality field (Vyse server case)
+        languageInfo = ` [${detectedLanguage}]`;
+      }
+
       streams.push({
-        name: `VIDEASY ${serverName} (${serverConfig.language}) - ${quality}`,
+        name: `VIDEASY ${serverName} (${serverConfig.language})${languageInfo} - ${quality}`,
         title: title,
         url: source.url,
         quality: quality,
