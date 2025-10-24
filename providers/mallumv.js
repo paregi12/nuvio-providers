@@ -516,7 +516,18 @@ function findBestMatch(results, query) {
         return { item: r, score: score };
     });
     scored.sort(function (a, b) { return b.score - a.score; });
-    return scored[0].item;
+    
+    // Only return the best match if it has a reasonable similarity score
+    // Require at least 30% similarity or exact match to avoid wrong movies
+    const bestMatch = scored[0];
+    const similarity = calculateSimilarity(bestMatch.item.title, query);
+    
+    if (similarity < 0.3 && normalizeTitle(bestMatch.item.title) !== normalizeTitle(query)) {
+        console.log(`[MalluMV] Best match "${bestMatch.item.title}" has low similarity (${(similarity * 100).toFixed(1)}%) with "${query}" - rejecting`);
+        return null;
+    }
+    
+    return bestMatch.item;
 }
 
 function parseQualityForSort(qualityString) {
@@ -666,6 +677,12 @@ function searchContent(title, year, mediaType) {
     return makeHTTPRequest(searchUrl)
         .then(response => response.body)
         .then(html => {
+            // Check if search returned "No Result Found" - if so, return empty results
+            if (html.includes('No Result Found. Showing Recent Movies:')) {
+                console.log(`[MalluMV] No exact results found for "${title}" - returning empty results`);
+                return [];
+            }
+            
             // Look for movie page links (without leading slash)
             const moviePageRegex = /<a href="(movie\/\d+\/[^"]+\.xhtml)">/g;
             const results = [];
@@ -952,6 +969,10 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
 
             // Find best match
             const selectedResult = findBestMatch(searchResults, tmdb.title);
+            if (!selectedResult) {
+                console.log(`[MalluMV] No suitable match found for "${tmdb.title}"`);
+                return [];
+            }
             console.log(`[MalluMV] Selected result: "${selectedResult.title}"`);
             
             // Extract download links from movie page
