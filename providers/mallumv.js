@@ -543,14 +543,31 @@ function parseSizeForSort(sizeString) {
     return 0;
 }
 
-// Extract quality from text - prioritize resolution over generic terms
+// Extract quality from text - improved to handle numeric values and normalize labels
 function extractQuality(text) {
     if (!text) return 'Unknown';
     
     // First, look for specific resolution values (prioritize these)
     const resolutionMatch = text.match(/(4K|2160p|1080p|720p|480p|360p)/i);
     if (resolutionMatch) {
-        return resolutionMatch[1].toUpperCase();
+        const quality = resolutionMatch[1].toUpperCase();
+        // Normalize 4K to standard format
+        if (quality === '4K') return '4K';
+        return quality;
+    }
+    
+    // Look for numeric quality values (like 2160, 1080, 720, etc.)
+    const numericMatch = text.match(/(\d{3,4})[pP]?/);
+    if (numericMatch) {
+        const numericValue = parseInt(numericMatch[1], 10);
+        // Convert numeric values to standard quality labels (match hdhub4u.js approach)
+        if (numericValue >= 2160) return '4K';
+        else if (numericValue >= 1440) return '1440p';
+        else if (numericValue >= 1080) return '1080p';
+        else if (numericValue >= 720) return '720p';
+        else if (numericValue >= 480) return '480p';
+        else if (numericValue >= 360) return '360p';
+        else if (numericValue >= 240) return '240p';
     }
     
     // If no specific resolution found, look for quality indicators
@@ -591,35 +608,50 @@ function getServiceName(url) {
     }
 }
 
-// Helper function for HTTP requests
+// Helper function for HTTP requests with HTML parsing support
 function makeHTTPRequest(url, options = {}) {
-    const defaultHeaders = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none'
-    };
+    return new Promise((resolve, reject) => {
+        const defaultHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none'
+        };
 
-    return fetch(url, {
-        ...options,
-        headers: {
-            ...defaultHeaders,
-            ...options.headers
-        },
-        redirect: 'follow'
-    }).then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        return response;
-    }).catch(error => {
-        console.error(`[MalluMV] Request failed for ${url}: ${error.message}`);
-        throw error;
+        const fetchOptions = {
+            method: options.method || 'GET',
+            headers: {
+                ...defaultHeaders,
+                ...options.headers
+            },
+            redirect: 'follow'
+        };
+
+        fetch(url, fetchOptions)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                return response.text().then(data => {
+                    if (options.parseHTML && data) {
+                        const cheerio = require('cheerio-without-node-native');
+                        const $ = cheerio.load(data);
+                        resolve({ $: $, body: data, statusCode: response.status, headers: Object.fromEntries(response.headers) });
+                    } else {
+                        resolve({ body: data, statusCode: response.status, headers: Object.fromEntries(response.headers) });
+                    }
+                });
+            })
+            .catch(error => {
+                console.error(`[MalluMV] Request failed for ${url}: ${error.message}`);
+                reject(error);
+            });
     });
 }
 
@@ -632,7 +664,7 @@ function searchContent(title, year, mediaType) {
     console.log(`[MalluMV] Searching for: "${searchQuery}" at ${searchUrl}`);
     
     return makeHTTPRequest(searchUrl)
-        .then(response => response.text())
+        .then(response => response.body)
         .then(html => {
             // Look for movie page links (without leading slash)
             const moviePageRegex = /<a href="(movie\/\d+\/[^"]+\.xhtml)">/g;
@@ -666,7 +698,7 @@ function extractDownloadLinks(pageUrl) {
     console.log(`[MalluMV] Extracting download links from: ${pageUrl}`);
     
     return makeHTTPRequest(pageUrl)
-        .then(response => response.text())
+        .then(response => response.body)
         .then(html => {
             const downloadLinks = [];
             
@@ -741,7 +773,7 @@ function processConfirmLink(confirmPageUrl) {
     console.log(`[MalluMV] Processing confirm page: ${confirmPageUrl}`);
     
     return makeHTTPRequest(confirmPageUrl)
-        .then(response => response.text())
+        .then(response => response.body)
         .then(html => {
             // Look for the "Confirm Download" link that leads to internal page
             const internalMatch = html.match(/<a class="touch" href="(\/internal\/\d+\/\d+\/[^"]+\.xhtml)">/);
@@ -766,7 +798,7 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
     console.log(`[MalluMV] Processing internal page: ${internalPageUrl}`);
     
     return makeHTTPRequest(internalPageUrl)
-        .then(response => response.text())
+        .then(response => response.body)
         .then(html => {
             // Check for HubCloud links FIRST
             const hubCloudMatch = html.match(/<a href="(https:\/\/[^"]*hubcloud\.[^"]*)"/);
@@ -830,13 +862,75 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
 // TMDB helper
 function getTMDBDetails(tmdbId, mediaType) {
     var url = 'https://api.themoviedb.org/3/' + mediaType + '/' + tmdbId + '?api_key=' + TMDB_API_KEY;
-    return makeHTTPRequest(url).then(function (res) { return res.json(); }).then(function (data) {
+    return makeHTTPRequest(url).then(function (res) { return JSON.parse(res.body); }).then(function (data) {
         if (mediaType === 'movie') {
             return { title: data.title, original_title: data.original_title, year: data.release_date ? data.release_date.split('-')[0] : null };
         } else {
             return { title: data.name, original_title: data.original_name, year: data.first_air_date ? data.first_air_date.split('-')[0] : null };
         }
     }).catch(function () { return null; });
+}
+
+// Filter and deduplicate streams (match hdhub4u.js quality standards)
+function filterAndDeduplicateStreams(streams) {
+    // Filter suspicious URLs
+    const suspicious = ['www-google-com.cdn.ampproject.org', 'bloggingvector.shop', 'cdn.ampproject.org'];
+    const filtered = streams.filter(stream => {
+        const url = (stream.url || '').toLowerCase();
+        
+        // Filter ZIP files
+        if (url.includes('.zip') || (stream.title && stream.title.toLowerCase().includes('.zip'))) {
+            return false;
+        }
+        
+        // Filter suspicious AMP/redirect URLs
+        if (suspicious.some(pattern => url.includes(pattern))) {
+            return false;
+        }
+        
+        // Filter base64 encoded URLs (likely intermediate redirects)
+        if (url.includes('/aHR0cHM6') || url.includes('/foo/aHR0')) {
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Resolve gamerxyt.com/dl.php?link= URLs to extract actual Google Drive URLs
+    const resolvedStreams = filtered.map(stream => {
+        const url = stream.url;
+        
+        // Check if it's a gamerxyt.com/dl.php?link= URL
+        if (url.includes('gamerxyt.com/dl.php?link=')) {
+            try {
+                // Extract the actual Google Drive URL from the link parameter
+                const linkMatch = url.match(/gamerxyt\.com\/dl\.php\?link=([^&\s]+)/);
+                if (linkMatch && linkMatch[1]) {
+                    const actualUrl = decodeURIComponent(linkMatch[1]);
+                    console.log(`[MalluMV] Resolved gamerxyt URL: ${url.substring(0, 80)}... -> ${actualUrl.substring(0, 80)}...`);
+                    
+                    return {
+                        ...stream,
+                        url: actualUrl
+                    };
+                }
+            } catch (error) {
+                console.log(`[MalluMV] Failed to resolve gamerxyt URL: ${error.message}`);
+            }
+        }
+        
+        return stream;
+    });
+    
+    // Deduplicate by URL
+    const seenUrls = new Set();
+    const unique = resolvedStreams.filter(stream => {
+        if (seenUrls.has(stream.url)) return false;
+        seenUrls.add(stream.url);
+        return true;
+    });
+    
+    return unique;
 }
 
 // Main function that Nuvio will call
@@ -907,8 +1001,12 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                         return qualityB - qualityA;
                     });
 
+                    // Filter and deduplicate streams (match hdhub4u.js quality)
+                    const filteredStreams = filterAndDeduplicateStreams(uniqueStreams);
+
                     console.log(`[MalluMV] Successfully processed ${uniqueStreams.length} streams`);
-                    return uniqueStreams;
+                    console.log(`[MalluMV] After filtering: ${filteredStreams.length} quality streams`);
+                    return filteredStreams;
                 });
             });
         });
