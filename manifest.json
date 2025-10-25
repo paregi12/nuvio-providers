@@ -400,10 +400,11 @@
     {
       "id": "vidnest-anime",
       "name": "VidnestAnime",
-      "description": "Vidnest anime streaming with 5 servers (hindi, satoru, miko, pahe, anya)",
+      "description": "Vidnest anime streaming with TMDB→AniList mapping and 5 servers (hindi, satoru, miko, pahe, anya)",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
+        "movie",
         "tv"
       ],
       "filename": "providers/vidnest-anime.js",
@@ -416,7 +417,7 @@
         "ja"
       ],
       "limited": true,
-      "notes": "Uses AniList IDs. Supports sub/dub selection."
+      "notes": "Automatically maps TMDB IDs to AniList. Supports sub/dub."
     }
   ]
 }
