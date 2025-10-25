@@ -281,22 +281,12 @@ function processVidnestResponse(data, serverName, mediaInfo, seasonNum, episodeN
                 mediaTitle = `${mediaInfo.title} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`;
             }
             
-            // Create headers with referer if available
-            let headers = { ...PLAYBACK_HEADERS };
-            if (source.headers && source.headers.Referer) {
-                headers.Referer = source.headers.Referer;
-            } else {
-                // Default referer for vidnest streams
-                headers.Referer = 'https://vidnest.fun/';
-            }
-            
             streams.push({
                 name: `Vidnest ${serverName.charAt(0).toUpperCase() + serverName.slice(1)}${labelInfo}${languageInfo} - ${quality}`,
                 title: mediaTitle,
                 url: videoUrl,
                 quality: quality,
                 size: 'Unknown',
-                headers: headers,
                 provider: 'vidnest'
             });
             
@@ -402,7 +392,7 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                         // Validate all streams in parallel
                         console.log(`[Vidnest] Validating ${uniqueStreams.length} streams...`);
                         const validationPromises = uniqueStreams.map(stream => 
-                            validateStreamUrl(stream.url, stream.headers)
+                            validateStreamUrl(stream.url, PLAYBACK_HEADERS)
                                 .then(isValid => ({ stream, isValid }))
                         );
                         
