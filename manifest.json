@@ -418,6 +418,27 @@
       ],
       "limited": true,
       "notes": "Automatically maps TMDB IDs to AniList. Supports sub/dub."
+    },
+    {
+      "id": "vidrock",
+      "name": "Vidrock",
+      "description": "Vidrock streaming with AES-CBC encrypted sources",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/vidrock.js",
+      "enabled": true,
+      "formats": [
+        "mp4",
+        "m3u8"
+      ],
+      "logo": "https://vidrock.net/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
