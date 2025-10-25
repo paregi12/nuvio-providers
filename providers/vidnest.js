@@ -22,6 +22,19 @@ const WORKING_HEADERS = {
     'DNT': '1'
 };
 
+// Headers for stream playback (separate from API headers)
+const PLAYBACK_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+    'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'identity',
+    'Connection': 'keep-alive',
+    'Sec-Fetch-Dest': 'video',
+    'Sec-Fetch-Mode': 'no-cors',
+    'Sec-Fetch-Site': 'cross-site',
+    'DNT': '1'
+};
+
 // React Native-safe Base64 utilities (no Buffer dependency)
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
 
@@ -103,7 +116,26 @@ function decryptAesGcm(encryptedB64, passphraseB64) {
     });
 }
 
-
+// Validate stream URL accessibility
+function validateStreamUrl(url, headers) {
+    console.log(`[Vidnest] Validating stream URL: ${url.substring(0, 60)}...`);
+    
+    return fetch(url, {
+        method: 'HEAD',
+        headers: headers,
+        timeout: 5000
+    })
+    .then(response => {
+        // Accept 200 OK, 206 Partial Content, or 302 redirects
+        const isValid = response.ok || response.status === 206 || response.status === 302;
+        console.log(`[Vidnest] URL validation result: ${response.status} - ${isValid ? 'VALID' : 'INVALID'}`);
+        return isValid;
+    })
+    .catch(error => {
+        console.log(`[Vidnest] URL validation failed: ${error.message}`);
+        return false;
+    });
+}
 
 // Helper function to make HTTP requests
 function makeRequest(url, options = {}) {
@@ -250,9 +282,12 @@ function processVidnestResponse(data, serverName, mediaInfo, seasonNum, episodeN
             }
             
             // Create headers with referer if available
-            let headers = { ...WORKING_HEADERS };
+            let headers = { ...PLAYBACK_HEADERS };
             if (source.headers && source.headers.Referer) {
                 headers.Referer = source.headers.Referer;
+            } else {
+                // Default referer for vidnest streams
+                headers.Referer = 'https://vidnest.fun/';
             }
             
             streams.push({
@@ -364,7 +399,22 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                             }
                         });
                         
-                        // Sort streams by quality (highest first)
+                        // Validate all streams in parallel
+                        console.log(`[Vidnest] Validating ${uniqueStreams.length} streams...`);
+                        const validationPromises = uniqueStreams.map(stream => 
+                            validateStreamUrl(stream.url, stream.headers)
+                                .then(isValid => ({ stream, isValid }))
+                        );
+                        
+                        return Promise.all(validationPromises)
+                            .then(function(results) {
+                                const validStreams = results
+                                    .filter(r => r.isValid)
+                                    .map(r => r.stream);
+                                
+                                console.log(`[Vidnest] Filtered ${uniqueStreams.length - validStreams.length} broken links`);
+                                
+                                // Sort streams by quality (highest first)
                         const getQualityValue = (quality) => {
                             const q = quality.toLowerCase().replace(/p$/, ''); // Remove trailing 'p'
                             
@@ -390,14 +440,15 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                             return 1;
                         };
                         
-                        uniqueStreams.sort((a, b) => {
-                            const qualityA = getQualityValue(a.quality);
-                            const qualityB = getQualityValue(b.quality);
-                            return qualityB - qualityA;
-                        });
-                        
-                        console.log(`[Vidnest] Total streams found: ${uniqueStreams.length}`);
-                        resolve(uniqueStreams);
+                                validStreams.sort((a, b) => {
+                                    const qualityA = getQualityValue(a.quality);
+                                    const qualityB = getQualityValue(b.quality);
+                                    return qualityB - qualityA;
+                                });
+                                
+                                console.log(`[Vidnest] Total valid streams found: ${validStreams.length}`);
+                                resolve(validStreams);
+                            });
                     });
             })
             .catch(function(error) {
