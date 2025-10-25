@@ -22,19 +22,11 @@ const WORKING_HEADERS = {
     'DNT': '1'
 };
 
-// Headers for stream playback (separate from API headers)
+// Minimal headers for stream playback (only essential headers)
 const PLAYBACK_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
-    'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'identity',
     'Referer': 'https://vidrock.net/',
-    'Origin': 'https://vidrock.net',
-    'Connection': 'keep-alive',
-    'Sec-Fetch-Dest': 'video',
-    'Sec-Fetch-Mode': 'no-cors',
-    'Sec-Fetch-Site': 'cross-site',
-    'DNT': '1'
+    'Origin': 'https://vidrock.net'
 };
 
 // React Native-safe Base64 utilities (no Buffer dependency)
