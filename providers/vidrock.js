@@ -142,20 +142,21 @@ function urlEncode(str) {
 // Validate stream URL accessibility
 function validateStreamUrl(url, headers) {
     console.log(`[Vidrock] Validating stream URL: ${url.substring(0, 60)}...`);
+    console.log(`[Vidrock] Using headers: ${headers && Object.keys(headers).length > 0 ? 'YES' : 'NO'}`);
     
     return fetch(url, {
         method: 'HEAD',
         headers: headers,
-        timeout: 5000
+        timeout: 10000
     })
     .then(response => {
         // Accept 200 OK, 206 Partial Content, or 302 redirects
         const isValid = response.ok || response.status === 206 || response.status === 302;
-        console.log(`[Vidrock] URL validation result: ${response.status} - ${isValid ? 'VALID' : 'INVALID'}`);
+        console.log(`[Vidrock] URL validation result: ${response.status} - ${isValid ? 'VALID' : 'INVALID'} - ${url.substring(0, 40)}...`);
         return isValid;
     })
     .catch(error => {
-        console.log(`[Vidrock] URL validation failed: ${error.message}`);
+        console.log(`[Vidrock] URL validation failed: ${error.message} - ${url.substring(0, 40)}...`);
         return false;
     });
 }
@@ -243,6 +244,11 @@ function needsHeaders(serverName, url) {
     
     // Servers that showed 403 errors need headers
     if (serverName === 'Atlas' && url.includes('hls1.vdrk.site')) {
+        return true;
+    }
+    
+    // Luna server needs headers (cdn.niggaflix.xyz returns 403 without headers)
+    if (serverName === 'Luna' && url.includes('cdn.niggaflix.xyz')) {
         return true;
     }
     
@@ -480,56 +486,41 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                     }
                 });
                 
-                // Validate all streams in parallel
-                console.log(`[Vidrock] Validating ${uniqueStreams.length} streams...`);
-                const validationPromises = uniqueStreams.map(stream => 
-                    validateStreamUrl(stream.url, PLAYBACK_HEADERS)
-                        .then(isValid => ({ stream, isValid }))
-                );
+                console.log(`[Vidrock] Total streams found: ${uniqueStreams.length}`);
                 
-                return Promise.all(validationPromises)
-                    .then(function(results) {
-                        const validStreams = results
-                            .filter(r => r.isValid)
-                            .map(r => r.stream);
-                        
-                        console.log(`[Vidrock] Filtered ${uniqueStreams.length - validStreams.length} broken links`);
-                        
-                        // Sort streams by quality (highest first)
-                        const getQualityValue = (quality) => {
-                            const q = quality.toLowerCase().replace(/p$/, ''); // Remove trailing 'p'
-                            
-                            // Handle specific quality names
-                            if (q === '4k' || q === '2160') return 2160;
-                            if (q === '1440') return 1440;
-                            if (q === '1080') return 1080;
-                            if (q === '720') return 720;
-                            if (q === '480') return 480;
-                            if (q === '360') return 360;
-                            if (q === '240') return 240;
-                            
-                            // Handle unknown quality (put at end)
-                            if (q === 'unknown') return 0;
-                            
-                            // Try to parse as number
-                            const numQuality = parseInt(q);
-                            if (!isNaN(numQuality) && numQuality > 0) {
-                                return numQuality;
-                            }
-                            
-                            // Default for unrecognized qualities
-                            return 1;
-                        };
-                        
-                        validStreams.sort((a, b) => {
-                            const qualityA = getQualityValue(a.quality);
-                            const qualityB = getQualityValue(b.quality);
-                            return qualityB - qualityA;
-                        });
-                        
-                        console.log(`[Vidrock] Total valid streams found: ${validStreams.length}`);
-                        resolve(validStreams);
-                    });
+                // Sort streams by quality (highest first)
+                const getQualityValue = (quality) => {
+                    const q = quality.toLowerCase().replace(/p$/, ''); // Remove trailing 'p'
+                    
+                    // Handle specific quality names
+                    if (q === '4k' || q === '2160') return 2160;
+                    if (q === '1440') return 1440;
+                    if (q === '1080') return 1080;
+                    if (q === '720') return 720;
+                    if (q === '480') return 480;
+                    if (q === '360') return 360;
+                    if (q === '240') return 240;
+                    
+                    // Handle unknown quality (put at end)
+                    if (q === 'unknown') return 0;
+                    
+                    // Try to parse as number
+                    const numQuality = parseInt(q);
+                    if (!isNaN(numQuality) && numQuality > 0) {
+                        return numQuality;
+                    }
+                    
+                    // Default for unrecognized qualities
+                    return 1;
+                };
+                
+                uniqueStreams.sort((a, b) => {
+                    const qualityA = getQualityValue(a.quality);
+                    const qualityB = getQualityValue(b.quality);
+                    return qualityB - qualityA;
+                });
+                
+                resolve(uniqueStreams);
             })
             .catch(function(error) {
                 console.error(`[Vidrock] Error fetching media details: ${error.message}`);
