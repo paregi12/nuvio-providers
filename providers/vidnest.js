@@ -79,42 +79,64 @@ function atob(str) {
     return base64ToBytes(str).map(byte => String.fromCharCode(byte)).join('');
 }
 
-// AES-GCM Decryption using external service (similar to other providers)
+// AES-GCM Decryption using crypto-js (React Native compatible)
 function decryptAesGcm(encryptedB64, passphraseB64) {
-    console.log('[Vidnest] Starting AES-GCM decryption...');
+    console.log('[Vidnest] Starting AES-GCM decryption with crypto-js...');
     
-    // Use external decryption service similar to other providers
-    return fetch('https://enc-dec.app/api/dec-vidnest', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json',
-            'Accept-Language': 'en-US,en;q=0.9'
-        },
-        body: JSON.stringify({ 
-            text: encryptedB64,
-            key: passphraseB64
-        })
-    }).then(function(response) {
-        if (!response.ok) {
-            throw new Error(`Decryption API error: ${response.status} ${response.statusText}`);
+    try {
+        // Import crypto-js from sandbox
+        const CryptoJS = require('crypto-js');
+        
+        // Base64 decode encrypted data and key
+        const encryptedBytes = base64ToBytes(encryptedB64);
+        const keyBytes = base64ToBytes(passphraseB64).slice(0, 32); // Take first 32 bytes
+        
+        console.log(`[Vidnest] Encrypted data length: ${encryptedBytes.length} bytes`);
+        console.log(`[Vidnest] Key length: ${keyBytes.length} bytes`);
+        
+        // Extract components (AES-GCM format: IV + ciphertext + auth tag)
+        const iv = encryptedBytes.slice(0, 12); // 12-byte IV for GCM
+        const ciphertext = encryptedBytes.slice(12, -16); // Middle part
+        const tag = encryptedBytes.slice(-16); // Last 16 bytes for auth tag
+        
+        console.log(`[Vidnest] IV length: ${iv.length}, Ciphertext length: ${ciphertext.length}, Tag length: ${tag.length}`);
+        
+        // Convert to CryptoJS format
+        const key = CryptoJS.lib.WordArray.create(keyBytes);
+        const ivWordArray = CryptoJS.lib.WordArray.create(iv);
+        const ciphertextWordArray = CryptoJS.lib.WordArray.create(ciphertext);
+        const tagWordArray = CryptoJS.lib.WordArray.create(tag);
+        
+        // Combine ciphertext and tag for GCM
+        const combined = ciphertextWordArray.concat(tagWordArray);
+        
+        // Decrypt using AES-GCM
+        const decrypted = CryptoJS.AES.decrypt(
+            { ciphertext: combined },
+            key,
+            { 
+                iv: ivWordArray, 
+                mode: CryptoJS.mode.GCM, 
+                padding: CryptoJS.pad.NoPadding 
+            }
+        );
+        
+        const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
+        
+        if (!decryptedText) {
+            throw new Error('Decryption resulted in empty string');
         }
-        return response.json();
-    }).then(function(decryptedResponse) {
-        if (decryptedResponse.status === 200 && decryptedResponse.result) {
-            console.log(`[Vidnest] Successfully decrypted response`);
-            return decryptedResponse.result;
-        } else {
-            throw new Error(`Decryption failed: ${decryptedResponse.error || 'Unknown error'}`);
-        }
-    }).catch(function(error) {
-        console.error(`[Vidnest] Decryption failed: ${error.message}`);
+        
+        console.log('[Vidnest] Successfully decrypted response with crypto-js');
+        return decryptedText;
+        
+    } catch (error) {
+        console.error(`[Vidnest] Crypto-js decryption failed: ${error.message}`);
         
         // Fallback: try manual decryption
         console.log('[Vidnest] Attempting manual decryption fallback...');
         return manualDecrypt(encryptedB64, passphraseB64);
-    });
+    }
 }
 
 // Manual decryption fallback using proper AES-GCM
