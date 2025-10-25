@@ -110,137 +110,31 @@ function atob(str) {
     return base64ToBytes(str).map(byte => String.fromCharCode(byte)).join('');
 }
 
-// AES-GCM Decryption using crypto-js (React Native compatible)
+// AES-GCM Decryption using server (React Native compatible)
 function decryptAesGcm(encryptedB64, passphraseB64) {
-    console.log('[VidnestAnime] Starting AES-GCM decryption with crypto-js...');
+    console.log('[VidnestAnime] Starting AES-GCM decryption via server...');
     
-    try {
-        // Import crypto-js from sandbox
-        const CryptoJS = require('crypto-js');
-        
-        // Base64 decode encrypted data and key
-        const encryptedBytes = base64ToBytes(encryptedB64);
-        const keyBytes = base64ToBytes(passphraseB64).slice(0, 32); // Take first 32 bytes
-        
-        console.log(`[VidnestAnime] Encrypted data length: ${encryptedBytes.length} bytes`);
-        console.log(`[VidnestAnime] Key length: ${keyBytes.length} bytes`);
-        
-        // Extract components (AES-GCM format: IV + ciphertext + auth tag)
-        const iv = encryptedBytes.slice(0, 12); // 12-byte IV for GCM
-        const ciphertext = encryptedBytes.slice(12, -16); // Middle part
-        const tag = encryptedBytes.slice(-16); // Last 16 bytes for auth tag
-        
-        console.log(`[VidnestAnime] IV length: ${iv.length}, Ciphertext length: ${ciphertext.length}, Tag length: ${tag.length}`);
-        
-        // Convert to CryptoJS format
-        const key = CryptoJS.lib.WordArray.create(keyBytes);
-        const ivWordArray = CryptoJS.lib.WordArray.create(iv);
-        const ciphertextWordArray = CryptoJS.lib.WordArray.create(ciphertext);
-        const tagWordArray = CryptoJS.lib.WordArray.create(tag);
-        
-        // Combine ciphertext and tag for GCM
-        const combined = ciphertextWordArray.concat(tagWordArray);
-        
-        // Decrypt using AES-GCM
-        const decrypted = CryptoJS.AES.decrypt(
-            { ciphertext: combined },
-            key,
-            { 
-                iv: ivWordArray, 
-                mode: CryptoJS.mode.GCM, 
-                padding: CryptoJS.pad.NoPadding 
-            }
-        );
-        
-        const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
-        
-        if (!decryptedText) {
-            throw new Error('Decryption resulted in empty string');
-        }
-        
-        console.log('[VidnestAnime] Successfully decrypted response with crypto-js');
-        return decryptedText;
-        
-    } catch (error) {
-        console.error(`[VidnestAnime] Crypto-js decryption failed: ${error.message}`);
-        
-        // Fallback: try manual decryption
-        console.log('[VidnestAnime] Attempting manual decryption fallback...');
-        return manualDecrypt(encryptedB64, passphraseB64);
-    }
-}
-
-// Manual decryption fallback using proper AES-GCM
-function manualDecrypt(encryptedB64, passphraseB64) {
-    try {
-        console.log('[VidnestAnime] Manual AES-GCM decryption fallback...');
-        
-        // Base64 decode encrypted data and key
-        const encryptedBytes = base64ToBytes(encryptedB64);
-        const keyBytes = base64ToBytes(passphraseB64).slice(0, 32); // Take first 32 bytes
-        
-        console.log(`[VidnestAnime] Encrypted data length: ${encryptedBytes.length} bytes`);
-        console.log(`[VidnestAnime] Key length: ${keyBytes.length} bytes`);
-        
-        // Extract components (AES-GCM format: IV + ciphertext + auth tag)
-        const iv = encryptedBytes.slice(0, 12); // 12-byte IV for GCM
-        const ciphertext = encryptedBytes.slice(12, -16); // Middle part
-        const tag = encryptedBytes.slice(-16); // Last 16 bytes for auth tag
-        
-        console.log(`[VidnestAnime] IV length: ${iv.length}, Ciphertext length: ${ciphertext.length}, Tag length: ${tag.length}`);
-        
-        // Try to use Web Crypto API if available (for browsers)
-        if (typeof crypto !== 'undefined' && crypto.subtle) {
-            console.log('[VidnestAnime] Attempting Web Crypto API decryption...');
-            return webCryptoDecrypt(keyBytes, iv, ciphertext, tag);
-        }
-        
-        // Fallback: return empty result for now
-        console.log('[VidnestAnime] No suitable decryption method available');
-        throw new Error('Unable to decrypt - no suitable method available');
-        
-    } catch (error) {
-        console.error(`[VidnestAnime] Manual decryption error: ${error.message}`);
+    return fetch('https://aesdec.nuvioapp.space/decrypt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            encryptedData: encryptedB64,
+            passphrase: passphraseB64
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) throw new Error(data.error);
+        console.log('[VidnestAnime] Server decryption successful');
+        return data.decrypted;
+    })
+    .catch(error => {
+        console.error(`[VidnestAnime] Server decryption failed: ${error.message}`);
         throw error;
-    }
-}
-
-// Web Crypto API decryption (for browsers)
-function webCryptoDecrypt(keyBytes, iv, ciphertext, tag) {
-    return new Promise((resolve, reject) => {
-        try {
-            // Import the key
-            crypto.subtle.importKey(
-                'raw',
-                keyBytes,
-                { name: 'AES-GCM' },
-                false,
-                ['decrypt']
-            ).then(function(key) {
-                // Combine ciphertext and tag for GCM
-                const combinedCiphertext = new Uint8Array(ciphertext.length + tag.length);
-                combinedCiphertext.set(ciphertext);
-                combinedCiphertext.set(tag, ciphertext.length);
-                
-                // Decrypt
-                return crypto.subtle.decrypt(
-                    { name: 'AES-GCM', iv: iv },
-                    key,
-                    combinedCiphertext
-                );
-            }).then(function(decryptedBuffer) {
-                const decryptedText = new TextDecoder().decode(decryptedBuffer);
-                console.log('[VidnestAnime] Web Crypto API decryption successful');
-                resolve(decryptedText);
-            }).catch(function(error) {
-                console.error(`[VidnestAnime] Web Crypto API decryption failed: ${error.message}`);
-                reject(error);
-            });
-        } catch (error) {
-            reject(error);
-        }
     });
 }
+
+
 
 // Helper function to make HTTP requests
 function makeRequest(url, options = {}) {
