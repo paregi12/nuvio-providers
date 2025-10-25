@@ -85,7 +85,7 @@ function bytesToBase64(bytes) {
 function encryptAesCbc(text, passphrase) {
     console.log('[Vidrock] Starting AES-CBC encryption via server...');
     
-    return fetch('http://localhost:3050/encrypt', {
+    return fetch('https://aesdec.nuvioapp.space/encrypt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
