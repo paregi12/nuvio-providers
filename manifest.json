@@ -289,7 +289,7 @@
         "tv"
       ],
       "filename": "providers/showbox.js",
-      "enabled": true,
+      "enabled": false,
       "formats": ["mp4","mkv"],
       "logo": "https://www.showbox.media/favicon.ico",
       "contentLanguage": [
