@@ -225,6 +225,21 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                     }
                 }
 
+                // Extract the actual download URL from gamerxyt.com/dl.php?link= URLs
+                if (url.includes('gamerxyt.com/dl.php?link=')) {
+                    console.log(`[MalluMV] 🔍 Processing gamerxyt.com URL: ${url.substring(0, 100)}...`);
+                    const linkMatch = url.match(/gamerxyt\.com\/dl\.php\?link=([^&\s]+)/);
+                    
+                    if (linkMatch && linkMatch[1]) {
+                        const actualUrl = decodeURIComponent(linkMatch[1]);
+                        console.log(`[MalluMV] ✅ Extracted URL from gamerxyt.com: ${actualUrl.substring(0, 80)}...`);
+                        // Recursively resolve the extracted URL to ensure it's fully resolved
+                        return resolveHubCloudUrl(actualUrl);
+                    } else {
+                        console.log(`[MalluMV] ❌ Failed to extract URL from gamerxyt.com link`);
+                    }
+                }
+
                 // If it's a direct Google Drive download URL, it might be final
                 if (url.includes('video-downloads.googleusercontent.com')) {
                     console.log(`[MalluMV] Google Drive download URL found: ${url.substring(0, 50)}...`);
@@ -259,18 +274,106 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                     if (response.status === 200) {
                         console.log(`[MalluMV] Checking for direct URL in response...`);
                         return response.text().then(text => {
-                            // Look for direct download URLs in the response
+                            // Look for "Download Here" button/link (common in .fans/?id= pages)
+                            // Try multiple patterns to catch different HTML structures
+                            const downloadHerePatterns = [
+                                /<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*Download Here/i,
+                                /<a[^>]*>Download Here[^<]*<\/a>/i,
+                                /href=["']([^"']+)["'][^>]*>[^<]*Download Here/i,
+                                /<a[^>]*href=["']([^"']+)["'][^>]*class[^>]*download/i,
+                                /<a[^>]*class[^>]*download[^>]*href=["']([^"']+)["']/i
+                            ];
+                            
+                            for (const pattern of downloadHerePatterns) {
+                                const downloadHereMatch = text.match(pattern);
+                                if (downloadHereMatch) {
+                                    // Extract href from the matched link
+                                    let downloadUrl = null;
+                                    if (downloadHereMatch[1]) {
+                                        downloadUrl = downloadHereMatch[1];
+                                    } else {
+                                        // Try to extract from the full match
+                                        const hrefMatch = downloadHereMatch[0].match(/href=["']([^"']+)["']/i);
+                                        if (hrefMatch && hrefMatch[1]) {
+                                            downloadUrl = hrefMatch[1];
+                                        }
+                                    }
+                                    
+                                    if (downloadUrl && !downloadUrl.startsWith('#') && downloadUrl !== url) {
+                                        console.log(`[MalluMV] Found "Download Here" link: ${downloadUrl.substring(0, 50)}...`);
+                                        // Resolve relative URLs to absolute
+                                        try {
+                                            const absoluteUrl = new URL(downloadUrl, url).href;
+                                            return resolveHubCloudUrl(absoluteUrl);
+                                        } catch (e) {
+                                            return resolveHubCloudUrl(downloadUrl);
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Look for any download button/link with href
+                            const downloadLinkMatch = text.match(/<a[^>]*href=["']([^"']+)["'][^>]*>.*?[Dd]ownload/i);
+                            if (downloadLinkMatch && downloadLinkMatch[1]) {
+                                const downloadUrl = downloadLinkMatch[1];
+                                // Skip if it's a fragment, relative path without extension, or the same URL
+                                if (!downloadUrl.startsWith('#') && 
+                                    (downloadUrl.startsWith('http') || downloadUrl.includes('/') || downloadUrl.includes('.'))) {
+                                    console.log(`[MalluMV] Found download link: ${downloadUrl.substring(0, 50)}...`);
+                                    try {
+                                        const absoluteUrl = new URL(downloadUrl, url).href;
+                                        return resolveHubCloudUrl(absoluteUrl);
+                                    } catch (e) {
+                                        return resolveHubCloudUrl(downloadUrl);
+                                    }
+                                }
+                            }
+
+                            // Look for meta refresh redirects
+                            const metaRefreshMatch = text.match(/<meta[^>]*http-equiv=["']refresh["'][^>]*content=["'][^"']*url=([^"';]+)/i);
+                            if (metaRefreshMatch && metaRefreshMatch[1]) {
+                                const redirectUrl = metaRefreshMatch[1].trim();
+                                console.log(`[MalluMV] Found meta refresh redirect: ${redirectUrl.substring(0, 50)}...`);
+                                try {
+                                    const absoluteUrl = new URL(redirectUrl, url).href;
+                                    return resolveHubCloudUrl(absoluteUrl);
+                                } catch (e) {
+                                    return resolveHubCloudUrl(redirectUrl);
+                                }
+                            }
+
+                            // Look for JavaScript redirects (window.location, location.href, etc.)
+                            const jsRedirectMatch = text.match(/(?:window\.location|location\.href|location\.replace)\s*[=:]\s*["']([^"']+)["']/i);
+                            if (jsRedirectMatch && jsRedirectMatch[1]) {
+                                const redirectUrl = jsRedirectMatch[1];
+                                console.log(`[MalluMV] Found JavaScript redirect: ${redirectUrl.substring(0, 50)}...`);
+                                try {
+                                    const absoluteUrl = new URL(redirectUrl, url).href;
+                                    return resolveHubCloudUrl(absoluteUrl);
+                                } catch (e) {
+                                    return resolveHubCloudUrl(redirectUrl);
+                                }
+                            }
+
+                            // Look for direct download URLs in the response (R2 Cloudflare)
                             const directUrlMatch = text.match(/(https?:\/\/[^"'\s]+\.r2\.cloudflarestorage\.com[^"'\s]*)/);
                             if (directUrlMatch) {
-                                console.log(`[MalluMV] Found direct URL in response: ${directUrlMatch[1].substring(0, 50)}...`);
+                                console.log(`[MalluMV] Found direct R2 URL in response: ${directUrlMatch[1].substring(0, 50)}...`);
                                 return directUrlMatch[1];
                             }
 
-                            // Look for other direct download patterns
+                            // Look for other direct download patterns (video files)
                             const otherDirectMatch = text.match(/(https?:\/\/[^"'\s]+\/[^"'\s]*\.(mkv|mp4|avi|m4v)[^"'\s]*)/i);
                             if (otherDirectMatch) {
                                 console.log(`[MalluMV] Found direct file URL: ${otherDirectMatch[1].substring(0, 50)}...`);
                                 return otherDirectMatch[1];
+                            }
+
+                            // Look for Google Drive, Pixeldrain, or other cloud storage URLs
+                            const cloudStorageMatch = text.match(/(https?:\/\/[^"'\s]*(?:video-downloads\.googleusercontent\.com|pixeldrain\.(?:net|dev)|sharepoint\.com|onedrive\.live\.com)[^"'\s]*)/i);
+                            if (cloudStorageMatch) {
+                                console.log(`[MalluMV] Found cloud storage URL: ${cloudStorageMatch[1].substring(0, 50)}...`);
+                                return resolveHubCloudUrl(cloudStorageMatch[1]);
                             }
 
                             // Return original URL if we can't find a direct URL
@@ -295,15 +398,17 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                 const pd = buttonLink.match(/pixeldrain\.(?:net|dev)\/u\/([a-zA-Z0-9]+)/);
                 if (pd && pd[1]) buttonLink = 'https://pixeldrain.net/api/file/' + pd[1];
 
-                // Handle intermediate HubCloud URLs (.fans/?id=, .workers.dev/?id=, and Google Drive redirects)
-                if (buttonLink.includes('.fans/?id=') || buttonLink.includes('.workers.dev/?id=') || buttonLink.includes('360news4u.net/dl.php')) {
+                // Handle intermediate HubCloud URLs (.fans/?id=, .workers.dev/?id=, and redirect URLs)
+                if (buttonLink.includes('.fans/?id=') || buttonLink.includes('.workers.dev/?id=') || 
+                    buttonLink.includes('360news4u.net/dl.php') || buttonLink.includes('gamerxyt.com/dl.php')) {
                     return resolveHubCloudUrl(buttonLink)
                         .then(resolvedUrl => {
                             // If resolution failed and we still have an intermediate URL, try one more time
                             if (resolvedUrl.includes('.workers.dev/?id=') &&
                                 !resolvedUrl.includes('r2.cloudflarestorage.com') &&
                                 !resolvedUrl.includes('video-downloads.googleusercontent.com') &&
-                                !resolvedUrl.includes('360news4u.net/dl.php')) {
+                                !resolvedUrl.includes('360news4u.net/dl.php') &&
+                                !resolvedUrl.includes('gamerxyt.com/dl.php')) {
                                 console.log(`[MalluMV] Second attempt to resolve: ${resolvedUrl.substring(0, 50)}...`);
                                 return resolveHubCloudUrl(resolvedUrl);
                             }
