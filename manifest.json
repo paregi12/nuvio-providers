@@ -124,7 +124,7 @@
       "filename": "providers/hdhub4u.js",
       "enabled": true,
       "formats": ["mkv"],
-      "logo": "https://hdhub4u.cologne/wp-content/uploads/2021/05/cropped-cropped-1-1-1-2-1-32x32.png",
+      "logo": "https://hdhub4u.pictures/wp-content/uploads/2021/05/cropped-cropped-1-1-1-2-1-32x32.png",
       "contentLanguage": [
         "en",
         "hi"
@@ -435,7 +435,7 @@
         "mp4",
         "m3u8"
       ],
-      "logo": "https://vidrock.net/favicon.ico",
+      "logo": "https://vidrock.net/Rock.png",
       "contentLanguage": [
         "en"
       ]
