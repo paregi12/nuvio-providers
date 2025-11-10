@@ -439,6 +439,27 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "mapple",
+      "name": "Mapple",
+      "description": "Mapple streaming with multiple sources (Mapple 4K, Sakura, Pinecone, Oak, Willow)",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/mapple.js",
+      "enabled": true,
+      "formats": [
+        "mp4",
+        "m3u8"
+      ],
+      "logo": "https://mapple.uk/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
