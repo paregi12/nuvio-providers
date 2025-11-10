@@ -156,6 +156,21 @@ function getQualityFromStream(stream) {
 function resolveM3U8(url, sourceName) {
     console.log(`[Mapple] Resolving M3U8 playlist for ${sourceName}...`);
 
+    // Special handling for Sakura - return master URL directly with "Auto" quality
+    if (sourceName === 'sakura') {
+        console.log(`[Mapple] Sakura source detected - returning master URL with Auto quality`);
+        const capitalizedSource = sourceName.charAt(0).toUpperCase() + sourceName.slice(1);
+        return Promise.resolve([{
+            name: `Mapple ${capitalizedSource} - Auto`,
+            title: "", // Will be filled by caller
+            url: url,
+            quality: 'Auto',
+            size: "Unknown",
+            headers: WORKING_HEADERS,
+            provider: "mapple"
+        }]);
+    }
+
     return fetch(url, {
         method: 'GET',
         headers: WORKING_HEADERS
@@ -196,7 +211,7 @@ function resolveM3U8(url, sourceName) {
 
                 // Sort by quality (highest first)
                 resolvedStreams.sort(function(a, b) {
-                    const qualityOrder = { '4K': 4, '1440p': 3, '1080p': 2, '720p': 1, '480p': 0, '360p': -1, '240p': -2, 'Unknown': -3 };
+                    const qualityOrder = { 'Auto': 5, '4K': 4, '1440p': 3, '1080p': 2, '720p': 1, '480p': 0, '360p': -1, '240p': -2, 'Unknown': -3 };
                     return (qualityOrder[b.quality] || -3) - (qualityOrder[a.quality] || -3);
                 });
 
@@ -441,7 +456,7 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
                 });
 
                 // Sort streams by quality (highest first)
-                const qualityOrder = ['4K', '1440p', '1080p', '720p', '480p', '360p', '240p', 'Unknown'];
+                const qualityOrder = ['Auto', '4K', '1440p', '1080p', '720p', '480p', '360p', '240p', 'Unknown'];
                 allStreams.sort(function(a, b) {
                     const aIndex = qualityOrder.indexOf(a.quality);
                     const bIndex = qualityOrder.indexOf(b.quality);
