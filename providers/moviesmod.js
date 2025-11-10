@@ -212,15 +212,17 @@ async function extractDownloadLinks(moviePageUrl) {
           }
         });
       } else if (header.is('h4')) {
-        // Movie Logic
-        const linkElement = blockContent.find('a[href*="modrefer.in"]').first();
+        // Movie Logic - Updated for new maxbutton structure
+        const linkElement = blockContent.find('a.maxbutton-download-links, .maxbutton').first();
         if (linkElement.length > 0) {
           const link = linkElement.attr('href');
           const cleanQuality = extractQuality(headerText);
-          links.push({
-            quality: cleanQuality,
-            url: link
-          });
+          if (link && cleanQuality) {
+            links.push({
+              quality: cleanQuality,
+              url: link
+            });
+          }
         }
       }
     });
@@ -233,12 +235,70 @@ async function extractDownloadLinks(moviePageUrl) {
   }
 }
 
-// Resolve intermediate links
+// Resolve intermediate links (dramadrip, episodes.modpro.blog, links.modpro.blog, posts.modpro.blog, modrefer.in)
 async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
   try {
     const urlObject = new URL(initialUrl);
 
-    if (urlObject.hostname.includes('modrefer.in')) {
+    // Handle links.modpro.blog and posts.modpro.blog (new maxbutton links)
+    if (urlObject.hostname.includes('links.modpro.blog') || urlObject.hostname.includes('posts.modpro.blog')) {
+      const response = await makeRequest(initialUrl, { headers: { 'Referer': refererUrl } });
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      const finalLinks = [];
+
+      // Look for driveseed.org, tech.unblockedgames.world links in entry content
+      $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"], .entry-content a[href*="tech.examzculture.in"]').each((i, el) => {
+        const link = $(el).attr('href');
+        const text = $(el).text().trim();
+        if (link && text && !text.toLowerCase().includes('batch')) {
+          finalLinks.push({
+            server: text.replace(/\s+/g, ' '),
+            url: link,
+          });
+        }
+      });
+
+      // If no links found in entry-content, try broader search
+      if (finalLinks.length === 0) {
+        $('a[href*="driveseed.org"], a[href*="tech.unblockedgames.world"], a[href*="tech.creativeexpressionsblog.com"], a[href*="tech.examzculture.in"]').each((i, el) => {
+          const link = $(el).attr('href');
+          const text = $(el).text().trim();
+          if (link && text && !text.toLowerCase().includes('batch')) {
+            finalLinks.push({
+              server: text.replace(/\s+/g, ' ') || 'Download Link',
+              url: link,
+            });
+          }
+        });
+      }
+
+      console.log(`[MoviesMod] Found ${finalLinks.length} links from ${urlObject.hostname}`);
+      return finalLinks;
+    }
+
+    // Handle episodes.modpro.blog (for TV shows)
+    else if (urlObject.hostname.includes('episodes.modpro.blog')) {
+      const response = await makeRequest(initialUrl, { headers: { 'Referer': refererUrl } });
+      const html = await response.text();
+      const $ = cheerio.load(html);
+      const finalLinks = [];
+
+      $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"], .entry-content a[href*="tech.examzculture.in"]').each((i, el) => {
+        const link = $(el).attr('href');
+        const text = $(el).text().trim();
+        if (link && text && !text.toLowerCase().includes('batch')) {
+          finalLinks.push({
+            server: text.replace(/\s+/g, ' '),
+            url: link,
+          });
+        }
+      });
+      return finalLinks;
+    }
+
+    // Handle modrefer.in (legacy)
+    else if (urlObject.hostname.includes('modrefer.in')) {
       const encodedUrl = urlObject.searchParams.get('url');
       if (!encodedUrl) {
         console.error('[MoviesMod] Could not find encoded URL in modrefer.in link.');
@@ -828,8 +888,69 @@ async function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episode
       return [];
     }
 
-    // Process links to get final streams - using Promise.all like UHDMovies
-    const streamPromises = relevantLinks.map(link => processDownloadLink(link, selectedResult, mediaType, episodeNum));
+    // Process links to get final streams - resolve intermediate links first
+    const streamPromises = relevantLinks.map(async (link) => {
+      try {
+        // Resolve intermediate link (modpro.blog, modrefer.in, etc.)
+        const finalLinks = await resolveIntermediateLink(link.url, selectedResult.url, link.quality);
+        if (!finalLinks || finalLinks.length === 0) {
+          console.log(`[MoviesMod] No final links found for ${link.quality}`);
+          return null;
+        }
+
+        // Process each final link (driveseed.org or tech.unblockedgames.world)
+        const processedStreams = [];
+        for (const targetLink of finalLinks) {
+          let currentUrl = targetLink.url;
+
+          // Handle SID links (tech.unblockedgames.world)
+          if (currentUrl.includes('tech.unblockedgames.world') || 
+              currentUrl.includes('tech.creativeexpressionsblog.com') || 
+              currentUrl.includes('tech.examzculture.in')) {
+            const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
+            if (!resolvedUrl) continue;
+            currentUrl = resolvedUrl;
+          }
+
+          // Handle driveseed.org links
+          if (currentUrl && currentUrl.includes('driveseed.org')) {
+            const driveseedInfo = await resolveDriveseedLink(currentUrl);
+            if (driveseedInfo && driveseedInfo.downloadOptions && driveseedInfo.downloadOptions.length > 0) {
+              // Try Resume Cloud first
+              const resumeCloud = driveseedInfo.downloadOptions.find(opt => opt.type === 'resume');
+              if (resumeCloud) {
+                const finalUrl = await resolveResumeCloudLink(resumeCloud.url);
+                if (finalUrl && await validateVideoUrl(finalUrl)) {
+                  const mediaTitle = mediaType === 'tv' && seasonNum && episodeNum
+                    ? `${selectedResult.title} S${seasonNum.toString().padStart(2, '0')}E${episodeNum.toString().padStart(2, '0')}`
+                    : selectedResult.title;
+
+                  processedStreams.push({
+                    name: `MoviesMod ${targetLink.server || ''} - ${link.quality}`.trim(),
+                    title: mediaTitle,
+                    url: finalUrl,
+                    quality: link.quality,
+                    size: driveseedInfo.size || 'Unknown',
+                    headers: {
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                      'Referer': 'https://driveseed.org/'
+                    },
+                    provider: 'moviesmod'
+                  });
+                  break; // Use first successful resolution
+                }
+              }
+            }
+          }
+        }
+
+        return processedStreams.length > 0 ? processedStreams[0] : null;
+      } catch (error) {
+        console.error(`[MoviesMod] Error processing link ${link.quality}: ${error.message}`);
+        return null;
+      }
+    });
+
     const streams = (await Promise.all(streamPromises)).filter(Boolean);
 
     // Sort by quality descending
