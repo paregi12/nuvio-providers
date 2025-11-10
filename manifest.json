@@ -460,6 +460,26 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "cinevibe",
+      "name": "Cinevibe",
+      "description": "Cinevibe (Movies)",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie"
+      ],
+      "filename": "providers/cinevibe.js",
+      "enabled": true,
+      "formats": [
+        "mp4",
+        "m3u8"
+      ],
+      "logo": "https://cinevibe.asia/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
