@@ -68,7 +68,7 @@ function decryptCastle(encryptedB64, securityKeyB64) {
 // Helper function to make HTTP requests
 function makeRequest(url, options = {}) {
     const defaultHeaders = { ...WORKING_HEADERS };
-    
+
     return fetch(url, {
         method: options.method || 'GET',
         headers: { ...defaultHeaders, ...options.headers },
@@ -82,6 +82,35 @@ function makeRequest(url, options = {}) {
         console.error(`[Castle] Request failed for ${url}: ${error.message}`);
         throw error;
     });
+}
+
+// Get quality value for sorting (higher = better quality)
+function getQualityValue(quality) {
+    if (!quality) return 0;
+
+    // Remove common prefixes and clean up
+    const cleanQuality = quality.toString().toLowerCase()
+        .replace(/^(sd|hd|fhd|uhd|4k)\s*/i, '')
+        .replace(/p$/, '')
+        .trim();
+
+    // Handle specific quality names
+    if (cleanQuality === '4k' || cleanQuality === '2160') return 2160;
+    if (cleanQuality === '1440') return 1440;
+    if (cleanQuality === '1080') return 1080;
+    if (cleanQuality === '720') return 720;
+    if (cleanQuality === '480') return 480;
+    if (cleanQuality === '360') return 360;
+    if (cleanQuality === '240') return 240;
+
+    // Try to parse as number
+    const numQuality = parseInt(cleanQuality);
+    if (!isNaN(numQuality) && numQuality > 0) {
+        return numQuality;
+    }
+
+    // Unknown quality goes last
+    return 0;
 }
 
 // Extract cipher from response (can be JSON wrapper or raw base64)
@@ -555,6 +584,14 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
             })
             .then(function(streams) {
                 console.log(`[Castle] Total streams found: ${streams.length}`);
+
+                // Sort streams by quality (highest first)
+                streams.sort(function(a, b) {
+                    const qualityA = getQualityValue(a.quality);
+                    const qualityB = getQualityValue(b.quality);
+                    return qualityB - qualityA; // Higher quality first
+                });
+
                 resolve(streams);
             })
             .catch(function(error) {
