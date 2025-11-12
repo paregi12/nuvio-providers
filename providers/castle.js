@@ -346,12 +346,17 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
                 ? `Castle ${languageInfo} - ${videoQuality}`
                 : `Castle - ${videoQuality}`;
             
+            const sizeValue = video.size;
+            const formattedSize = (typeof sizeValue === 'number' && sizeValue > 0)
+                ? (sizeValue > 1000000000 ? `${(sizeValue / 1000000000).toFixed(2)} GB` : `${(sizeValue / 1000000).toFixed(0)} MB`)
+                : 'Unknown';
+
             streams.push({
                 name: streamName,
                 title: mediaTitle,
                 url: video.url || videoUrl,
                 quality: videoQuality,
-                size: video.size || 'Unknown',
+                size: formattedSize,
                 headers: PLAYBACK_HEADERS,
                 provider: 'castle'
             });
@@ -360,13 +365,19 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
         const streamName = languageInfo
             ? `Castle ${languageInfo} - ${quality}`
             : `Castle - ${quality}`;
-            
+
+        // Try to extract size from response data
+        const sizeValue = data.size;
+        const formattedSize = (typeof sizeValue === 'number' && sizeValue > 0)
+            ? (sizeValue > 1000000000 ? `${(sizeValue / 1000000000).toFixed(2)} GB` : `${(sizeValue / 1000000).toFixed(0)} MB`)
+            : 'Unknown';
+
         streams.push({
             name: streamName,
             title: mediaTitle,
             url: videoUrl,
             quality: quality,
-            size: 'Unknown',
+            size: formattedSize,
             headers: PLAYBACK_HEADERS,
             provider: 'castle'
         });
