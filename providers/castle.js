@@ -341,8 +341,11 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
     // Check if there are multiple quality videos
     if (data.videos && Array.isArray(data.videos)) {
         data.videos.forEach(function(video) {
-            const videoQuality = video.resolutionDescription || video.resolution || quality;
-            const streamName = languageInfo 
+            // Clean up quality to remove SD/HD/FHD prefixes
+            let videoQuality = video.resolutionDescription || video.resolution || quality;
+            videoQuality = videoQuality.replace(/^(SD|HD|FHD)\s+/i, ''); // Remove SD/HD/FHD prefixes
+
+            const streamName = languageInfo
                 ? `Castle ${languageInfo} - ${videoQuality}`
                 : `Castle - ${videoQuality}`;
             
