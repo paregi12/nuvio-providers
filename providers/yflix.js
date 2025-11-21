@@ -270,11 +270,45 @@ function searchYflix(query) {
 
 // Find best matching result based on TMDB title and year
 /**
- * Improved title matching utilities for YFlix
+ * Enhanced title matching utilities for YFlix
  */
 
 /**
- * Normalizes a title for better matching
+ * Creates multiple search query variations for better matching
+ * @param {string} title Original title
+ * @param {number} year Release year
+ * @returns {Array<string>} Array of search queries to try
+ */
+function createSearchQueries(title, year) {
+    const queries = [];
+    const cleanTitle = title.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Primary query with year
+    if (year) {
+        queries.push(`${cleanTitle} ${year}`);
+    }
+
+    // Title without year
+    queries.push(cleanTitle);
+
+    // Title with common variations
+    if (cleanTitle.includes(':')) {
+        queries.push(cleanTitle.split(':')[0].trim());
+    }
+
+    // Remove common suffixes/prefixes
+    const suffixes = [' (tv series)', ' (film)', ' (movie)', ' (series)', ' (tv movie)'];
+    for (const suffix of suffixes) {
+        if (cleanTitle.toLowerCase().endsWith(suffix)) {
+            queries.push(cleanTitle.slice(0, -suffix.length).trim());
+        }
+    }
+
+    return [...new Set(queries)]; // Remove duplicates
+}
+
+/**
+ * Advanced title normalization for better matching
  * @param {string} title The title to normalize
  * @returns {string} Normalized title
  */
@@ -282,20 +316,22 @@ function normalizeTitle(title) {
     if (!title) return '';
 
     return title
-        // Convert to lowercase
+        // Convert to lowercase and normalize unicode
         .toLowerCase()
-        // Remove common articles
-        .replace(/\b(the|a|an)\b/g, '')
-        // Normalize punctuation and spaces
-        .replace(/[:\-_]/g, ' ')
-        .replace(/\s+/g, ' ')
-        // Remove special characters but keep alphanumeric and spaces
-        .replace(/[^\w\s]/g, '')
+        .normalize('NFKD')
+        // Remove common articles and prepositions
+        .replace(/\b(the|a|an|and|or|but|in|on|at|to|for|of|with|by)\b/g, '')
+        // Handle special cases
+        .replace(/\b(part|volume|vol|season|series)\s*\d+/g, '') // Remove "Part 1", "Season 1", etc.
+        .replace(/\(\d{4}\)/g, '') // Remove year in parentheses
+        .replace(/[:\-_]/g, ' ') // Normalize separators
+        .replace(/[^\w\s]/g, '') // Remove special characters
+        .replace(/\s+/g, ' ') // Normalize whitespace
         .trim();
 }
 
 /**
- * Calculates similarity score between two titles
+ * Calculates advanced similarity score between two titles
  * @param {string} title1 First title
  * @param {string} title2 Second title
  * @returns {number} Similarity score (0-1)
@@ -307,23 +343,83 @@ function calculateTitleSimilarity(title1, title2) {
     // Exact match after normalization
     if (norm1 === norm2) return 1.0;
 
-    // Substring matches
-    if (norm1.includes(norm2) || norm2.includes(norm1)) return 0.9;
+    // Substring matches (one contains the other)
+    if (norm1.includes(norm2) || norm2.includes(norm1)) {
+        return Math.min(0.95, 0.8 + (Math.min(norm1.length, norm2.length) / Math.max(norm1.length, norm2.length)) * 0.15);
+    }
 
-    // Word-based similarity
-    const words1 = new Set(norm1.split(/\s+/).filter(w => w.length > 2));
-    const words2 = new Set(norm2.split(/\s+/).filter(w => w.length > 2));
+    // Word-based similarity with position weighting
+    const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
+    const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
 
-    if (words1.size === 0 || words2.size === 0) return 0;
+    if (words1.length === 0 || words2.length === 0) return 0;
 
-    const intersection = new Set([...words1].filter(w => words2.has(w)));
-    const union = new Set([...words1, ...words2]);
+    // Calculate Jaccard similarity
+    const set1 = new Set(words1);
+    const set2 = new Set(words2);
+    const intersection = new Set([...set1].filter(w => set2.has(w)));
+    const union = new Set([...set1, ...set2]);
+    const jaccardScore = intersection.size / union.size;
 
-    return intersection.size / union.size;
+    // Bonus for matching first words (usually most important)
+    let positionBonus = 0;
+    if (words1.length > 0 && words2.length > 0 && words1[0] === words2[0]) {
+        positionBonus = 0.1;
+    }
+
+    // Bonus for longer common sequences
+    const commonSequenceBonus = Math.min(0.1, (intersection.size / Math.min(words1.length, words2.length)) * 0.1);
+
+    return Math.min(1.0, jaccardScore + positionBonus + commonSequenceBonus);
 }
 
 /**
- * Finds the best title match from search results
+ * Enhanced Levenshtein distance calculation
+ * @param {string} str1 First string
+ * @param {string} str2 Second string
+ * @returns {number} Edit distance
+ */
+function levenshteinDistance(str1, str2) {
+    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
+
+    for (let i = 0; i <= str1.length; i += 1) {
+        matrix[0][i] = i;
+    }
+
+    for (let j = 0; j <= str2.length; j += 1) {
+        matrix[j][0] = j;
+    }
+
+    for (let j = 1; j <= str2.length; j += 1) {
+        for (let i = 1; i <= str1.length; i += 1) {
+            const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
+            matrix[j][i] = Math.min(
+                matrix[j][i - 1] + 1,     // deletion
+                matrix[j - 1][i] + 1,     // insertion
+                matrix[j - 1][i - 1] + indicator, // substitution
+            );
+        }
+    }
+
+    return matrix[str2.length][str1.length];
+}
+
+/**
+ * Calculates fuzzy string similarity using Levenshtein distance
+ * @param {string} str1 First string
+ * @param {string} str2 Second string
+ * @returns {number} Similarity score (0-1)
+ */
+function fuzzyStringSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    const maxLen = Math.max(str1.length, str2.length);
+    if (maxLen === 0) return 1;
+    const distance = levenshteinDistance(str1, str2);
+    return (maxLen - distance) / maxLen;
+}
+
+/**
+ * Finds the best title match from search results using multiple scoring methods
  * @param {Array} results Search results array
  * @param {string} tmdbTitle TMDB title
  * @param {number} tmdbYear TMDB year
@@ -335,37 +431,66 @@ function findBestTitleMatch(results, tmdbTitle, tmdbYear, mediaType) {
 
     let bestMatch = null;
     let bestScore = 0;
+    let bestDetails = {};
 
     for (const result of results) {
-        let score = calculateTitleSimilarity(tmdbTitle, result.title);
+        // Multiple similarity calculations
+        const wordSimilarity = calculateTitleSimilarity(tmdbTitle, result.title);
+        const fuzzySimilarity = fuzzyStringSimilarity(normalizeTitle(tmdbTitle), normalizeTitle(result.title));
 
-        // Year matching bonus/penalty
+        // Use the better of the two similarity scores
+        let baseScore = Math.max(wordSimilarity, fuzzySimilarity);
+
+        // Year matching with improved logic
+        let yearBonus = 0;
         if (tmdbYear && result.year) {
             const yearDiff = Math.abs(tmdbYear - result.year);
             if (yearDiff === 0) {
-                score += 0.2; // Exact year match bonus
-            } else if (yearDiff <= 1) {
-                score += 0.1; // Close year match bonus
-            } else if (yearDiff > 5) {
-                score -= 0.3; // Large year difference penalty
+                yearBonus = 0.25; // Exact year match bonus
+            } else if (yearDiff === 1) {
+                yearBonus = 0.15; // Adjacent year bonus
+            } else if (yearDiff <= 3) {
+                yearBonus = 0.05; // Close year bonus
+            } else if (yearDiff > 10) {
+                yearBonus = -0.2; // Large year difference penalty
             }
+        } else if (!tmdbYear && !result.year) {
+            yearBonus = 0.05; // Both missing year is okay
         }
 
-        // Media type matching
+        // Media type matching with improved logic
+        let typeBonus = 0;
         const expectedType = mediaType === 'tv' ? 'tv' : 'movie';
         const resultType = (result.type || '').toLowerCase();
+
         if (resultType.includes(expectedType) || expectedType.includes(resultType)) {
-            score += 0.1; // Type match bonus
+            typeBonus = 0.15; // Strong type match bonus
+        } else if (resultType && expectedType !== resultType) {
+            typeBonus = -0.1; // Type mismatch penalty
         }
 
-        if (score > bestScore && score > 0.3) { // Minimum threshold
-            bestScore = score;
+        // Length similarity bonus (similar title lengths are better)
+        const titleLengthRatio = Math.min(tmdbTitle.length, result.title.length) / Math.max(tmdbTitle.length, result.title.length);
+        const lengthBonus = titleLengthRatio > 0.7 ? 0.05 : 0;
+
+        const totalScore = Math.max(0, Math.min(1, baseScore + yearBonus + typeBonus + lengthBonus));
+
+        if (totalScore > bestScore && totalScore > 0.25) { // Lower threshold for better matching
+            bestScore = totalScore;
             bestMatch = result;
+            bestDetails = {
+                wordSimilarity: wordSimilarity.toFixed(3),
+                fuzzySimilarity: fuzzySimilarity.toFixed(3),
+                yearBonus: yearBonus.toFixed(3),
+                typeBonus: typeBonus.toFixed(3),
+                lengthBonus: lengthBonus.toFixed(3),
+                totalScore: totalScore.toFixed(3)
+            };
         }
     }
 
     if (bestMatch) {
-        console.log(`[YFlix] Best title match: "${bestMatch.title}" (${bestMatch.year}) [${bestMatch.type}] - Score: ${bestScore.toFixed(2)}`);
+        console.log(`[YFlix] Best title match: "${bestMatch.title}" (${bestMatch.year}) [${bestMatch.type}] - Score: ${bestDetails.totalScore} (${bestDetails.wordSimilarity}/${bestDetails.fuzzySimilarity} + ${bestDetails.yearBonus}y + ${bestDetails.typeBonus}t + ${bestDetails.lengthBonus}l)`);
     }
 
     return bestMatch;
@@ -569,43 +694,63 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
     const rid = createRequestId();
     logRid(rid, `getStreams start tmdbId=${tmdbId} type=${mediaType} S=${seasonNum||''} E=${episodeNum||''}`);
 
-    // Get TMDB details for search query only
+    // Get TMDB details for search query
     getTMDBDetails(tmdbId, mediaType)
       .then(({ title, year }) => {
         logRid(rid, `TMDB query`, { title, year });
 
-        // Search YFlix
-        const searchQuery = title + (year ? ` ${year}` : '');
-        return searchYflix(searchQuery)
-          .then(results => {
-            if (results.length === 0) {
-              logRid(rid, `no results for ${searchQuery}`);
-              resolve([]);
-              return;
-            }
+        // Try multiple search queries for better matching
+        const searchQueries = createSearchQueries(title, year);
+        logRid(rid, `trying ${searchQueries.length} search queries`, searchQueries);
 
-            // Find best matching result based on TMDB title and year
-            const selected = findBestMatch(results, title, year, mediaType);
-            if (!selected) {
-              logRid(rid, `no suitable match for title/year`);
-              resolve([]);
-              return;
-            }
+        // Try queries sequentially until we find a good match
+        let queryIndex = 0;
+        const tryNextQuery = () => {
+          if (queryIndex >= searchQueries.length) {
+            logRid(rid, 'no results from any search query');
+            resolve([]);
+            return;
+          }
 
-            logRid(rid, `selected match`, { title: selected.title, year: selected.year, url: selected.url });
+          const searchQuery = searchQueries[queryIndex++];
+          logRid(rid, `trying query ${queryIndex}/${searchQueries.length}: "${searchQuery}"`);
 
-            // Extract actual title, year, and contentId from YFlix page
-            return getContentInfoFromYflixUrl(selected.url)
-              .then(({ contentId, title: yflixTitle, year: yflixYear }) => {
-                logRid(rid, `yflix page info`, { contentId, title: yflixTitle, year: yflixYear });
+          return searchYflix(searchQuery)
+            .then(results => {
+              if (results.length === 0) {
+                logRid(rid, `no results for "${searchQuery}", trying next query`);
+                return tryNextQuery();
+              }
 
-                if (mediaType === 'tv') {
-                  return handleTvShow(selected.url, contentId, yflixTitle, yflixYear, seasonNum, episodeNum, rid);
-                } else {
-                  return runStreamFetch(contentId, null, yflixTitle, yflixYear, mediaType, seasonNum, episodeNum, rid);
-                }
-              });
-          });
+              // Find best matching result based on TMDB title and year
+              const selected = findBestTitleMatch(results, title, year, mediaType);
+              if (!selected) {
+                logRid(rid, `no suitable match for "${searchQuery}", trying next query`);
+                return tryNextQuery();
+              }
+
+              logRid(rid, `selected match`, { title: selected.title, year: selected.year, url: selected.url });
+
+              // Extract actual title, year, and contentId from YFlix page
+              return getContentInfoFromYflixUrl(selected.url)
+                .then(({ contentId, title: yflixTitle, year: yflixYear }) => {
+                  logRid(rid, `yflix page info`, { contentId, title: yflixTitle, year: yflixYear });
+
+                  if (mediaType === 'tv') {
+                    return handleTvShow(selected.url, contentId, yflixTitle, yflixYear, seasonNum, episodeNum, rid);
+                  } else {
+                    return runStreamFetch(contentId, null, yflixTitle, yflixYear, mediaType, seasonNum, episodeNum, rid);
+                  }
+                });
+            })
+            .catch(error => {
+              logRid(rid, `error with query "${searchQueries[queryIndex-1]}": ${error.message}`);
+              return tryNextQuery();
+            });
+        };
+
+        // Start with first query
+        return tryNextQuery();
       })
       .then(streams => {
         if (streams) {
