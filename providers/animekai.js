@@ -40,7 +40,11 @@ function encryptKai(text) {
 }
 
 function decryptKai(text) {
-    return fetchRequest(API + '/dec-kai?text=' + encodeURIComponent(text), { method: 'POST' })
+    return fetchRequest(API + '/dec-kai', {
+        method: 'POST',
+        headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ text: text })
+    })
         .then(function(res) { return res.json(); })
         .then(function(json) { return json.result; });
 }
@@ -564,7 +568,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 } else {
                     selectedEpisodeKey = keys[0];
                 }
-                token = episodes[selectedEpisodeKey].token;
+                token = episodes[selectedEpisodeKey][String(actualEpisode)].token;
                 return encryptKai(token);
             })
             .then(function(encToken) {

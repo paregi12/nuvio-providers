@@ -85,7 +85,7 @@ function encrypt(text) {
 }
 
 function decrypt(text) {
-  return getJson(`${API}/dec-movies-flix?text=${encodeURIComponent(text)}`).then(j => j.result);
+  return postJson(`${API}/dec-movies-flix`, { text: text }).then(j => j.result);
 }
 
 function parseHtml(html) {
@@ -427,9 +427,20 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
         eid = specificEid;
         logRid(rid, `using specified episode eid=${eid}`);
       } else {
-        const firstEpKey = episodeKeys[0];
-        eid = episodes[firstEpKey].eid;
-        logRid(rid, `using first episode ${firstEpKey}, eid=${eid}`);
+        // Find first available episode in nested structure (season -> episode)
+        const seasons = Object.keys(episodes || {});
+        if (seasons.length > 0) {
+          const firstSeason = seasons[0];
+          const episodesInSeason = Object.keys(episodes[firstSeason] || {});
+          if (episodesInSeason.length > 0) {
+            const firstEpisode = episodesInSeason[0];
+            eid = episodes[firstSeason][firstEpisode].eid;
+            logRid(rid, `using first episode S${firstSeason}E${firstEpisode}, eid=${eid}`);
+          }
+        }
+        if (!eid) {
+          logRid(rid, 'could not find eid in episodes structure');
+        }
       }
       return encrypt(eid).then(encEid => {
         logRid(rid, 'links/list: enc(eid) ready');
