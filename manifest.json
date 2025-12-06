@@ -451,7 +451,7 @@
         "tv"
       ],
       "filename": "providers/mapple.js",
-      "enabled": true,
+      "enabled": false,
       "formats": [
         "mp4",
         "m3u8"
