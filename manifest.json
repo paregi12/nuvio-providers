@@ -231,7 +231,7 @@
         "tv"
       ],
       "filename": "providers/moviebox.js",
-      "enabled": true,
+      "enabled": false,
       "formats": ["mp4"],
       "logo": "https://h5-static.aoneroom.com/oneroomStatic/public/_nuxt/web-logo.apJjVir2.svg",
       "contentLanguage": [

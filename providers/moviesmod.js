@@ -199,12 +199,16 @@ async function extractDownloadLinks(moviePageUrl) {
       const blockContent = header.nextUntil('h3, h4');
 
       if (header.is('h3') && headerText.toLowerCase().includes('season')) {
-        // TV Show Logic
-        const linkElements = blockContent.find('a.maxbutton-episode-links, a.maxbutton-batch-zip');
+        // TV Show Logic - Updated to find "Episode Links" text links
+        const linkElements = blockContent.find('a').filter((i, el) => {
+          const text = $(el).text().trim().toLowerCase();
+          return text.includes('episode links') && !text.includes('batch');
+        });
+
         linkElements.each((j, linkEl) => {
           const buttonText = $(linkEl).text().trim();
           const linkUrl = $(linkEl).attr('href');
-          if (linkUrl && !buttonText.toLowerCase().includes('batch')) {
+          if (linkUrl) {
             links.push({
               quality: `${headerText} - ${buttonText}`,
               url: linkUrl
@@ -284,16 +288,30 @@ async function resolveIntermediateLink(initialUrl, refererUrl, quality) {
       const $ = cheerio.load(html);
       const finalLinks = [];
 
-      $('.entry-content a[href*="driveseed.org"], .entry-content a[href*="tech.unblockedgames.world"], .entry-content a[href*="tech.creativeexpressionsblog.com"], .entry-content a[href*="tech.examzculture.in"]').each((i, el) => {
-        const link = $(el).attr('href');
-        const text = $(el).text().trim();
-        if (link && text && !text.toLowerCase().includes('batch')) {
-          finalLinks.push({
-            server: text.replace(/\s+/g, ' '),
-            url: link,
-          });
+      // Look for episode headers (h3 containing "Episode") - links are inside h3 elements
+      $('h3').each((i, el) => {
+        const headerText = $(el).text().trim();
+        const episodeMatch = headerText.match(/Episode\s+(\d+)/i);
+
+        if (episodeMatch) {
+          const episodeNum = episodeMatch[1];
+          // Find the link inside this h3 element
+          const linkElement = $(el).find('a').first();
+
+          if (linkElement.length > 0) {
+            const link = linkElement.attr('href');
+
+            if (link) {
+              finalLinks.push({
+                server: `Episode ${episodeNum}`,
+                url: link,
+              });
+            }
+          }
         }
       });
+
+      console.log(`[MoviesMod] Found ${finalLinks.length} episode links from episodes.modpro.blog`);
       return finalLinks;
     }
 
@@ -736,10 +754,13 @@ async function processDownloadLink(link, selectedResult, mediaType, episodeNum) 
             try {
               console.log(`[MoviesMod] Trying ${option.title} for ${link.quality}...`);
 
-              if (option.type === 'resume') {
+              if (option.type === 'resume' || option.type === 'worker') {
                 finalDownloadUrl = await resolveResumeCloudLink(option.url);
               } else if (option.type === 'instant') {
                 finalDownloadUrl = await resolveVideoSeedLink(option.url);
+              } else if (option.type === 'generic') {
+                // For generic download links, try them directly
+                finalDownloadUrl = option.url;
               }
 
               if (finalDownloadUrl) {
@@ -903,9 +924,13 @@ async function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episode
         for (const targetLink of finalLinks) {
           let currentUrl = targetLink.url;
 
-          // Handle SID links (tech.unblockedgames.world)
-          if (currentUrl.includes('tech.unblockedgames.world') || 
-              currentUrl.includes('tech.creativeexpressionsblog.com') || 
+          // Check if this is an episode link (has "Episode" in server name)
+          const isEpisodeLink = targetLink.server && targetLink.server.toLowerCase().includes('episode');
+          console.log(`[MoviesMod] Processing link: server="${targetLink.server}", isEpisodeLink=${isEpisodeLink}, url=${targetLink.url.substring(0, 50)}...`);
+
+          // Handle SID links (tech.unblockedgames.world) - for both episode links and regular links
+          if (currentUrl.includes('tech.unblockedgames.world') ||
+              currentUrl.includes('tech.creativeexpressionsblog.com') ||
               currentUrl.includes('tech.examzculture.in')) {
             const resolvedUrl = await resolveTechUnblockedLink(currentUrl);
             if (!resolvedUrl) continue;
@@ -914,13 +939,70 @@ async function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episode
 
           // Handle driveseed.org links
           if (currentUrl && currentUrl.includes('driveseed.org')) {
+            console.log(`[MoviesMod] Processing driveseed URL: ${currentUrl.substring(0, 80)}...`);
             const driveseedInfo = await resolveDriveseedLink(currentUrl);
+            console.log(`[MoviesMod] Driveseed info: ${driveseedInfo ? `options=${driveseedInfo.downloadOptions?.length || 0}` : 'null'}`);
+
             if (driveseedInfo && driveseedInfo.downloadOptions && driveseedInfo.downloadOptions.length > 0) {
-              // Try Resume Cloud first
-              const resumeCloud = driveseedInfo.downloadOptions.find(opt => opt.type === 'resume');
-              if (resumeCloud) {
+              console.log(`[MoviesMod] Download options available: ${driveseedInfo.downloadOptions.map(opt => `${opt.type}: ${opt.title}`).join(', ')}`);
+
+              // Try download methods in order of priority (sorted by priority)
+              const sortedOptions = driveseedInfo.downloadOptions.sort((a, b) => a.priority - b.priority);
+              let finalDownloadUrl = null;
+              let usedMethod = null;
+
+              for (const option of sortedOptions) {
+                console.log(`[MoviesMod] Trying ${option.title} (${option.type}) for ${link.quality}...`);
+
+                if (option.type === 'resume' || option.type === 'worker') {
+                  finalDownloadUrl = await resolveResumeCloudLink(option.url);
+                  console.log(`[MoviesMod] Resume/Worker result: ${finalDownloadUrl ? 'got URL' : 'null'}`);
+                } else if (option.type === 'instant') {
+                  // Try the API method first
+                  finalDownloadUrl = await resolveVideoSeedLink(option.url);
+                  console.log(`[MoviesMod] Instant API result: ${finalDownloadUrl ? 'got URL' : 'null'}`);
+
+                  // If API fails, try using the URL directly
+                  if (!finalDownloadUrl) {
+                    finalDownloadUrl = option.url;
+                    console.log(`[MoviesMod] Instant fallback: using URL directly`);
+                  }
+                } else if (option.type === 'generic') {
+                  finalDownloadUrl = option.url;
+                  console.log(`[MoviesMod] Generic result: using URL directly`);
+                }
+
+                if (finalDownloadUrl) {
+                  const isValid = await validateVideoUrl(finalDownloadUrl);
+                  if (isValid) {
+                    usedMethod = option.title;
+                    console.log(`[MoviesMod] ✓ Successfully resolved using ${usedMethod}`);
+                    break;
+                  } else {
+                    console.log(`[MoviesMod] ✗ ${option.title} returned invalid URL`);
+                    finalDownloadUrl = null;
+                  }
+                }
+              }
+
+              if (finalDownloadUrl) {
                 const finalUrl = await resolveResumeCloudLink(resumeCloud.url);
+                console.log(`[MoviesMod] Resume Cloud final URL: ${finalUrl ? 'resolved' : 'null'}`);
+
                 if (finalUrl && await validateVideoUrl(finalUrl)) {
+                  console.log(`[MoviesMod] URL validation: SUCCESS`);
+                  // For episode links, filter by specific episode number
+                  if (isEpisodeLink && episodeNum !== null) {
+                    const episodeFromServer = targetLink.server.match(/Episode\s+(\d+)/i);
+                    console.log(`[MoviesMod] Episode filtering: server="${targetLink.server}", requested episode=${episodeNum}, found episode=${episodeFromServer ? episodeFromServer[1] : 'none'}`);
+                    if (episodeFromServer && parseInt(episodeFromServer[1]) !== episodeNum) {
+                      console.log(`[MoviesMod] Skipping episode ${episodeFromServer[1]} (not episode ${episodeNum})`);
+                      continue; // Skip if not the requested episode
+                    } else if (episodeFromServer && parseInt(episodeFromServer[1]) === episodeNum) {
+                      console.log(`[MoviesMod] Processing episode ${episodeNum} - continuing...`);
+                    }
+                  }
+
                   const mediaTitle = mediaType === 'tv' && seasonNum && episodeNum
                     ? `${selectedResult.title} S${seasonNum.toString().padStart(2, '0')}E${episodeNum.toString().padStart(2, '0')}`
                     : selectedResult.title;
@@ -944,14 +1026,23 @@ async function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episode
           }
         }
 
-        return processedStreams.length > 0 ? processedStreams[0] : null;
+        const result = processedStreams.length > 0 ? processedStreams[0] : null;
+        console.log(`[MoviesMod] Returning ${result ? 'stream' : 'null'} for ${link.quality}`);
+        return result;
       } catch (error) {
         console.error(`[MoviesMod] Error processing link ${link.quality}: ${error.message}`);
         return null;
       }
     });
 
-    const streams = (await Promise.all(streamPromises)).filter(Boolean);
+    const rawStreams = await Promise.all(streamPromises);
+    console.log(`[MoviesMod] Raw streams before filtering: ${rawStreams.length}`);
+    rawStreams.forEach((stream, i) => {
+      console.log(`  [${i}] ${stream ? 'VALID' : 'NULL'}`);
+    });
+
+    const streams = rawStreams.filter(Boolean);
+    console.log(`[MoviesMod] Streams after null filtering: ${streams.length}`);
 
     // Sort by quality descending
     streams.sort((a, b) => {
