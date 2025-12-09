@@ -3,8 +3,6 @@
   "version": "1.0.0",
   "scrapers": [
     {
-      
-    
       "id": "4khdhub",
       "name": "4KHDHub",
       "description": "4KHDHub direct links",
@@ -16,7 +14,9 @@
       ],
       "filename": "providers/4khdhub.js",
       "enabled": true,
-      "formats": ["mkv"],
+      "formats": [
+        "mkv"
+      ],
       "logo": "https://4khdhub.fans/favicon.ico",
       "contentLanguage": [
         "en"
@@ -42,7 +42,7 @@
     {
       "id": "uhdmovies",
       "name": "UHDMovies",
-      "description": "UHD Movies streaming with multiple resolution" ,
+      "description": "UHD Movies streaming with multiple resolution",
       "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -51,7 +51,9 @@
       ],
       "filename": "providers/uhdmovies.js",
       "enabled": true,
-      "formats": ["mkv"],
+      "formats": [
+        "mkv"
+      ],
       "logo": "https://uhdmovies.rip/wp-content/uploads/2021/03/cropped-output-onlinepngtools-1-32x32.png",
       "contentLanguage": [
         "en"
@@ -69,7 +71,9 @@
       ],
       "filename": "providers/moviesmod.js",
       "enabled": true,
-      "formats": ["mkv"],
+      "formats": [
+        "mkv"
+      ],
       "logo": "https://moviesmod.plus/wp-content/uploads/2022/10/moviesmod.png",
       "contentLanguage": [
         "en"
@@ -105,29 +109,12 @@
       ],
       "filename": "providers/dahmermovies.js",
       "enabled": true,
-      "formats": ["mkv"],
+      "formats": [
+        "mkv"
+      ],
       "logo": "https://image.similarpng.com/file/similarpng/very-thumbnail/2021/05/Letter-D-logo-design-template-with-geometric-shape-style-on-transparent-background-PNG.png",
       "contentLanguage": [
         "en"
-      ]
-    },
-    {
-      "id": "hdhub4u",
-      "name": "HDHub4u",
-      "description": "HDHub4u direct download links with multiple hoster support",
-      "version": "1.1.0",
-      "author": "Nuvio Team",
-      "supportedTypes": [
-        "movie",
-        "tv"
-      ],
-      "filename": "providers/hdhub4u.js",
-      "enabled": true,
-      "formats": ["mkv"],
-      "logo": "https://hdhub4u.pictures/wp-content/uploads/2021/05/cropped-cropped-1-1-1-2-1-32x32.png",
-      "contentLanguage": [
-        "en",
-        "hi"
       ]
     },
     {
@@ -148,24 +135,6 @@
       ]
     },
     {
-      "id": "xprime",
-      "name": "Xprime",
-      "description": "Faster Streaming links from Xprime.tv",
-      "version": "1.1.0",
-      "author": "Nuvio Team",
-      "supportedTypes": [
-        "movie",
-        "tv"
-      ],
-      "filename": "providers/xprime.js",
-      "enabled": true,
-      "logo": "https://xprime.tv/favicon/favicon.ico",
-      "contentLanguage": [
-        "en"
-      ],
-      "supportsExternalPlayer": false
-    },
-    {
       "id": "netmirror",
       "name": "NetMirror",
       "description": "Streaming links from netmirror. Automatically disabled on iOS due to compatibility issues.",
@@ -181,7 +150,9 @@
       "contentLanguage": [
         "en"
       ],
-      "disabledPlatforms": ["ios"],
+      "disabledPlatforms": [
+        "ios"
+      ],
       "supportsExternalPlayer": false
     },
     {
@@ -213,7 +184,9 @@
       ],
       "filename": "providers/streamflix.js",
       "enabled": true,
-      "formats": ["mkv"],
+      "formats": [
+        "mkv"
+      ],
       "logo": "https://streamflix.app/assets/images/logo-text-148x72.png",
       "contentLanguage": [
         "en",
@@ -232,7 +205,9 @@
       ],
       "filename": "providers/moviebox.js",
       "enabled": false,
-      "formats": ["mp4"],
+      "formats": [
+        "mp4"
+      ],
       "logo": "https://h5-static.aoneroom.com/oneroomStatic/public/_nuxt/web-logo.apJjVir2.svg",
       "contentLanguage": [
         "en",
@@ -270,30 +245,14 @@
       ],
       "filename": "providers/dvdplay.js",
       "enabled": true,
-      "formats": ["mkv"],
+      "formats": [
+        "mkv"
+      ],
       "logo": "https://dvdplay.rodeo/dvdplay-icon.png",
       "contentLanguage": [
         "mal",
         "tam",
         "hin"
-      ]
-    },
-    {
-      "id": "showbox",
-      "name": "ShowBox",
-      "description": "ShowBox streaming with multiple quality options",
-      "version": "1.0.0",
-      "author": "Nuvio Team",
-      "supportedTypes": [
-        "movie",
-        "tv"
-      ],
-      "filename": "providers/showbox.js",
-      "enabled": false,
-      "formats": ["mp4","mkv"],
-      "logo": "https://www.showbox.media/favicon.ico",
-      "contentLanguage": [
-        "en"
       ]
     },
     {
@@ -309,7 +268,10 @@
       "filename": "providers/yflix.js",
       "enabled": true,
       "limited": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://yflix.to/assets/uploads/2f505f3de3c99889c1a72557f3e3714fc0c457b0.png",
       "contentLanguage": [
         "en"
@@ -328,7 +290,11 @@
       "filename": "providers/videasy.js",
       "enabled": true,
       "limited": true,
-      "formats": ["m3u8", "mp4", "mkv"],
+      "formats": [
+        "m3u8",
+        "mp4",
+        "mkv"
+      ],
       "logo": "https://www.videasy.net/logo.png",
       "contentLanguage": [
         "en",
@@ -351,7 +317,10 @@
       ],
       "filename": "providers/mallumv.js",
       "enabled": true,
-      "formats": ["mkv", "mp4"],
+      "formats": [
+        "mkv",
+        "mp4"
+      ],
       "logo": "https://mallumv.fit/favicon.ico",
       "contentLanguage": [
         "ta",
@@ -373,7 +342,10 @@
       ],
       "filename": "providers/vidlink.js",
       "enabled": true,
-      "formats": ["m3u8", "mp4"],
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
       "logo": "https://vidlink.pro/favicon.ico",
       "contentLanguage": [
         "en"
@@ -391,7 +363,10 @@
       ],
       "filename": "providers/vidnest.js",
       "enabled": true,
-      "formats": ["mp4", "m3u8"],
+      "formats": [
+        "mp4",
+        "m3u8"
+      ],
       "logo": "https://vidnest.fun/favicon.ico",
       "contentLanguage": [
         "en"
@@ -409,7 +384,9 @@
       ],
       "filename": "providers/vidnest-anime.js",
       "enabled": true,
-      "formats": ["m3u8"],
+      "formats": [
+        "m3u8"
+      ],
       "logo": "https://vidnest.fun/favicon.ico",
       "contentLanguage": [
         "en",
@@ -499,7 +476,12 @@
       ],
       "logo": "https://static.hbayy.com/simple-blog-13/prod/_nuxt/big-logo.DESZ4mBj.png",
       "contentLanguage": [
-        "en","hi","ta","te","ml","kn"
+        "en",
+        "hi",
+        "ta",
+        "te",
+        "ml",
+        "kn"
       ]
     }
   ]
