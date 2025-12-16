@@ -500,7 +500,7 @@
         "mp4",
         "mkv"
       ],
-      "logo": "https://www.showbox.media/static/images/Logo-2.png",
+      "logo": "https://raw.githubusercontent.com/tapframe/nuvio-providers/main/Assets/Logo-2.png",
       "contentLanguage": [
         "en"
       ]
