@@ -191,10 +191,10 @@ function processShowBoxResponse(data, mediaInfo, mediaType, seasonNum, episodeNu
                     const linkSize = link.size || versionSize;
                     const linkName = link.name || `${normalizedQuality}`;
 
-                    // Create stream name with version info if multiple versions exist
+                    // Create stream name - use version number if multiple versions exist
                     let streamName = 'ShowBox';
                     if (data.versions.length > 1) {
-                        streamName += ` ${versionName}`;
+                        streamName += ` V${versionIndex + 1}`;
                     }
                     streamName += ` ${normalizedQuality}`;
 
