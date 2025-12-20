@@ -26,7 +26,7 @@
       "id": "animekai",
       "name": "AnimeKai",
       "description": "AnimeKai TV episodes via AnimeKai servers",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "tv"
