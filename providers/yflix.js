@@ -1,9 +1,5 @@
 // YFlix Scraper for Nuvio Local Scrapers
-// React Native compatible version - Standalone (no external dependencies)
-
-// TMDB API Configuration
-const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
-const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+// React Native compatible version - Uses enc-dec.app database for accurate matching
 
 // Headers for requests
 const HEADERS = {
@@ -12,6 +8,7 @@ const HEADERS = {
 };
 
 const API = 'https://enc-dec.app/api';
+const DB_API = 'https://enc-dec.app/db/flix';
 const YFLIX_AJAX = 'https://yflix.to/ajax';
 
 // Debug helpers
@@ -101,6 +98,20 @@ function decryptRapidMedia(embedUrl) {
       return postJson(`${API}/dec-rapid`, { text: encrypted, agent: HEADERS['User-Agent'] });
     })
     .then(j => j.result);
+}
+
+// Database lookup - replaces title matching
+function findInDatabase(tmdbId, mediaType) {
+  const type = mediaType === 'movie' ? 'movie' : 'tv';
+  const url = `${DB_API}/find?tmdb_id=${tmdbId}&type=${type}`;
+
+  return getJson(url)
+    .then(results => {
+      if (!results || results.length === 0) {
+        return null;
+      }
+      return results[0]; // Return first match
+    });
 }
 
 // HLS helpers (Promise-based)
@@ -229,350 +240,14 @@ function formatStreamsData(rapidResult) {
   return { streams, subtitles, thumbnails, totalStreams: streams.length };
 }
 
-// Parse YFlix search results
-function searchYflix(query) {
-  const searchUrl = `${YFLIX_AJAX.replace('/ajax', '')}/browser?keyword=${encodeURIComponent(query)}`;
-  return getText(searchUrl)
-    .then(html => {
-      console.log(`[YFlix] Search URL: ${searchUrl}`);
-      console.log(`[YFlix] HTML length: ${html.length} characters`);
+function runStreamFetch(eid, title, year, mediaType, seasonNum, episodeNum, rid) {
+  logRid(rid, `runStreamFetch: start eid=${eid}`);
 
-      const results = [];
-
-      // Updated regex to match the actual YFlix search page structure
-      const infoRegex = /<div[^>]*class="[^"]*info[^"]*"[^>]*>[\s\S]*?<a[^>]*href="([^"]*watch\/[^"]*)"[^>]*class="[^"]*title[^"]*"[^>]*>([^<]*)<\/a>[\s\S]*?<div[^>]*class="[^"]*metadata[^"]*"[^>]*>([\s\S]*?)<\/div>/g;
-
-      let match;
-      while ((match = infoRegex.exec(html)) !== null) {
-        const [, url, title, metadata] = match;
-        const cleanTitle = title.trim();
-        const cleanUrl = url.startsWith('http') ? url : `${YFLIX_AJAX.replace('/ajax', '')}${url}`;
-
-        const typeMatch = metadata.match(/<span[^>]*>([^<]*)<\/span>/g) || [];
-        const metadataParts = typeMatch.map(span => span.replace(/<\/?span[^>]*>/g, ''));
-
-        const result = {
-          title: cleanTitle,
-          url: cleanUrl,
-          type: metadataParts[0] || 'Unknown',
-          year: metadataParts[1] && /^\d{4}$/.test(metadataParts[1]) ? parseInt(metadataParts[1]) : null,
-          duration: metadataParts[2] || null,
-          metadata: metadataParts
-        };
-
-        results.push(result);
-      }
-
-      console.log(`[YFlix] Found ${results.length} results using regex parsing`);
-      return results;
-    });
-}
-
-// Find best matching result based on TMDB title and year
-/**
- * Enhanced title matching utilities for YFlix
- */
-
-/**
- * Creates multiple search query variations for better matching
- * @param {string} title Original title
- * @param {number} year Release year
- * @returns {Array<string>} Array of search queries to try
- */
-function createSearchQueries(title, year) {
-    const queries = [];
-    const cleanTitle = title.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
-
-    // Primary query with year
-    if (year) {
-        queries.push(`${cleanTitle} ${year}`);
-    }
-
-    // Title without year
-    queries.push(cleanTitle);
-
-    // Title with common variations
-    if (cleanTitle.includes(':')) {
-        queries.push(cleanTitle.split(':')[0].trim());
-    }
-
-    // Remove common suffixes/prefixes
-    const suffixes = [' (tv series)', ' (film)', ' (movie)', ' (series)', ' (tv movie)'];
-    for (const suffix of suffixes) {
-        if (cleanTitle.toLowerCase().endsWith(suffix)) {
-            queries.push(cleanTitle.slice(0, -suffix.length).trim());
-        }
-    }
-
-    return [...new Set(queries)]; // Remove duplicates
-}
-
-/**
- * Advanced title normalization for better matching
- * @param {string} title The title to normalize
- * @returns {string} Normalized title
- */
-function normalizeTitle(title) {
-    if (!title) return '';
-
-    return title
-        // Convert to lowercase and normalize unicode
-        .toLowerCase()
-        .normalize('NFKD')
-        // Remove common articles and prepositions
-        .replace(/\b(the|a|an|and|or|but|in|on|at|to|for|of|with|by)\b/g, '')
-        // Handle special cases
-        .replace(/\b(part|volume|vol|season|series)\s*\d+/g, '') // Remove "Part 1", "Season 1", etc.
-        .replace(/\(\d{4}\)/g, '') // Remove year in parentheses
-        .replace(/[:\-_]/g, ' ') // Normalize separators
-        .replace(/[^\w\s]/g, '') // Remove special characters
-        .replace(/\s+/g, ' ') // Normalize whitespace
-        .trim();
-}
-
-/**
- * Calculates advanced similarity score between two titles
- * @param {string} title1 First title
- * @param {string} title2 Second title
- * @returns {number} Similarity score (0-1)
- */
-function calculateTitleSimilarity(title1, title2) {
-    const norm1 = normalizeTitle(title1);
-    const norm2 = normalizeTitle(title2);
-
-    // Exact match after normalization
-    if (norm1 === norm2) return 1.0;
-
-    // Substring matches (one contains the other)
-    if (norm1.includes(norm2) || norm2.includes(norm1)) {
-        return Math.min(0.95, 0.8 + (Math.min(norm1.length, norm2.length) / Math.max(norm1.length, norm2.length)) * 0.15);
-    }
-
-    // Word-based similarity with position weighting
-    const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
-    const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
-
-    if (words1.length === 0 || words2.length === 0) return 0;
-
-    // Calculate Jaccard similarity
-    const set1 = new Set(words1);
-    const set2 = new Set(words2);
-    const intersection = new Set([...set1].filter(w => set2.has(w)));
-    const union = new Set([...set1, ...set2]);
-    const jaccardScore = intersection.size / union.size;
-
-    // Bonus for matching first words (usually most important)
-    let positionBonus = 0;
-    if (words1.length > 0 && words2.length > 0 && words1[0] === words2[0]) {
-        positionBonus = 0.1;
-    }
-
-    // Bonus for longer common sequences
-    const commonSequenceBonus = Math.min(0.1, (intersection.size / Math.min(words1.length, words2.length)) * 0.1);
-
-    return Math.min(1.0, jaccardScore + positionBonus + commonSequenceBonus);
-}
-
-/**
- * Enhanced Levenshtein distance calculation
- * @param {string} str1 First string
- * @param {string} str2 Second string
- * @returns {number} Edit distance
- */
-function levenshteinDistance(str1, str2) {
-    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
-
-    for (let i = 0; i <= str1.length; i += 1) {
-        matrix[0][i] = i;
-    }
-
-    for (let j = 0; j <= str2.length; j += 1) {
-        matrix[j][0] = j;
-    }
-
-    for (let j = 1; j <= str2.length; j += 1) {
-        for (let i = 1; i <= str1.length; i += 1) {
-            const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-            matrix[j][i] = Math.min(
-                matrix[j][i - 1] + 1,     // deletion
-                matrix[j - 1][i] + 1,     // insertion
-                matrix[j - 1][i - 1] + indicator, // substitution
-            );
-        }
-    }
-
-    return matrix[str2.length][str1.length];
-}
-
-/**
- * Calculates fuzzy string similarity using Levenshtein distance
- * @param {string} str1 First string
- * @param {string} str2 Second string
- * @returns {number} Similarity score (0-1)
- */
-function fuzzyStringSimilarity(str1, str2) {
-    if (!str1 || !str2) return 0;
-    const maxLen = Math.max(str1.length, str2.length);
-    if (maxLen === 0) return 1;
-    const distance = levenshteinDistance(str1, str2);
-    return (maxLen - distance) / maxLen;
-}
-
-/**
- * Finds the best title match from search results using multiple scoring methods
- * @param {Array} results Search results array
- * @param {string} tmdbTitle TMDB title
- * @param {number} tmdbYear TMDB year
- * @param {string} mediaType "movie" or "tv"
- * @returns {Object|null} Best matching result
- */
-function findBestTitleMatch(results, tmdbTitle, tmdbYear, mediaType) {
-    if (!results || results.length === 0) return null;
-
-    let bestMatch = null;
-    let bestScore = 0;
-    let bestDetails = {};
-
-    for (const result of results) {
-        // Multiple similarity calculations
-        const wordSimilarity = calculateTitleSimilarity(tmdbTitle, result.title);
-        const fuzzySimilarity = fuzzyStringSimilarity(normalizeTitle(tmdbTitle), normalizeTitle(result.title));
-
-        // Use the better of the two similarity scores
-        let baseScore = Math.max(wordSimilarity, fuzzySimilarity);
-
-        // Year matching with improved logic
-        let yearBonus = 0;
-        if (tmdbYear && result.year) {
-            const yearDiff = Math.abs(tmdbYear - result.year);
-            if (yearDiff === 0) {
-                yearBonus = 0.25; // Exact year match bonus
-            } else if (yearDiff === 1) {
-                yearBonus = 0.15; // Adjacent year bonus
-            } else if (yearDiff <= 3) {
-                yearBonus = 0.05; // Close year bonus
-            } else if (yearDiff > 10) {
-                yearBonus = -0.2; // Large year difference penalty
-            }
-        } else if (!tmdbYear && !result.year) {
-            yearBonus = 0.05; // Both missing year is okay
-        }
-
-        // Media type matching with improved logic
-        let typeBonus = 0;
-        const expectedType = mediaType === 'tv' ? 'tv' : 'movie';
-        const resultType = (result.type || '').toLowerCase();
-
-        if (resultType.includes(expectedType) || expectedType.includes(resultType)) {
-            typeBonus = 0.15; // Strong type match bonus
-        } else if (resultType && expectedType !== resultType) {
-            typeBonus = -0.1; // Type mismatch penalty
-        }
-
-        // Length similarity bonus (similar title lengths are better)
-        const titleLengthRatio = Math.min(tmdbTitle.length, result.title.length) / Math.max(tmdbTitle.length, result.title.length);
-        const lengthBonus = titleLengthRatio > 0.7 ? 0.05 : 0;
-
-        const totalScore = Math.max(0, Math.min(1, baseScore + yearBonus + typeBonus + lengthBonus));
-
-        if (totalScore > bestScore && totalScore > 0.25) { // Lower threshold for better matching
-            bestScore = totalScore;
-            bestMatch = result;
-            bestDetails = {
-                wordSimilarity: wordSimilarity.toFixed(3),
-                fuzzySimilarity: fuzzySimilarity.toFixed(3),
-                yearBonus: yearBonus.toFixed(3),
-                typeBonus: typeBonus.toFixed(3),
-                lengthBonus: lengthBonus.toFixed(3),
-                totalScore: totalScore.toFixed(3)
-            };
-        }
-    }
-
-    if (bestMatch) {
-        console.log(`[YFlix] Best title match: "${bestMatch.title}" (${bestMatch.year}) [${bestMatch.type}] - Score: ${bestDetails.totalScore} (${bestDetails.wordSimilarity}/${bestDetails.fuzzySimilarity} + ${bestDetails.yearBonus}y + ${bestDetails.typeBonus}t + ${bestDetails.lengthBonus}l)`);
-    }
-
-    return bestMatch;
-}
-
-// Backward compatibility - keep old function name
-function findBestMatch(results, tmdbTitle, tmdbYear, mediaType) {
-    return findBestTitleMatch(results, tmdbTitle, tmdbYear, mediaType);
-}
-
-function getContentInfoFromYflixUrl(yflixUrl) {
-  const urlMatch = yflixUrl.match(/\/watch\/([^.]+)\.([^\/\?]+)/);
-  if (!urlMatch) return Promise.reject(new Error('Invalid YFlix URL format'));
-
-  return getText(yflixUrl)
-    .then(html => {
-      // Extract content ID
-      let contentId = null;
-      const idMatch = html.match(/<div[^>]*class="[^"]*rating[^"]*"[^>]*data-id="([^"]*)"[^>]*>/);
-      if (idMatch) {
-        contentId = idMatch[1];
-      } else {
-        const altMatch = html.match(/data-id="([^"]*)"[^>]*id="movie-rating/);
-        if (altMatch) contentId = altMatch[1];
-      }
-
-      if (!contentId) {
-        throw new Error('Could not find content ID in YFlix page');
-      }
-
-      // Extract title from h1 tag
-      const titleMatch = html.match(/<h1[^>]*itemprop="name"[^>]*class="title"[^>]*>([^<]+)<\/h1>/);
-      const title = titleMatch ? titleMatch[1].trim() : 'Unknown Title';
-
-      // Extract year from metadata div
-      const yearMatch = html.match(/<div[^>]*class="[^"]*metadata[^"]*set[^"]*"[^>]*>[\s\S]*?<span[^>]*>(\d{4})<\/span>/);
-      const year = yearMatch ? parseInt(yearMatch[1]) : null;
-
-      console.log(`[YFlix] Extracted from YFlix - Title: "${title}", Year: ${year}, ContentID: ${contentId}`);
-
-      return { contentId, title, year };
-    });
-}
-
-function runStreamFetch(contentId, specificEid = null, title, year, mediaType, seasonNum, episodeNum, rid) {
-  logRid(rid, `runStreamFetch: start contentId=${contentId}`);
-
-  return encrypt(contentId)
-    .then(encId => {
-      logRid(rid, 'episodes/list: enc(contentId) ready');
-      return getJson(`${YFLIX_AJAX}/episodes/list?id=${contentId}&_=${encId}`);
+  return encrypt(eid)
+    .then(encEid => {
+      logRid(rid, 'links/list: enc(eid) ready');
+      return getJson(`${YFLIX_AJAX}/links/list?eid=${eid}&_=${encEid}`);
     })
-    .then(episodesResp => parseHtml(episodesResp.result))
-    .then(episodes => {
-      const episodeKeys = Object.keys(episodes || {});
-      logRid(rid, `episodes parsed: totalKeys=${episodeKeys.length}`);
-      let eid;
-      if (specificEid) {
-        eid = specificEid;
-        logRid(rid, `using specified episode eid=${eid}`);
-      } else {
-        // Find first available episode in nested structure (season -> episode)
-        const seasons = Object.keys(episodes || {});
-        if (seasons.length > 0) {
-          const firstSeason = seasons[0];
-          const episodesInSeason = Object.keys(episodes[firstSeason] || {});
-          if (episodesInSeason.length > 0) {
-            const firstEpisode = episodesInSeason[0];
-            eid = episodes[firstSeason][firstEpisode].eid;
-            logRid(rid, `using first episode S${firstSeason}E${firstEpisode}, eid=${eid}`);
-          }
-        }
-        if (!eid) {
-          logRid(rid, 'could not find eid in episodes structure');
-        }
-      }
-      return encrypt(eid).then(encEid => {
-        logRid(rid, 'links/list: enc(eid) ready');
-        return ({ eid, encEid });
-      });
-    })
-    .then(({ eid, encEid }) => getJson(`${YFLIX_AJAX}/links/list?eid=${eid}&_=${encEid}`))
     .then(serversResp => parseHtml(serversResp.result))
     .then(servers => {
       const serverTypes = Object.keys(servers || {});
@@ -652,105 +327,61 @@ function runStreamFetch(contentId, specificEid = null, title, year, mediaType, s
     });
 }
 
-function handleTvShow(yflixUrl, contentId, title, year, seasonNum, episodeNum, rid) {
-  logRid(rid, `handleTvShow: S${seasonNum || 1}E${episodeNum || 1}`);
-
-  const selectedSeason = seasonNum || 1;
-  const selectedEpisode = episodeNum || 1;
-
-  const episodeUrl = `${yflixUrl}#ep=${selectedSeason},${selectedEpisode}`;
-  logRid(rid, `episode URL ${episodeUrl}`);
-
-  return getText(episodeUrl)
-    .then(html => {
-      const epMatch = html.match(/data-episode="([^"]*)"/) || html.match(/episode["\s]*:[\s]*["']([^"']+)["']/);
-      if (epMatch) {
-        logRid(rid, `found episode data ${epMatch[1]}`);
-        return epMatch[1];
-      }
-
-      logRid(rid, 'no episode data in hash page; using main contentId');
-      return contentId;
-    })
-    .then(episodeId => runStreamFetch(contentId, episodeId, title, year, 'tv', selectedSeason, selectedEpisode, rid));
-}
-
-// Get TMDB details for search
-function getTMDBDetails(tmdbId, mediaType) {
-  const endpoint = mediaType === 'movie' ? 'movie' : 'tv';
-  const url = `${TMDB_BASE_URL}/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}`;
-
-  return getJson(url)
-    .then(data => ({
-      title: data.title || data.name,
-      year: data.release_date ? new Date(data.release_date).getFullYear() :
-            data.first_air_date ? new Date(data.first_air_date).getFullYear() : null
-    }));
-}
-
 // Main getStreams function
 function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
   return new Promise((resolve, reject) => {
     const rid = createRequestId();
-    logRid(rid, `getStreams start tmdbId=${tmdbId} type=${mediaType} S=${seasonNum||''} E=${episodeNum||''}`);
+    logRid(rid, `getStreams start tmdbId=${tmdbId} type=${mediaType} S=${seasonNum || ''} E=${episodeNum || ''}`);
 
-    // Get TMDB details for search query
-    getTMDBDetails(tmdbId, mediaType)
-      .then(({ title, year }) => {
-        logRid(rid, `TMDB query`, { title, year });
+    // Look up content in database by TMDB ID
+    findInDatabase(tmdbId, mediaType)
+      .then(dbResult => {
+        if (!dbResult) {
+          logRid(rid, 'no match found in database');
+          resolve([]);
+          return;
+        }
 
-        // Try multiple search queries for better matching
-        const searchQueries = createSearchQueries(title, year);
-        logRid(rid, `trying ${searchQueries.length} search queries`, searchQueries);
+        const info = dbResult.info;
+        const episodes = dbResult.episodes;
 
-        // Try queries sequentially until we find a good match
-        let queryIndex = 0;
-        const tryNextQuery = () => {
-          if (queryIndex >= searchQueries.length) {
-            logRid(rid, 'no results from any search query');
-            resolve([]);
-            return;
+        logRid(rid, `database match found`, {
+          title: info.title_en,
+          year: info.year,
+          flixId: info.flix_id,
+          episodeCount: info.episode_count
+        });
+
+        // Get the episode ID
+        let eid = null;
+        const selectedSeason = String(seasonNum || 1);
+        const selectedEpisode = String(episodeNum || 1);
+
+        if (episodes && episodes[selectedSeason] && episodes[selectedSeason][selectedEpisode]) {
+          eid = episodes[selectedSeason][selectedEpisode].eid;
+          logRid(rid, `found episode eid=${eid} for S${selectedSeason}E${selectedEpisode}`);
+        } else {
+          // Fallback: try to find any available episode
+          const seasons = Object.keys(episodes || {});
+          if (seasons.length > 0) {
+            const firstSeason = seasons[0];
+            const episodesInSeason = Object.keys(episodes[firstSeason] || {});
+            if (episodesInSeason.length > 0) {
+              const firstEp = episodesInSeason[0];
+              eid = episodes[firstSeason][firstEp].eid;
+              logRid(rid, `fallback: using S${firstSeason}E${firstEp}, eid=${eid}`);
+            }
           }
+        }
 
-          const searchQuery = searchQueries[queryIndex++];
-          logRid(rid, `trying query ${queryIndex}/${searchQueries.length}: "${searchQuery}"`);
+        if (!eid) {
+          logRid(rid, 'no episode ID found');
+          resolve([]);
+          return;
+        }
 
-          return searchYflix(searchQuery)
-            .then(results => {
-              if (results.length === 0) {
-                logRid(rid, `no results for "${searchQuery}", trying next query`);
-                return tryNextQuery();
-              }
-
-              // Find best matching result based on TMDB title and year
-              const selected = findBestTitleMatch(results, title, year, mediaType);
-              if (!selected) {
-                logRid(rid, `no suitable match for "${searchQuery}", trying next query`);
-                return tryNextQuery();
-              }
-
-              logRid(rid, `selected match`, { title: selected.title, year: selected.year, url: selected.url });
-
-              // Extract actual title, year, and contentId from YFlix page
-              return getContentInfoFromYflixUrl(selected.url)
-                .then(({ contentId, title: yflixTitle, year: yflixYear }) => {
-                  logRid(rid, `yflix page info`, { contentId, title: yflixTitle, year: yflixYear });
-
-                  if (mediaType === 'tv') {
-                    return handleTvShow(selected.url, contentId, yflixTitle, yflixYear, seasonNum, episodeNum, rid);
-                  } else {
-                    return runStreamFetch(contentId, null, yflixTitle, yflixYear, mediaType, seasonNum, episodeNum, rid);
-                  }
-                });
-            })
-            .catch(error => {
-              logRid(rid, `error with query "${searchQueries[queryIndex-1]}": ${error.message}`);
-              return tryNextQuery();
-            });
-        };
-
-        // Start with first query
-        return tryNextQuery();
+        // Fetch streams using the episode ID
+        return runStreamFetch(eid, info.title_en, info.year, mediaType, seasonNum, episodeNum, rid);
       })
       .then(streams => {
         if (streams) {
