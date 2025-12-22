@@ -40,6 +40,25 @@
       ]
     },
     {
+      "id": "animepahe",
+      "name": "AnimePahe",
+      "description": "AnimePahe anime streaming with Kwik servers",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/animepahe.js",
+      "enabled": true,
+      "limited": true,
+      "logo": "https://animepahe.si/favicon.ico",
+      "contentLanguage": [
+        "en",
+        "ja"
+      ]
+    },
+    {
       "id": "uhdmovies",
       "name": "UHDMovies",
       "description": "UHD Movies streaming with multiple resolution",
