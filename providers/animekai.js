@@ -324,7 +324,19 @@ function extractContentIdFromSlug(slugUrl) {
 }
 function formatToNuvioStreams(formattedData, mediaTitle) {
     var links = [];
-    var subs = formattedData && formattedData.subtitles ? formattedData.subtitles : [];
+    var rawSubs = formattedData && formattedData.subtitles ? formattedData.subtitles : [];
+
+    // MAP: Convert your scraper's subtitle format to Nuvio's expected format
+    var subs = rawSubs.map(function(s, index) {
+        return {
+            id: 'animekai_sub_' + index + '_' + Math.random().toString(36).slice(2, 7),
+            url: s.url,
+            lang: s.language || s.title || 'Unknown', // Nuvio uses 'lang'
+            format: s.type || 'vtt',                // Nuvio uses 'format'
+            headers: s.headers                      // Optional: passed for future compatibility
+        };
+    });
+
     var streams = formattedData && formattedData.streams ? formattedData.streams : [];
     
     var headers = {
