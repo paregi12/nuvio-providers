@@ -1,10 +1,7 @@
 // AnimeKai Scraper for Nuvio Local Scrapers
 // (Unrestricted Servers + All Fixes)
 // Changes: Removed server whitelist to fetch ALL available streams.
-// (Final Stable)
-// - Fixed Stream Array Concatenation Logic (The Bug you pointed out)
-// - Unrestricted Servers (Fetches all available)
-// - Subtitles with Headers included
+// Optimized: Parallel searching, reduced TMDB calls, parallel metadata fetching.
 
 // TMDB API Configuration
 const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
@@ -35,10 +32,6 @@ function fetchRequest(url, options) {
 
 function getSubType(url) {
     return url.indexOf('.srt') !== -1 ? 'srt' : 'vtt'; 
-    if (url.indexOf('.srt') !== -1) {
-        return 'srt';
-    }
-    return 'vtt'; 
 }
 
 function getTypeLabel(typeKey) {
@@ -155,7 +148,7 @@ function resolveM3U8(url, serverName, typeLabel) {
                         if (uriMatch) {
                             var subUrl = resolveUrlRelative(uriMatch[1], url);
                             var label = (nameMatch ? nameMatch[1] : null) || (langMatch ? langMatch[1] : 'Unknown');
-                            subtitles.push({ 
+                            subtitles.push({
                                 title: label, 
                                 language: label, 
                                 url: subUrl, 
@@ -227,16 +220,39 @@ function getTitlesFromKitsuEntry(entry) {
     }
     return unique;
 }
-function waterfallSearchAnimeKai(titles, type, season, tmdbId) {
+// Replaced waterfall with parallel search
+function parallelSearchAnimeKai(titles, type, season, tmdbId) {
     if (titles.length === 0) return Promise.resolve(null);
-    var title = titles[0];
-    var remaining = titles.slice(1);
+    var uniqueTitles = [];
+    var seenT = {};
+    for (var i = 0; i < titles.length; i++) {
+        var t = titles[i];
+        if (t && !seenT[t]) { seenT[t] = true; uniqueTitles.push(t); }
+    }
+    // Limit to top 5 to avoid potential rate limiting issues while remaining fast
+    var toSearch = uniqueTitles.slice(0, 5); 
     
-    return searchAnimeByName(title, type).then(function(res) {
-        if (res && res.length > 0) {
-             return pickResult(res, type, season, tmdbId);
+    var promises = toSearch.map(function(t) {
+        return searchAnimeByName(t, type).catch(function() { return []; });
+    });
+
+    return Promise.all(promises).then(function(resultsArray) {
+        var allResults = [];
+        var seenUrls = {};
+        for (var i = 0; i < resultsArray.length; i++) {
+            var res = resultsArray[i];
+            if (res && res.length > 0) {
+                for (var j = 0; j < res.length; j++) {
+                    var item = res[j];
+                    if (!seenUrls[item.url]) {
+                        seenUrls[item.url] = true;
+                        allResults.push(item);
+                    }
+                }
+            }
         }
-        return waterfallSearchAnimeKai(remaining, type, season, tmdbId);
+        if (allResults.length === 0) return null;
+        return pickResult(allResults, type, season, tmdbId);
     });
 }
 function searchAnimeByName(animeName, type) {
@@ -278,7 +294,7 @@ function getAccurateAnimeKaiEntry(animeTitle, season, episode, tmdbId, type) {
         // Also add the original search title to the list if not present
         if (titles.indexOf(animeTitle) === -1) titles.push(animeTitle);
 
-        return waterfallSearchAnimeKai(titles, type, season, tmdbId);
+        return parallelSearchAnimeKai(titles, type, season, tmdbId);
     }).catch(function() {
         return searchAnimeByName(animeTitle, type).then(function(res) { return pickResult(res, type, season, tmdbId); });
     });
@@ -299,19 +315,19 @@ function pickResult(results, mediaType, season, tmdbId) {
         var u = (r2.url || '').toLowerCase();
         if (u.indexOf('season-' + seasonStr) !== -1 || u.indexOf('-s' + seasonStr) !== -1) candidates.push({ r: r2, score: 2 });
     }
-    if (tmdbId && season > 1) {
-        return getTMDBSeasonInfo(tmdbId, season).then(function(seasonInfo) {
-            if (candidates.length > 0) return candidates.sort(function(a,b){ return b.score - a.score; })[0].r;
-            return results[0];
-        }).catch(function() {
-             if (candidates.length > 0) return candidates.sort(function(a,b){ return b.score - a.score; })[0].r;
-             return results[0];
-        });
-    }
-    return Promise.resolve(candidates.length > 0 ? candidates.sort(function(a,b){ return b.score - a.score; })[0].r : results[0]);
+    
+    // Removed redundant TMDB Season Info check - it didn't change the outcome
+    if (candidates.length > 0) return Promise.resolve(candidates.sort(function(a,b){ return b.score - a.score; })[0].r);
+    return Promise.resolve(results[0]);
 }
 // --- Formatting ---
 function buildMediaTitle(info, mediaType, season, episode, episodeInfo) {
+    if (mediaType === 'movie') {
+        if (info && info.year) return info.title + ' (' + info.year + ')';
+        if (info && info.title) return info.title;
+        if (episodeInfo && episodeInfo.seasonName) return episodeInfo.seasonName;
+        return 'Movie';
+    }
     if (episodeInfo && episodeInfo.seasonName) {
         var e = String(episodeInfo.episode || episode).padStart(2, '0');
         return episodeInfo.seasonName + ' E' + e;
@@ -416,17 +432,22 @@ function getStreams(tmdbId, mediaType, season, episode) {
     var rid = createRequestId();
     
     logRid(rid, 'getStreams start', { tmdbId: tmdbId, type: mediaType });
-    return getTMDBDetails(tmdbId, mediaType)
-        .then(function(info) {
-            mediaInfo = info || { title: null, year: null };
+
+    // Parallelize Initial Metadata Fetching
+    var detailsPromise = getTMDBDetails(tmdbId, mediaType);
+    var seasonPromise = (mediaType === 'tv' && targetSeason > 1) ? getTMDBSeasonInfo(tmdbId, targetSeason) : Promise.resolve(null);
+
+    return Promise.all([detailsPromise, seasonPromise])
+        .then(function(results) {
+            mediaInfo = results[0] || { title: null, year: null };
+            var seasonInfo = results[1];
+            
             var titleToSearch = mediaInfo.title || '';
-            if (mediaType === 'tv' && targetSeason > 1) {
-                return getTMDBSeasonInfo(tmdbId, targetSeason).then(function(seasonInfo) {
-                    var searchTitle = titleToSearch;
-                    if (seasonInfo.name && seasonInfo.name !== `Season ${targetSeason}`) searchTitle = titleToSearch + ' ' + seasonInfo.name;
-                    return getAccurateAnimeKaiEntry(searchTitle, targetSeason, targetEpisode, tmdbId, mediaType);
-                });
+            
+            if (seasonInfo && seasonInfo.name && seasonInfo.name !== `Season ${targetSeason}`) {
+                titleToSearch = titleToSearch + ' ' + seasonInfo.name;
             }
+            
             return getAccurateAnimeKaiEntry(titleToSearch, targetSeason, targetEpisode, tmdbId, mediaType);
         })
         .then(function(chosen) {
@@ -476,10 +497,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
                 Object.keys(servers || {}).forEach(function(typeKey) {
                     Object.keys(servers[typeKey] || {}).forEach(function(serverKey) {
 
-                        // REMOVED FILTER: We allow ALL servers now to ensure links are found
-                        // NOTE: Server filter removed intentionally to ensure all possible streams are found.
-                        // if (ALLOWED_SERVERS.indexOf(serverKey) === -1) return;
-
                         var lid = servers[typeKey][serverKey].lid;
                         var typeLabel = getTypeLabel(typeKey);
                         var p = encryptKai(lid)
@@ -517,8 +534,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     var m3u8Links = allStreams.filter(function(s){ return s && s.url && s.url.indexOf('.m3u8') !== -1; });
                     var directLinks = allStreams.filter(function(s){ return !(s && s.url && s.url.indexOf('.m3u8') !== -1); });
 
-                    // IMPORTANT: Extract .streams and .subtitles properly
-                    // FIXED: Extract .streams and .subtitles from the object before concatenating
                     return resolveMultipleM3U8(m3u8Links).then(function(resolutionResult) {
                         var m3u8Streams = resolutionResult.streams || [];
                         var m3u8Subs = resolutionResult.subtitles || [];
