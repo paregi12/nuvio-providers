@@ -206,14 +206,38 @@ function searchKitsu(animeTitle) {
     return fetchRequest(searchUrl, { headers: KITSU_HEADERS })
         .then(function(res) { return res.json(); })
         .then(function(response) {
-            var results = response.data || [];
-            var normalizedQuery = animeTitle.toLowerCase().replace(/[^\w\s]/g, '').trim();
-            return results.filter(function(entry) {
-                var canonical = (entry.attributes.canonicalTitle || '').toLowerCase().replace(/[^\w\s]/g, '');
-                var english = (entry.attributes.titles && entry.attributes.titles.en || '').toLowerCase().replace(/[^\w\s]/g, '');
-                return canonical.includes(normalizedQuery) || english.includes(normalizedQuery) || normalizedQuery.includes(canonical);
-            });
+            return response.data || [];
         });
+}
+function getTitlesFromKitsuEntry(entry) {
+    var titles = [];
+    var attrs = entry.attributes || {};
+    if (attrs.titles) {
+        if (attrs.titles.en) titles.push(attrs.titles.en);
+        if (attrs.titles.en_jp) titles.push(attrs.titles.en_jp);
+        if (attrs.titles.ja_jp) titles.push(attrs.titles.ja_jp);
+    }
+    if (attrs.canonicalTitle) titles.push(attrs.canonicalTitle);
+    
+    // Filter duplicates
+    var unique = [];
+    for (var i = 0; i < titles.length; i++) {
+        var t = titles[i];
+        if (t && unique.indexOf(t) === -1) unique.push(t);
+    }
+    return unique;
+}
+function waterfallSearchAnimeKai(titles, type, season, tmdbId) {
+    if (titles.length === 0) return Promise.resolve(null);
+    var title = titles[0];
+    var remaining = titles.slice(1);
+    
+    return searchAnimeByName(title, type).then(function(res) {
+        if (res && res.length > 0) {
+             return pickResult(res, type, season, tmdbId);
+        }
+        return waterfallSearchAnimeKai(remaining, type, season, tmdbId);
+    });
 }
 function searchAnimeByName(animeName, type) {
     var searchUrl = BASE_DOMAIN + '/browser?keyword=' + encodeURIComponent(animeName);
@@ -234,12 +258,27 @@ function searchAnimeByName(animeName, type) {
 }
 function getAccurateAnimeKaiEntry(animeTitle, season, episode, tmdbId, type) {
     return searchKitsu(animeTitle).then(function(kitsuResults) {
-        if (kitsuResults && kitsuResults.length > 0) {
-            var kitsuEntry = kitsuResults[0];
-            var kitsuTitle = kitsuEntry.attributes.titles && kitsuEntry.attributes.titles.en || kitsuEntry.attributes.canonicalTitle;
-            return searchAnimeByName(kitsuTitle, type).then(function(res) { return pickResult(res, type, season, tmdbId); });
+        if (!kitsuResults || kitsuResults.length === 0) {
+            return searchAnimeByName(animeTitle, type).then(function(res) { return pickResult(res, type, season, tmdbId); });
         }
-        return searchAnimeByName(animeTitle, type).then(function(res) { return pickResult(res, type, season, tmdbId); });
+
+        // Advanced Logic: Find best Kitsu entry
+        var bestEntry = kitsuResults[0];
+        if (season > 1) {
+             var seasonStr = String(season);
+             // Try to find exact season match in Kitsu results
+             var exactMatch = kitsuResults.find(function(entry) {
+                 var t = (entry.attributes.canonicalTitle || '').toLowerCase();
+                 return t.indexOf('season ' + seasonStr) !== -1 || t.indexOf(' ' + seasonStr) !== -1;
+             });
+             if (exactMatch) bestEntry = exactMatch;
+        }
+
+        var titles = getTitlesFromKitsuEntry(bestEntry);
+        // Also add the original search title to the list if not present
+        if (titles.indexOf(animeTitle) === -1) titles.push(animeTitle);
+
+        return waterfallSearchAnimeKai(titles, type, season, tmdbId);
     }).catch(function() {
         return searchAnimeByName(animeTitle, type).then(function(res) { return pickResult(res, type, season, tmdbId); });
     });
