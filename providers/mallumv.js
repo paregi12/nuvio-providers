@@ -3,7 +3,7 @@
 
 // Constants
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c"; // This will be replaced by Nuvio
-const BASE_URL = 'https://mallumv.fit';
+const BASE_URL = 'https://mallumv.gay';
 
 // Temporarily disable URL validation for faster results
 global.URL_VALIDATION_ENABLED = true;
@@ -14,8 +14,8 @@ const WORKING_HEADERS = {
     'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
     'Accept-Language': 'en-US,en;q=0.9',
     'Accept-Encoding': 'identity',
-    'Origin': 'https://mallumv.fit',
-    'Referer': 'https://mallumv.fit/',
+    'Origin': 'https://mallumv.gay',
+    'Referer': 'https://mallumv.gay/',
     'Sec-Fetch-Dest': 'video',
     'Sec-Fetch-Mode': 'no-cors',
     'Sec-Fetch-Site': 'cross-site',
@@ -66,23 +66,23 @@ function getIndexQuality(str) {
 function cleanTitle(title) {
     const decodedTitle = decodeFilename(title);
     const parts = decodedTitle.split(/[.\-_]/);
-    
+
     const qualityTags = ['WEBRip', 'WEB-DL', 'WEB', 'BluRay', 'HDRip', 'DVDRip', 'HDTV', 'CAM', 'TS', 'R5', 'DVDScr', 'BRRip', 'BDRip', 'DVD', 'PDTV', 'HD'];
     const audioTags = ['AAC', 'AC3', 'DTS', 'MP3', 'FLAC', 'DD5', 'EAC3', 'Atmos'];
     const subTags = ['ESub', 'ESubs', 'Subs', 'MultiSub', 'NoSub', 'EnglishSub', 'HindiSub'];
     const codecTags = ['x264', 'x265', 'H264', 'HEVC', 'AVC'];
-    
-    const startIndex = parts.findIndex(part => 
+
+    const startIndex = parts.findIndex(part =>
         qualityTags.some(tag => part.toLowerCase().includes(tag.toLowerCase()))
     );
-    
+
     const endIndex = parts.map((part, index) => {
-        const hasTag = [...subTags, ...audioTags, ...codecTags].some(tag => 
+        const hasTag = [...subTags, ...audioTags, ...codecTags].some(tag =>
             part.toLowerCase().includes(tag.toLowerCase())
         );
         return hasTag ? index : -1;
     }).filter(index => index !== -1).pop() || -1;
-    
+
     if (startIndex !== -1 && endIndex !== -1 && endIndex >= startIndex) {
         return parts.slice(startIndex, endIndex + 1).join('.');
     } else if (startIndex !== -1) {
@@ -94,16 +94,16 @@ function cleanTitle(title) {
 
 function decodeFilename(filename) {
     if (!filename) return filename;
-    
+
     try {
         let decoded = filename;
-        
+
         if (decoded.startsWith('UTF-8')) {
             decoded = decoded.substring(5);
         }
-        
+
         decoded = decodeURIComponent(decoded);
-        
+
         return decoded;
     } catch (error) {
         return filename;
@@ -117,14 +117,14 @@ function getFilenameFromUrl(url) {
                 .then(response => {
                     const contentDisposition = response.headers.get('content-disposition');
                     let filename = null;
-                    
+
                     if (contentDisposition) {
                         const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
                         if (filenameMatch && filenameMatch[1]) {
                             filename = filenameMatch[1].replace(/["']/g, '');
                         }
                     }
-                    
+
                     if (!filename) {
                         const urlObj = new URL(url);
                         const pathParts = urlObj.pathname.split('/');
@@ -133,7 +133,7 @@ function getFilenameFromUrl(url) {
                             filename = filename.replace(/\.[^.]+$/, '');
                         }
                     }
-                    
+
                     const decodedFilename = decodeFilename(filename);
                     resolve(decodedFilename || null);
                 })
@@ -157,11 +157,11 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
             return href;
         }
     }
-    
+
     return makeHTTPRequest(url, { parseHTML: true })
         .then(response => {
             const $ = response.$;
-            
+
             var href;
             if (url.indexOf('hubcloud.php') !== -1) {
                 href = url;
@@ -190,8 +190,8 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                     href = toAbsolute(rawHref, origin);
                 }
             }
-            
-            return makeHTTPRequest(href, { parseHTML: true }).then(function(secondResponse) {
+
+            return makeHTTPRequest(href, { parseHTML: true }).then(function (secondResponse) {
                 return { firstResponse: response, secondResponse: secondResponse, href: href };
             });
         })
@@ -229,7 +229,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                 if (url.includes('gamerxyt.com/dl.php?link=')) {
                     console.log(`[MalluMV] 🔍 Processing gamerxyt.com URL: ${url.substring(0, 100)}...`);
                     const linkMatch = url.match(/gamerxyt\.com\/dl\.php\?link=([^&\s]+)/);
-                    
+
                     if (linkMatch && linkMatch[1]) {
                         const actualUrl = decodeURIComponent(linkMatch[1]);
                         console.log(`[MalluMV] ✅ Extracted URL from gamerxyt.com: ${actualUrl.substring(0, 80)}...`);
@@ -283,7 +283,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                                 /<a[^>]*href=["']([^"']+)["'][^>]*class[^>]*download/i,
                                 /<a[^>]*class[^>]*download[^>]*href=["']([^"']+)["']/i
                             ];
-                            
+
                             for (const pattern of downloadHerePatterns) {
                                 const downloadHereMatch = text.match(pattern);
                                 if (downloadHereMatch) {
@@ -298,7 +298,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                                             downloadUrl = hrefMatch[1];
                                         }
                                     }
-                                    
+
                                     if (downloadUrl && !downloadUrl.startsWith('#') && downloadUrl !== url) {
                                         console.log(`[MalluMV] Found "Download Here" link: ${downloadUrl.substring(0, 50)}...`);
                                         // Resolve relative URLs to absolute
@@ -317,7 +317,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                             if (downloadLinkMatch && downloadLinkMatch[1]) {
                                 const downloadUrl = downloadLinkMatch[1];
                                 // Skip if it's a fragment, relative path without extension, or the same URL
-                                if (!downloadUrl.startsWith('#') && 
+                                if (!downloadUrl.startsWith('#') &&
                                     (downloadUrl.startsWith('http') || downloadUrl.includes('/') || downloadUrl.includes('.'))) {
                                     console.log(`[MalluMV] Found download link: ${downloadUrl.substring(0, 50)}...`);
                                     try {
@@ -399,7 +399,7 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                 if (pd && pd[1]) buttonLink = 'https://pixeldrain.net/api/file/' + pd[1];
 
                 // Handle intermediate HubCloud URLs (.fans/?id=, .workers.dev/?id=, and redirect URLs)
-                if (buttonLink.includes('.fans/?id=') || buttonLink.includes('.workers.dev/?id=') || 
+                if (buttonLink.includes('.fans/?id=') || buttonLink.includes('.workers.dev/?id=') ||
                     buttonLink.includes('360news4u.net/dl.php') || buttonLink.includes('gamerxyt.com/dl.php')) {
                     return resolveHubCloudUrl(buttonLink)
                         .then(resolvedUrl => {
@@ -416,13 +416,13 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                         })
                         .then(resolvedUrl => {
                             return getFilenameFromUrl(resolvedUrl)
-                                    .then(actualFilename => {
-                                        const displayFilename = actualFilename || headerDetails || 'Unknown';
-                                        const titleParts = [];
-                                        if (displayFilename) titleParts.push(displayFilename);
-                                        if (size) titleParts.push(size);
-                                        const finalTitle = titleParts.join('\n');
-                                        
+                                .then(actualFilename => {
+                                    const displayFilename = actualFilename || headerDetails || 'Unknown';
+                                    const titleParts = [];
+                                    if (displayFilename) titleParts.push(displayFilename);
+                                    if (size) titleParts.push(size);
+                                    const finalTitle = titleParts.join('\n');
+
                                     let name;
                                     if (buttonText.includes('FSL Server')) name = 'MalluMV - FSL Server' + qualityLabel;
                                     else if (buttonText.includes('S3 Server')) name = 'MalluMV - S3 Server' + qualityLabel;
@@ -439,14 +439,14 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                                         headers: WORKING_HEADERS,
                                         provider: 'mallumv'
                                     };
-                                    })
-                                    .catch(() => {
-                                        const displayFilename = headerDetails || 'Unknown';
-                                        const titleParts = [];
-                                        if (displayFilename) titleParts.push(displayFilename);
-                                        if (size) titleParts.push(size);
-                                        const finalTitle = titleParts.join('\n');
-                                        
+                                })
+                                .catch(() => {
+                                    const displayFilename = headerDetails || 'Unknown';
+                                    const titleParts = [];
+                                    if (displayFilename) titleParts.push(displayFilename);
+                                    if (size) titleParts.push(size);
+                                    const finalTitle = titleParts.join('\n');
+
                                     const name = 'MalluMV - HubCloud' + qualityLabel;
                                     return {
                                         name: name,
@@ -457,54 +457,54 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
                                         headers: WORKING_HEADERS,
                                         provider: 'mallumv'
                                     };
-                                        });
-                                    });
+                                });
+                        });
                 }
 
                 return getFilenameFromUrl(buttonLink)
-                                    .then(actualFilename => {
-                                        const displayFilename = actualFilename || headerDetails || 'Unknown';
-                                        const titleParts = [];
-                                        if (displayFilename) titleParts.push(displayFilename);
-                                        if (size) titleParts.push(size);
-                                        const finalTitle = titleParts.join('\n');
-                                        
-                let name;
-                if (buttonText.includes('FSL Server')) name = 'MalluMV - FSL Server' + qualityLabel;
-                else if (buttonText.includes('S3 Server')) name = 'MalluMV - S3 Server' + qualityLabel;
-                else if (/pixeldra/i.test(buttonText) || /pixeldra/i.test(buttonLink)) name = 'MalluMV - Pixeldrain' + qualityLabel;
-                else if (buttonText.includes('Download File')) name = 'MalluMV - HubCloud' + qualityLabel;
-                else name = 'MalluMV - HubCloud' + qualityLabel;
+                    .then(actualFilename => {
+                        const displayFilename = actualFilename || headerDetails || 'Unknown';
+                        const titleParts = [];
+                        if (displayFilename) titleParts.push(displayFilename);
+                        if (size) titleParts.push(size);
+                        const finalTitle = titleParts.join('\n');
 
-                return {
-                    name: name,
-                    title: finalTitle,
-                    url: buttonLink,
-                    quality: quality ? quality + 'p' : 'Unknown',
-                    size: size || 'Unknown',
-                    headers: WORKING_HEADERS,
-                    provider: 'mallumv'
-                };
-                                    })
-                                    .catch(() => {
-                                        const displayFilename = headerDetails || 'Unknown';
-                                        const titleParts = [];
-                                        if (displayFilename) titleParts.push(displayFilename);
-                                        if (size) titleParts.push(size);
-                                        const finalTitle = titleParts.join('\n');
-                                        
-                const name = 'MalluMV - HubCloud' + qualityLabel;
-                return {
-                    name: name,
-                    title: finalTitle,
-                    url: buttonLink,
-                    quality: quality ? quality + 'p' : 'Unknown',
-                    size: size || 'Unknown',
-                    headers: WORKING_HEADERS,
-                    provider: 'mallumv'
-                };
-            });
-        }
+                        let name;
+                        if (buttonText.includes('FSL Server')) name = 'MalluMV - FSL Server' + qualityLabel;
+                        else if (buttonText.includes('S3 Server')) name = 'MalluMV - S3 Server' + qualityLabel;
+                        else if (/pixeldra/i.test(buttonText) || /pixeldra/i.test(buttonLink)) name = 'MalluMV - Pixeldrain' + qualityLabel;
+                        else if (buttonText.includes('Download File')) name = 'MalluMV - HubCloud' + qualityLabel;
+                        else name = 'MalluMV - HubCloud' + qualityLabel;
+
+                        return {
+                            name: name,
+                            title: finalTitle,
+                            url: buttonLink,
+                            quality: quality ? quality + 'p' : 'Unknown',
+                            size: size || 'Unknown',
+                            headers: WORKING_HEADERS,
+                            provider: 'mallumv'
+                        };
+                    })
+                    .catch(() => {
+                        const displayFilename = headerDetails || 'Unknown';
+                        const titleParts = [];
+                        if (displayFilename) titleParts.push(displayFilename);
+                        if (size) titleParts.push(size);
+                        const finalTitle = titleParts.join('\n');
+
+                        const name = 'MalluMV - HubCloud' + qualityLabel;
+                        return {
+                            name: name,
+                            title: finalTitle,
+                            url: buttonLink,
+                            quality: quality ? quality + 'p' : 'Unknown',
+                            size: size || 'Unknown',
+                            headers: WORKING_HEADERS,
+                            provider: 'mallumv'
+                        };
+                    });
+            }
 
             // Iterate per card to capture per-quality sections (from 4KHDHub)
             const tasks = [];
@@ -530,13 +530,13 @@ function extractHubCloudLinks(url, referer = 'HubCloud') {
 
                         // Only consider plausible buttons (from 4KHDHub)
                         const isPlausible = /(hubcloud|hubdrive|pixeldrain|buzz|10gbps|workers\.dev|r2\.dev|download|api\/file)/i.test(link) ||
-                                          text.toLowerCase().includes('download');
+                            text.toLowerCase().includes('download');
 
                         if (!isPlausible) return;
 
                         tasks.push(buildTask(text, link, headerDetails, size, quality));
+                    });
                 });
-            });
             }
 
             // Fallback: whole page buttons (from 4KHDHub)
@@ -609,7 +609,7 @@ function calculateSimilarity(str1, str2) {
 function findBestMatch(results, query) {
     if (!results || results.length === 0) return null;
     if (results.length === 1) return results[0];
-    
+
     var scored = results.map(function (r) {
         var score = 0;
         if (normalizeTitle(r.title) === normalizeTitle(query)) score += 100;
@@ -621,17 +621,17 @@ function findBestMatch(results, query) {
         return { item: r, score: score };
     });
     scored.sort(function (a, b) { return b.score - a.score; });
-    
+
     // Only return the best match if it has a reasonable similarity score
     // Require at least 30% similarity or exact match to avoid wrong movies
     const bestMatch = scored[0];
     const similarity = calculateSimilarity(bestMatch.item.title, query);
-    
+
     if (similarity < 0.3 && normalizeTitle(bestMatch.item.title) !== normalizeTitle(query)) {
         console.log(`[MalluMV] Best match "${bestMatch.item.title}" has low similarity (${(similarity * 100).toFixed(1)}%) with "${query}" - rejecting`);
         return null;
     }
-    
+
     return bestMatch.item;
 }
 
@@ -642,27 +642,27 @@ function parseQualityForSort(qualityString) {
 
 function parseSizeForSort(sizeString) {
     if (!sizeString) return 0;
-    
+
     const match = sizeString.match(/(\d+(?:\.\d+)?)\s*(GB|MB)/i);
     if (!match) return 0;
-    
+
     const value = parseFloat(match[1]);
     const unit = match[2].toUpperCase();
-    
+
     // Convert everything to MB for comparison
     if (unit === 'GB') {
         return value * 1024; // Convert GB to MB
     } else if (unit === 'MB') {
         return value;
     }
-    
+
     return 0;
 }
 
 // Extract quality from text - improved to handle numeric values and normalize labels
 function extractQuality(text) {
     if (!text) return 'Unknown';
-    
+
     // First, look for specific resolution values (prioritize these)
     const resolutionMatch = text.match(/(4K|2160p|1080p|720p|480p|360p)/i);
     if (resolutionMatch) {
@@ -671,7 +671,7 @@ function extractQuality(text) {
         if (quality === '4K') return '4K';
         return quality;
     }
-    
+
     // Look for numeric quality values (like 2160, 1080, 720, etc.)
     const numericMatch = text.match(/(\d{3,4})[pP]?/);
     if (numericMatch) {
@@ -685,13 +685,13 @@ function extractQuality(text) {
         else if (numericValue >= 360) return '360p';
         else if (numericValue >= 240) return '240p';
     }
-    
+
     // If no specific resolution found, look for quality indicators
     const qualityMatch = text.match(/(WEB-DL|BluRay|HDRip|DVDRip|HDTV|CAM|TS|R5|DVDScr|BRRip|BDRip|DVD|PDTV|HD)/i);
     if (qualityMatch) {
         return qualityMatch[1];
     }
-    
+
     return 'Unknown';
 }
 
@@ -706,18 +706,18 @@ function getServiceName(url) {
     try {
         const urlObj = new URL(url);
         const hostname = urlObj.hostname.toLowerCase();
-        
+
         if (hostname.includes('sharepoint')) return 'OneDrive';
         if (hostname.includes('hubcloud')) return 'HubCloud';
         if (hostname.includes('pixeldrain')) return 'Pixeldrain';
         if (hostname.includes('gofile')) return 'GoFile';
-        
+
         // Extract domain name for unknown services
         const parts = hostname.split('.');
         if (parts.length >= 2) {
             return parts[parts.length - 2].charAt(0).toUpperCase() + parts[parts.length - 2].slice(1);
         }
-        
+
         return 'Unknown Service';
     } catch (error) {
         return 'Unknown Service';
@@ -753,7 +753,7 @@ function makeHTTPRequest(url, options = {}) {
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
-                
+
                 return response.text().then(data => {
                     if (options.parseHTML && data) {
                         const cheerio = require('cheerio-without-node-native');
@@ -776,9 +776,9 @@ function searchContent(title, year, mediaType) {
     const searchQuery = title.trim();
     const encodedQuery = encodeURIComponent(searchQuery);
     const searchUrl = `${BASE_URL}/search.php?q=${encodedQuery}`;
-    
+
     console.log(`[MalluMV] Searching for: "${searchQuery}" at ${searchUrl}`);
-    
+
     return makeHTTPRequest(searchUrl)
         .then(response => response.body)
         .then(html => {
@@ -787,25 +787,25 @@ function searchContent(title, year, mediaType) {
                 console.log(`[MalluMV] No exact results found for "${title}" - returning empty results`);
                 return [];
             }
-            
+
             // Look for movie page links (without leading slash)
             const moviePageRegex = /<a href="(movie\/\d+\/[^"]+\.xhtml)">/g;
             const results = [];
             let match;
-            
+
             while ((match = moviePageRegex.exec(html)) !== null) {
                 const movieUrl = new URL('/' + match[1], BASE_URL).href;
-                
+
                 // Extract title from the link text (look for the text between <a> tags)
                 const linkTextMatch = html.substring(match.index).match(/<a href="[^"]+">\s*<p class="home">\s*<font[^>]*>\s*<b>\s*»\s*([^<]+)/);
                 const extractedTitle = linkTextMatch ? linkTextMatch[1].trim() : title;
-                
+
                 results.push({
                     title: extractedTitle,
                     url: movieUrl
                 });
             }
-            
+
             console.log(`[MalluMV] Found ${results.length} search results`);
             return results;
         })
@@ -818,17 +818,17 @@ function searchContent(title, year, mediaType) {
 // Extract download links from movie page
 function extractDownloadLinks(pageUrl) {
     console.log(`[MalluMV] Extracting download links from: ${pageUrl}`);
-    
+
     return makeHTTPRequest(pageUrl)
         .then(response => response.body)
         .then(html => {
             const downloadLinks = [];
-            
+
             // Look for confirm page links with full titles
             // Pattern matches: [» Title with details](confirm/url)
             const confirmRegex = /\[»\s*([^\]]+)\]\((\/confirm\/\d+\/\d+\/[^)]+\.xhtml)\)/g;
             let match;
-            
+
             while ((match = confirmRegex.exec(html)) !== null) {
                 const confirmUrl = new URL(match[2], BASE_URL).href;
                 const fullTitle = match[1].trim()
@@ -838,11 +838,11 @@ function extractDownloadLinks(pageUrl) {
                     .replace(/&gt;/g, '>')
                     .replace(/&quot;/g, '"')
                     .replace(/&#39;/g, "'");
-                
+
                 // Extract quality and size from full title
                 const quality = extractQuality(fullTitle);
                 const size = extractSize(fullTitle);
-                
+
                 downloadLinks.push({
                     url: confirmUrl,
                     text: fullTitle,
@@ -851,12 +851,12 @@ function extractDownloadLinks(pageUrl) {
                     fullTitle: fullTitle
                 });
             }
-            
+
             // Fallback: if no matches found with the new pattern, try the old pattern
             if (downloadLinks.length === 0) {
                 const fallbackRegex = /<a class="touh" href="(\/confirm\/\d+\/\d+\/[^"]+\.xhtml)">([^<]+)<\/a>/g;
                 let fallbackMatch;
-                
+
                 while ((fallbackMatch = fallbackRegex.exec(html)) !== null) {
                     const confirmUrl = new URL(fallbackMatch[1], BASE_URL).href;
                     const linkText = fallbackMatch[2].trim()
@@ -866,11 +866,11 @@ function extractDownloadLinks(pageUrl) {
                         .replace(/&gt;/g, '>')
                         .replace(/&quot;/g, '"')
                         .replace(/&#39;/g, "'");
-                    
+
                     // Extract quality and size from link text
                     const quality = extractQuality(linkText);
                     const size = extractSize(linkText);
-                    
+
                     downloadLinks.push({
                         url: confirmUrl,
                         text: linkText,
@@ -880,7 +880,7 @@ function extractDownloadLinks(pageUrl) {
                     });
                 }
             }
-            
+
             console.log(`[MalluMV] Found ${downloadLinks.length} download links`);
             return downloadLinks;
         })
@@ -893,13 +893,13 @@ function extractDownloadLinks(pageUrl) {
 // Process confirm page to get internal page URL
 function processConfirmLink(confirmPageUrl) {
     console.log(`[MalluMV] Processing confirm page: ${confirmPageUrl}`);
-    
+
     return makeHTTPRequest(confirmPageUrl)
         .then(response => response.body)
         .then(html => {
             // Look for the "Confirm Download" link that leads to internal page
             const internalMatch = html.match(/<a class="touch" href="(\/internal\/\d+\/\d+\/[^"]+\.xhtml)">/);
-            
+
             if (internalMatch) {
                 const internalUrl = new URL(internalMatch[1], BASE_URL).href;
                 console.log(`[MalluMV] Found internal page URL: ${internalUrl}`);
@@ -918,7 +918,7 @@ function processConfirmLink(confirmPageUrl) {
 // Process internal page to get final download URL
 function processInternalLink(internalPageUrl, quality, size, fullTitle) {
     console.log(`[MalluMV] Processing internal page: ${internalPageUrl}`);
-    
+
     return makeHTTPRequest(internalPageUrl)
         .then(response => response.body)
         .then(html => {
@@ -927,7 +927,7 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
             if (hubCloudMatch) {
                 const hubCloudUrl = hubCloudMatch[1];
                 console.log(`[MalluMV] Found HubCloud URL, extracting streams...`);
-                
+
                 // Use DVDPlay's HubCloud extractor
                 return extractHubCloudLinks(hubCloudUrl, 'MalluMV')
                     .then(streams => {
@@ -940,7 +940,7 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
                         }));
                     });
             }
-            
+
             // Fall back to direct download patterns
             const downloadPatterns = [
                 // OneDrive/SharePoint pattern
@@ -950,16 +950,16 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
                 // Generic download link
                 /<a href="(https:\/\/[^"]*)"[^>]*>Download/
             ];
-            
+
             for (const pattern of downloadPatterns) {
                 const match = html.match(pattern);
                 if (match) {
                     const downloadUrl = match[1];
                     const serviceName = getServiceName(downloadUrl);
                     const qualityLabel = quality ? (' - ' + quality) : '';
-                    
+
                     console.log(`[MalluMV] Found download URL: ${downloadUrl.substring(0, 80)}...`);
-                    
+
                     return [{
                         name: `MalluMV - ${serviceName}${qualityLabel}`,
                         title: fullTitle || `${quality || 'Unknown'} Quality`,
@@ -971,7 +971,7 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
                     }];
                 }
             }
-            
+
             console.log(`[MalluMV] No download URL found in internal page`);
             return [];
         })
@@ -999,29 +999,29 @@ function filterAndDeduplicateStreams(streams) {
     const suspicious = ['www-google-com.cdn.ampproject.org', 'bloggingvector.shop', 'cdn.ampproject.org'];
     const filtered = streams.filter(stream => {
         const url = (stream.url || '').toLowerCase();
-        
+
         // Filter ZIP files
         if (url.includes('.zip') || (stream.title && stream.title.toLowerCase().includes('.zip'))) {
             return false;
         }
-        
+
         // Filter suspicious AMP/redirect URLs
         if (suspicious.some(pattern => url.includes(pattern))) {
             return false;
         }
-        
+
         // Filter base64 encoded URLs (likely intermediate redirects)
         if (url.includes('/aHR0cHM6') || url.includes('/foo/aHR0')) {
             return false;
         }
-        
+
         return true;
     });
-    
+
     // Resolve gamerxyt.com/dl.php?link= URLs to extract actual Google Drive URLs
     const resolvedStreams = filtered.map(stream => {
         const url = stream.url;
-        
+
         // Check if it's a gamerxyt.com/dl.php?link= URL
         if (url.includes('gamerxyt.com/dl.php?link=')) {
             try {
@@ -1030,7 +1030,7 @@ function filterAndDeduplicateStreams(streams) {
                 if (linkMatch && linkMatch[1]) {
                     const actualUrl = decodeURIComponent(linkMatch[1]);
                     console.log(`[MalluMV] Resolved gamerxyt URL: ${url.substring(0, 80)}... -> ${actualUrl.substring(0, 80)}...`);
-                    
+
                     return {
                         ...stream,
                         url: actualUrl
@@ -1040,10 +1040,10 @@ function filterAndDeduplicateStreams(streams) {
                 console.log(`[MalluMV] Failed to resolve gamerxyt URL: ${error.message}`);
             }
         }
-        
+
         return stream;
     });
-    
+
     // Deduplicate by URL
     const seenUrls = new Set();
     const unique = resolvedStreams.filter(stream => {
@@ -1051,18 +1051,18 @@ function filterAndDeduplicateStreams(streams) {
         seenUrls.add(stream.url);
         return true;
     });
-    
+
     return unique;
 }
 
 // Main function that Nuvio will call
 function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = null) {
     console.log(`[MalluMV] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}`);
-    
+
     var tmdbType = (mediaType === 'series' ? 'tv' : mediaType);
     return getTMDBDetails(tmdbId, tmdbType).then(function (tmdb) {
         if (!tmdb || !tmdb.title) return [];
-        
+
         console.log(`[MalluMV] TMDB Info: "${tmdb.title}" (${tmdb.year})`);
 
         // Search for content
@@ -1079,7 +1079,7 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                 return [];
             }
             console.log(`[MalluMV] Selected result: "${selectedResult.title}"`);
-            
+
             // Extract download links from movie page
             return extractDownloadLinks(selectedResult.url).then(downloadLinks => {
                 if (downloadLinks.length === 0) {
@@ -1103,10 +1103,10 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                 return Promise.all(streamPromises).then(nestedStreams => {
                     // Flatten array of arrays
                     let allStreams = nestedStreams.flat();
-                    
+
                     // Filter out empty results
                     let validStreams = allStreams.filter(stream => stream !== null && stream.url);
-                    
+
                     // Remove duplicates based on URL
                     const uniqueStreams = Array.from(new Map(validStreams.map(stream => [stream.url, stream])).values());
 
@@ -1115,12 +1115,12 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
                         // Parse sizes to numbers for comparison
                         const sizeA = parseSizeForSort(a.size);
                         const sizeB = parseSizeForSort(b.size);
-                        
+
                         // If sizes are different, sort by size (largest first)
                         if (sizeA !== sizeB) {
                             return sizeB - sizeA;
                         }
-                        
+
                         // If sizes are equal, sort by quality (highest first)
                         const qualityA = parseQualityForSort(a.quality);
                         const qualityB = parseQualityForSort(b.quality);
