@@ -1,409 +1,253 @@
-# Nuvio Local Scrapers
+# Nuvio Providers
 
-A collection of local scrapers for the Nuvio streaming application. These scrapers allow you to fetch streams from various sources directly within the app.
+A collection of streaming providers for the Nuvio app. Providers are JavaScript modules that fetch streams from various sources.
 
-## Installation
+## 🚀 Quick Start
 
-1. Open Nuvio app
-2. Go to Settings → Local Scrapers
-3. Add this repository URL:
+### Using in Nuvio App
+
+1. Open **Nuvio** → **Settings** → **Plugins**
+2. Add this repository URL:
    ```
-   https://raw.githubusercontent.com/tapframe/nuvio-providers/refs/heads/main/
+   https://raw.githubusercontent.com/tapframe/nuvio-providers/refs/heads/main
    ```
-4. Enable the scrapers you want to use
+3. Refresh and enable the providers you want
 
-## Scraper Development
+---
 
-**💡 Tip:** Check existing scrapers in the `providers/` directory for real working examples before starting your own.
+## 📁 Project Structure
 
-### Core Function
-**⚠️ IMPORTANT:** Your scraper must use Promise-based approach only. **async/await is NOT supported** in this sandboxed environment.
-
-Your scraper must export a `getStreams` function that returns a Promise:
-
-```javascript
-function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
-  return new Promise((resolve, reject) => {
-    // Your scraping logic here - NO async/await allowed
-    // Use .then() and .catch() for all async operations
-    // Return array of stream objects or empty array on error
-    resolve(streams);
-  });
-}
-
-// Export for React Native compatibility
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { getStreams };
-} else {
-  global.getStreams = getStreams;
-}
+```
+nuvio-providers/
+├── src/                    # Source files (multi-file development)
+│   ├── vixsrc/
+│   │   ├── index.js        # Main entry point
+│   │   ├── extractor.js    # Stream extraction
+│   │   ├── http.js         # HTTP utilities
+│   │   └── ...
+│   └── uhdmovies/
+│       └── ...
+│
+├── providers/              # Built output (single files)
+│   ├── vixsrc.js           # ← Bundled from src/vixsrc/
+│   ├── uhdmovies.js
+│   └── ...
+│
+├── manifest.json           # Provider registry
+├── build.js                # Build script
+└── package.json
 ```
 
-**Parameters:**
-- `tmdbId` (string): TMDB ID
-- `mediaType` (string): "movie" or "tv"
-- `seasonNum` (number): Season number (TV only)
-- `episodeNum` (number): Episode number (TV only)
+---
 
-### Stream Object Format
-Each stream must return this exact format (see `providers/xprime.js` for real examples):
+## 🛠️ Development
+
+### Prerequisites
+
+```bash
+npm install
+```
+
+### Creating a New Provider
+
+1. **Create provider folder:**
+   ```bash
+   mkdir -p src/myprovider
+   ```
+
+2. **Create entry point** (`src/myprovider/index.js`):
+   ```javascript
+   import { fetchPage } from './http.js';
+   import { extractStreams } from './extractor.js';
+
+   async function getStreams(tmdbId, mediaType, season, episode) {
+     console.log(`[MyProvider] Fetching ${mediaType} ${tmdbId}`);
+     
+     const page = await fetchPage(tmdbId, mediaType, season, episode);
+     const streams = extractStreams(page);
+     
+     return streams;
+   }
+
+   module.exports = { getStreams };
+   ```
+
+3. **Add helper modules** as needed:
+   - `src/myprovider/http.js` — HTTP utilities
+   - `src/myprovider/extractor.js` — Extraction logic
+   - `src/myprovider/utils.js` — Helper functions
+
+4. **Build:**
+   ```bash
+   node build.js myprovider
+   ```
+
+5. **Add to manifest.json:**
+   ```json
+   {
+     "id": "myprovider",
+     "name": "My Provider",
+     "description": "Description of your provider",
+     "version": "1.0.0",
+     "supportedTypes": ["movie", "tv"],
+     "filename": "providers/myprovider.js",
+     "enabled": true,
+     "logo": "https://example.com/logo.png",
+     "contentLanguage": ["en"]
+   }
+   ```
+
+---
+
+## 📦 Building
+
+### Build All Providers
+
+```bash
+npm run build
+```
+
+### Build Specific Provider
+
+```bash
+node build.js vixsrc
+node build.js vixsrc uhdmovies showbox
+```
+
+### Watch Mode (Auto-rebuild)
+
+```bash
+npm run build:watch
+```
+
+---
+
+## 🧪 Testing
+
+### Test a Built Provider
+
+```bash
+# Create a test file
+cat > test-myprovider.js << 'EOF'
+const { getStreams } = require('./providers/myprovider.js');
+
+async function test() {
+  // Test movie (Oppenheimer)
+  const movieStreams = await getStreams('872585', 'movie');
+  console.log('Movie streams:', movieStreams.length);
+
+  // Test TV (Breaking Bad S1E1)
+  const tvStreams = await getStreams('1396', 'tv', 1, 1);
+  console.log('TV streams:', tvStreams.length);
+}
+
+test().catch(console.error);
+EOF
+
+node test-myprovider.js
+```
+
+### Run Existing Tests
+
+```bash
+node test-vixsrc.js
+```
+
+---
+
+## 📋 Stream Object Format
+
+Providers must return an array of stream objects:
 
 ```javascript
 {
-  name: "XPrime Primebox - 1080p",  // Provider + server name
-  title: "Movie Title (2024)",       // Media title with year
-  url: "https://stream.url",         // Direct stream URL
-  quality: "1080p",                  // Quality (720p, 1080p, 4K, etc.)
-  size: "Unknown",                   // Optional file size
-  headers: WORKING_HEADERS,          // Required headers for playback
-  provider: "xprime"                 // Provider identifier
-}
-```
-
-### Headers (When Needed)
-Include headers if the stream requires them for playback. Check `providers/xprime.js` for real WORKING_HEADERS example:
-
-```javascript
-// From providers/xprime.js - real working headers
-const WORKING_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept': 'video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'identity',
-    'Origin': 'https://xprime.tv',
-    'Referer': 'https://xprime.tv/',
-    'Sec-Fetch-Dest': 'video',
-    'Sec-Fetch-Mode': 'no-cors',
-    'Sec-Fetch-Site': 'cross-site',
-    'DNT': '1'
-};
-```
-
-### React Native Compatibility
-- **❌ async/await is NOT supported** in this sandboxed environment
-- **✅ Promise-based approach is COMPULSORY** - use `.then()` and `.catch()`
-- Use `fetch()` for HTTP requests (no axios)
-- Use `cheerio-without-node-native` for HTML parsing
-- Avoid Node.js modules (fs, path, crypto)
-
-### Testing
-Create a test file to verify your scraper (see existing scrapers for examples):
-
-```javascript
-const { getStreams } = require('./providers/xprime.js');
-
-getStreams('550', 'movie').then(streams => {
-  console.log('Found', streams.length, 'streams');
-  streams.forEach(stream => console.log(`${stream.name}: ${stream.quality}`));
-}).catch(console.error);
-```
-
-### Manifest Entry
-Add your scraper to `manifest.json` (see existing entries for examples):
-
-```json
-{
-  "id": "yourscraper",
-  "name": "Your Scraper",
-  "description": "Brief description of what your scraper does",
-  "version": "1.0.0",
-  "author": "Your Name",
-  "supportedTypes": ["movie", "tv"],
-  "filename": "providers/yourscraper.js",
-  "enabled": true,
-  "formats": ["mkv"],
-  "logo": "https://your-logo-url.com/logo.png",
-  "contentLanguage": ["en"]
-}
-```
-
-## Publishing to GitHub
-
-1. **Create a new repository on GitHub:**
-   - Go to github.com
-   - Click "New repository"
-   - Name it `nuvio-local-scrapers`
-   - Make it public
-   - Don't initialize with README (we already have one)
-
-2. **Upload files:**
-   ```bash
-   cd /path/to/local-scrapers-repo
-   git init
-   git add .
-   git commit -m "Initial commit with UHD Movies scraper"
-   git branch -M main
-   git remote add origin https://github.com/tapframe/nuvio-local-scrapers.git
-   git push -u origin main
-   ```
-
-3. **Get the raw URL:**
-   ```
-   https://raw.githubusercontent.com/tapframe/nuvio-local-scrapers/main/
-   ```
-
-## Contributing
-
-### Development Workflow
-
-1. **Fork this repository**
-   ```bash
-   # Clone your fork
-   git clone https://github.com/tapframe/nuvio-local-scrapers.git
-   cd nuvio-local-scrapers
-   ```
-
-2. **Create a new branch**
-   ```bash
-   git checkout -b add-newscraper
-   ```
-
-3. **Develop your scraper**
-   - Create `newscraper.js`
-   - Update `manifest.json`
-   - Create `test_newscraper.js`
-   - Test thoroughly
-
-4. **Test your scraper**
-   ```bash
-   # Run tests
-   node test_newscraper.js
-   
-   # Test with different content types
-   # Verify stream URLs work
-   # Check error handling
-   ```
-
-5. **Commit and push**
-   ```bash
-   git add .
-   git commit -m "Add NewScraper with support for movies and TV shows"
-   git push origin add-newscraper
-   ```
-
-6. **Submit a pull request**
-   - Include description of the scraper
-   - List supported features
-   - Provide test results
-   - Mention any limitations
-
-### Code Review Checklist
-
-Before submitting, ensure your scraper:
-
-- [ ] **Follows naming conventions** (camelCase, descriptive names)
-- [ ] **Has proper error handling** (try-catch blocks, graceful failures)
-- [ ] **Includes comprehensive logging** (with scraper name prefix)
-- [ ] **Is React Native compatible** (no Node.js modules, uses fetch())
-- [ ] **Has a working test file** (tests movies and TV shows)
-- [ ] **Updates manifest.json** (correct metadata and version)
-- [ ] **Respects rate limits** (reasonable delays between requests)
-- [ ] **Handles edge cases** (missing content, network errors)
-- [ ] **Returns proper stream objects** (correct format and required fields)
-- [ ] **Is well-documented** (comments explaining complex logic)
-
-### Scraper Quality Standards
-
-#### Performance
-- Response time < 15 seconds for most requests
-- Handles concurrent requests gracefully
-- Minimal memory usage
-- Efficient DOM parsing
-
-#### Reliability
-- Success rate > 80% for popular content
-- Graceful degradation when source is unavailable
-- Proper timeout handling
-- Retry logic for transient failures
-
-#### User Experience
-- Clear, descriptive stream titles
-- Accurate quality and size information
-- Sorted results (highest quality first)
-- Consistent naming conventions
-
-### Debugging Tips
-
-#### 1. Network Issues
-```javascript
-// Add request/response logging
-console.log(`[YourScraper] Requesting: ${url}`);
-console.log(`[YourScraper] Response status: ${response.status}`);
-console.log(`[YourScraper] Response headers:`, response.headers);
-```
-
-#### 2. HTML Parsing Issues
-```javascript
-// Log HTML content for inspection
-console.log(`[YourScraper] HTML length: ${html.length}`);
-console.log(`[YourScraper] Page title: ${$('title').text()}`);
-console.log(`[YourScraper] Found ${$('.target-selector').length} elements`);
-```
-
-#### 3. URL Resolution Issues
-```javascript
-// Validate URLs before returning
-async function validateUrl(url) {
-  try {
-    const response = await fetch(url, { method: 'HEAD' });
-    return response.ok || response.status === 206; // 206 for partial content
-  } catch (error) {
-    return false;
+  name: "Provider Name",           // Provider identifier
+  title: "1080p Stream",           // Stream description
+  url: "https://...",              // Direct stream URL (m3u8, mp4, mkv)
+  quality: "1080p",                // Quality label
+  size: "2.5 GB",                  // Optional file size
+  headers: {                       // Optional headers for playback
+    "Referer": "https://source.com",
+    "User-Agent": "Mozilla/5.0..."
   }
 }
 ```
 
-### Real-World Examples
+---
 
-#### UHDMovies Scraper Features
-- **Episode-specific extraction** for TV shows
-- **Multiple tech domains** (tech.unblockedgames.world, tech.examzculture.in, etc.)
-- **SID link resolution** with multi-step form submission
-- **Driveleech URL processing** with multiple download methods
-- **Quality parsing** with technical details (10-bit, HEVC, HDR)
+## 🔧 Available Modules
 
-#### MoviesMod Scraper Features
-- **Dynamic domain fetching** from GitHub repository
-- **String similarity matching** for content selection
-- **Intermediate link resolution** (modrefer.in decoding)
-- **Multiple download servers** (Resume Cloud, Worker Bot, Instant Download)
-- **Broken link filtering** (report pages, invalid URLs)
-- **Parallel processing** of multiple quality options
+Providers have access to these modules via `require()`:
 
-### Advanced Techniques
+| Module | Usage |
+|--------|-------|
+| `cheerio-without-node-native` | HTML parsing |
+| `crypto-js` | Encryption/decryption |
+| `axios` | HTTP requests |
 
-#### 1. Multi-Domain Support
-```javascript
-const TECH_DOMAINS = [
-  'tech.unblockedgames.world',
-  'tech.examzculture.in',
-  'tech.creativeexpressionsblog.com',
-  'tech.examdegree.site'
-];
-
-function isTechDomain(url) {
-  return TECH_DOMAINS.some(domain => url.includes(domain));
-}
-```
-
-#### 2. Form-Based Authentication
-```javascript
-async function submitVerificationForm(formUrl, formData) {
-  const response = await fetch(formUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Referer': previousUrl
-    },
-    body: new URLSearchParams(formData).toString()
-  });
-  return response;
-}
-```
-
-#### 3. JavaScript Execution Simulation
-```javascript
-// Extract dynamic values from JavaScript code
-function extractFromJavaScript(html) {
-  const cookieMatch = html.match(/s_343\('([^']+)',\s*'([^']+)'/);
-  const linkMatch = html.match(/c\.setAttribute\("href",\s*"([^"]+)"\)/);
-  
-  return {
-    cookieName: cookieMatch?.[1],
-    cookieValue: cookieMatch?.[2],
-    linkPath: linkMatch?.[1]
-  };
-}
-```
-
-### Maintenance
-
-#### Updating Existing Scrapers
-- Monitor source website changes
-- Update selectors and logic as needed
-- Test after updates
-- Increment version number in manifest
-
-#### Handling Source Changes
-- Implement fallback mechanisms
-- Use multiple extraction methods
-- Add domain rotation support
-- Monitor for breaking changes
-
-### Troubleshooting
-
-#### Common Issues
-
-1. **CORS Errors**
-   - Use appropriate headers
-   - Consider proxy solutions
-   - Check source website restrictions
-
-2. **Rate Limiting**
-   - Add delays between requests
-   - Implement exponential backoff
-   - Use different user agents
-
-3. **Captcha/Bot Detection**
-   - Rotate user agents
-   - Add realistic delays
-   - Implement session management
-
-4. **Dynamic Content**
-   - Look for API endpoints
-   - Parse JavaScript for data
-   - Use multiple extraction methods
-
-#### Getting Help
-
-- Check existing scraper implementations
-- Review error logs carefully
-- Test with different content types
-- Ask for help in community discussions
+Native `fetch` is also available globally.
 
 ---
 
-## 🧰 Tools & Technologies
+## 📝 Manifest Options
 
-<p align="left">
-  <a href="https://skillicons.dev">
-    <img src="https://skillicons.dev/icons?i=javascript,nodejs,github,githubactions&theme=light&perline=4" />
-  </a>
-</p>
+```json
+{
+  "id": "unique-id",
+  "name": "Display Name",
+  "description": "What this provider does",
+  "version": "1.0.0",
+  "author": "Your Name",
+  "supportedTypes": ["movie", "tv"],
+  "filename": "providers/file.js",
+  "enabled": true,
+  "logo": "https://url/to/logo.png",
+  "contentLanguage": ["en", "hi"],
+  "formats": ["mkv", "mp4"],
+  "limited": false,
+  "disabledPlatforms": ["ios"],
+  "supportsExternalPlayer": true
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `enabled` | Default enabled state (user can override) |
+| `limited` | Shows "Limited" badge (depends on external APIs) |
+| `disabledPlatforms` | Disable on specific platforms (`ios`, `android`) |
+| `supportsExternalPlayer` | Whether streams work in external players |
+| `formats` | Output formats (`mkv`, `mp4`, `m3u8`) |
 
 ---
 
+## 🤝 Contributing
 
+1. Fork the repository
+2. Create a branch: `git checkout -b add-myprovider`
+3. Develop and test your provider
+4. Build: `node build.js myprovider`
+5. Commit: `git commit -m "Add MyProvider"`
+6. Push and create a Pull Request
+
+---
 
 ## 📄 License
 
-[![GNU GPLv3 Image](https://www.gnu.org/graphics/gplv3-127x51.png)](http://www.gnu.org/licenses/gpl-3.0.en.html)
+[![GNU GPLv3](https://www.gnu.org/graphics/gplv3-127x51.png)](http://www.gnu.org/licenses/gpl-3.0.en.html)
 
-These scrapers are **free software**: you can use, study, share, and modify them as you wish.
-
-They are distributed under the terms of the [GNU General Public License](https://www.gnu.org/licenses/gpl.html) version 3 or later, published by the Free Software Foundation.
+This project is licensed under the **GNU General Public License v3.0**.
 
 ---
 
-## ⚖️ DMCA Disclaimer
+## ⚠️ Disclaimer
 
-We hereby issue this notice to clarify that these scrapers function similarly to a standard web browser by fetching video files from the internet.
-
-- **No content is hosted by this repository or the Nuvio application.**
-- Any content accessed is hosted by third-party websites.
-- Users are solely responsible for their usage and must comply with their local laws.
-
-If you believe content is violating copyright laws, please contact the **actual file hosts**, **not** the developers of this repository or the Nuvio app.
+- **No content is hosted by this repository.**
+- Providers fetch publicly available content from third-party websites.
+- Users are responsible for compliance with local laws.
+- For DMCA concerns, contact the actual content hosts.
 
 ---
 
-## Support
-
-For issues or questions:
-- Open an issue on GitHub
-- Check the Nuvio app documentation
-- Join the community discussions
-
----
-
-**Thank You for using Nuvio Local Scrapers!**
+<p align="center">
+  <b>Thank you for using Nuvio Providers!</b>
+</p>
