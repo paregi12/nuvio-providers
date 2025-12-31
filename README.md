@@ -2,11 +2,13 @@
 
 A collection of streaming providers for the Nuvio app. Providers are JavaScript modules that fetch streams from various sources.
 
-##  Quick Start
+📖 **[Read the Comprehensive Developer Guide](DOCUMENTATION.md)**
+
+## Quick Start
 
 ### Using in Nuvio App
 
-1. Open **Nuvio** → **Settings** → **Plugins**
+1. Open **Nuvio** > **Settings** > **Plugins**
 2. Add this repository URL:
    ```
    https://raw.githubusercontent.com/tapframe/nuvio-providers/refs/heads/main
@@ -15,7 +17,7 @@ A collection of streaming providers for the Nuvio app. Providers are JavaScript 
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 nuvio-providers/
@@ -28,8 +30,8 @@ nuvio-providers/
 │   └── uhdmovies/
 │       └── ...
 │
-├── providers/              # Built output (single files)
-│   ├── vixsrc.js           # ← Bundled from src/vixsrc/
+├── providers/              # Output directory (ready-to-use files)
+│   ├── vixsrc.js           # Bundled from src/vixsrc/
 │   ├── uhdmovies.js
 │   └── ...
 │
@@ -40,21 +42,19 @@ nuvio-providers/
 
 ---
 
-## 🛠️ Development
+## Development
 
-### Two Approaches
+There are two ways to create providers:
 
-| Approach | Complexity | Build Required? |
-|----------|------------|-----------------|
-| **Simple (single-file)** | Low | ❌ No |
-| **Multi-file** | Advanced | ✅ Yes |
+### Option 1: Single-File Provider
 
----
+For simple providers, you can create a single JavaScript file directly in the `providers/` directory.
 
-### Option 1: Simple Single-File Provider (No Build)
+**Important:** The app's JavaScript engine (Hermes) has limitations with `async/await` in dynamic code.
+- **Recommended**: Use Promise chains (`.then()`).
+- **Alternative**: Use `async/await` and run the transpiler command (see below).
 
-For straightforward providers, just create a single file directly in `providers/`:
-
+**Example (Promise Chains):**
 ```javascript
 // providers/myprovider.js
 
@@ -80,7 +80,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
 module.exports = { getStreams };
 ```
 
-Then add to `manifest.json`:
+To register the provider, add it to `manifest.json`:
 ```json
 {
   "id": "myprovider",
@@ -91,118 +91,98 @@ Then add to `manifest.json`:
 }
 ```
 
-**Done!** No build step needed.
+### Option 2: Multi-File Provider (Recommended)
 
-> ⚠️ **Note about async/await**: Single-file providers should use **Promise chains** (`.then()`) 
-> instead of `async/await`. If you prefer async/await, run the transpiler:
-> ```bash
-> node build.js --transpile myprovider
-> ```
+For complex providers, use the `src/` directory. This allows you to split code into multiple files. The build script automatically handles bundling and `async/await` transpilation.
 
----
-
-### Option 2: Multi-File Provider (With Build)
-
-For complex providers with shared utilities, use the `src/` folder:
-
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-2. **Create provider folder:**
+1. **Create source folder:**
    ```bash
    mkdir -p src/myprovider
    ```
 
-3. **Create entry point** (`src/myprovider/index.js`):
+2. **Create entry point** (`src/myprovider/index.js`):
    ```javascript
    import { fetchPage } from './http.js';
    import { extractStreams } from './extractor.js';
 
+   // async/await is fully supported here
    async function getStreams(tmdbId, mediaType, season, episode) {
-     console.log(`[MyProvider] Fetching ${mediaType} ${tmdbId}`);
-     
      const page = await fetchPage(tmdbId, mediaType, season, episode);
-     const streams = extractStreams(page);
-     
-     return streams;
+     return extractStreams(page);
    }
 
    module.exports = { getStreams };
    ```
 
-4. **Add helper modules** as needed:
-   - `src/myprovider/http.js` — HTTP utilities
-   - `src/myprovider/extractor.js` — Extraction logic
-   - `src/myprovider/utils.js` — Helper functions
-
-5. **Build:**
+3. **Build:**
    ```bash
    node build.js myprovider
    ```
 
-6. **Add to manifest.json** (same as simple approach)
+This generates `providers/myprovider.js`.
 
 ---
 
-## 📦 Building
+## Building
 
-### Build All Providers
-
-```bash
-npm run build
-```
-
-### Build Specific Provider
+### Build Source Providers
+Bundles files from `src/<provider>/` into `providers/<provider>.js`.
 
 ```bash
+# Build specific provider
 node build.js vixsrc
-node build.js vixsrc uhdmovies showbox
+
+# Build multiple
+node build.js vixsrc uhdmovies
+
+# Build all source providers
+node build.js
 ```
 
-### Watch Mode (Auto-rebuild)
+### Transpile Single-File Providers
+If you wrote a single-file provider using `async/await`, you must transpile it for compatibility.
 
+```bash
+# Transpile specific file
+node build.js --transpile myprovider.js
+
+# Transpile all applicable files in providers/
+node build.js --transpile
+```
+
+### Watch Mode
+Automatically rebuilds when files change.
 ```bash
 npm run build:watch
 ```
 
 ---
 
-## 🧪 Testing
+## Testing
 
-### Test a Built Provider
+Create a test script to identify issues before loading into the app.
 
-```bash
-# Create a test file
-cat > test-myprovider.js << 'EOF'
+```javascript
+// test-myprovider.js
 const { getStreams } = require('./providers/myprovider.js');
 
 async function test() {
-  // Test movie (Oppenheimer)
-  const movieStreams = await getStreams('872585', 'movie');
-  console.log('Movie streams:', movieStreams.length);
-
-  // Test TV (Breaking Bad S1E1)
-  const tvStreams = await getStreams('1396', 'tv', 1, 1);
-  console.log('TV streams:', tvStreams.length);
+  console.log('Testing...');
+  const streams = await getStreams('872585', 'movie'); // Oppenheimer ID
+  console.log('Streams found:', streams.length);
 }
 
-test().catch(console.error);
-EOF
-
-node test-myprovider.js
+test();
 ```
 
-### Run Existing Tests
-
+Run with Node.js:
 ```bash
-node test-vixsrc.js
+node test-myprovider.js
 ```
 
 ---
 
-## 📋 Stream Object Format
+## Stream Object Format
 
 Providers must return an array of stream objects:
 
@@ -222,7 +202,7 @@ Providers must return an array of stream objects:
 
 ---
 
-## 🔧 Available Modules
+## Available Modules
 
 Providers have access to these modules via `require()`:
 
@@ -232,17 +212,19 @@ Providers have access to these modules via `require()`:
 | `crypto-js` | Encryption/decryption |
 | `axios` | HTTP requests |
 
-Native `fetch` is also available globally.
+Native `fetch` and `console` are also available globally.
 
 ---
 
-## 📝 Manifest Options
+## Manifest Options
+
+The `manifest.json` file controls provider settings.
 
 ```json
 {
   "id": "unique-id",
   "name": "Display Name",
-  "description": "What this provider does",
+  "description": "Short description",
   "version": "1.0.0",
   "author": "Your Name",
   "supportedTypes": ["movie", "tv"],
@@ -257,44 +239,28 @@ Native `fetch` is also available globally.
 }
 ```
 
-| Field | Description |
-|-------|-------------|
-| `enabled` | Default enabled state (user can override) |
-| `limited` | Shows "Limited" badge (depends on external APIs) |
-| `disabledPlatforms` | Disable on specific platforms (`ios`, `android`) |
-| `supportsExternalPlayer` | Whether streams work in external players |
-| `formats` | Output formats (`mkv`, `mp4`, `m3u8`) |
+---
+
+## Contributing
+
+1. **Fork the repository**
+2. **Create a branch**: `git checkout -b add-myprovider`
+3. **Develop and test**
+4. **Build**: `node build.js myprovider`
+5. **Commit**: `git commit -m "Add MyProvider"`
+6. **Push and PR**
 
 ---
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a branch: `git checkout -b add-myprovider`
-3. Develop and test your provider
-4. Build: `node build.js myprovider`
-5. Commit: `git commit -m "Add MyProvider"`
-6. Push and create a Pull Request
-
----
-
-## 📄 License
-
-[![GNU GPLv3](https://www.gnu.org/graphics/gplv3-127x51.png)](http://www.gnu.org/licenses/gpl-3.0.en.html)
+## License
 
 This project is licensed under the **GNU General Public License v3.0**.
 
 ---
 
-## ⚠️ Disclaimer
+## Disclaimer
 
 - **No content is hosted by this repository.**
 - Providers fetch publicly available content from third-party websites.
 - Users are responsible for compliance with local laws.
 - For DMCA concerns, contact the actual content hosts.
-
----
-
-<p align="center">
-  <b>Thank you for using Nuvio Providers!</b>
-</p>

@@ -1,6 +1,6 @@
 /**
  * 4khdhub - Built from src/4khdhub/
- * Generated: 2025-12-31T21:23:16.722Z
+ * Generated: 2025-12-31T21:33:16.718Z
  */
 "use strict";
 var __defProp = Object.defineProperty;
@@ -173,21 +173,34 @@ var cheerio = require("cheerio-without-node-native");
 function fetchPageUrl(name, year, isSeries) {
   return __async(this, null, function* () {
     const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(name + " " + year)}`;
+    console.log(`[4KHDHub] Search Request URL: ${searchUrl}`);
     const html = yield fetchText(searchUrl);
-    if (!html)
+    if (!html) {
+      console.log("[4KHDHub] Search failed: No HTML response");
       return null;
+    }
     const $ = cheerio.load(html);
     const targetType = isSeries ? "Series" : "Movies";
+    console.log(`[4KHDHub] Parsing search results for type: ${targetType}`);
     const matchingCards = $(".movie-card").filter((_, el) => {
       const hasFormat = $(el).find(`.movie-card-format:contains("${targetType}")`).length > 0;
+      if (!hasFormat) {
+      }
       return hasFormat;
     }).filter((_, el) => {
       const metaText = $(el).find(".movie-card-meta").text();
       const movieCardYear = parseInt(metaText);
-      return !isNaN(movieCardYear) && Math.abs(movieCardYear - year) <= 1;
+      const yearMatch = !isNaN(movieCardYear) && Math.abs(movieCardYear - year) <= 1;
+      if (!yearMatch) {
+        console.log(`[4KHDHub] Skip: Year mismatch (${movieCardYear} vs ${year}) - ${$(el).find(".movie-card-title").text().trim()}`);
+      }
+      return yearMatch;
     }).filter((_, el) => {
       const movieCardTitle = $(el).find(".movie-card-title").text().replace(/\[.*?]/g, "").trim();
-      return levenshteinDistance(movieCardTitle.toLowerCase(), name.toLowerCase()) < 5;
+      const distance = levenshteinDistance(movieCardTitle.toLowerCase(), name.toLowerCase());
+      const match = distance < 5;
+      console.log(`[4KHDHub] Checking: "${movieCardTitle}" (Dist: ${distance}) vs "${name}"`);
+      return match;
     }).map((_, el) => {
       let href = $(el).attr("href");
       if (href && !href.startsWith("http")) {
@@ -195,6 +208,11 @@ function fetchPageUrl(name, year, isSeries) {
       }
       return href;
     }).get();
+    if (matchingCards.length === 0) {
+      console.log("[4KHDHub] No matching cards found after filtering");
+    } else {
+      console.log(`[4KHDHub] Found ${matchingCards.length} matching cards`);
+    }
     return matchingCards.length > 0 ? matchingCards[0] : null;
   });
 }
