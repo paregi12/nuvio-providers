@@ -42,20 +42,69 @@ nuvio-providers/
 
 ## 🛠️ Development
 
-### Prerequisites
+### Two Approaches
 
-```bash
-npm install
+| Approach | Complexity | Build Required? |
+|----------|------------|-----------------|
+| **Simple (single-file)** | Low | ❌ No |
+| **Multi-file** | Advanced | ✅ Yes |
+
+---
+
+### Option 1: Simple Single-File Provider (No Build)
+
+For straightforward providers, just create a single file directly in `providers/`:
+
+```javascript
+// providers/myprovider.js
+
+async function getStreams(tmdbId, mediaType, season, episode) {
+  console.log(`[MyProvider] Fetching ${mediaType} ${tmdbId}`);
+  
+  const response = await fetch(`https://api.example.com/streams/${tmdbId}`);
+  const data = await response.json();
+  
+  return data.streams.map(s => ({
+    name: "MyProvider",
+    title: s.title,
+    url: s.url,
+    quality: s.quality
+  }));
+}
+
+module.exports = { getStreams };
 ```
 
-### Creating a New Provider
+Then add to `manifest.json`:
+```json
+{
+  "id": "myprovider",
+  "name": "My Provider",
+  "filename": "providers/myprovider.js",
+  "supportedTypes": ["movie", "tv"],
+  "enabled": true
+}
+```
 
-1. **Create provider folder:**
+**Done!** No build step needed.
+
+---
+
+### Option 2: Multi-File Provider (With Build)
+
+For complex providers with shared utilities, use the `src/` folder:
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Create provider folder:**
    ```bash
    mkdir -p src/myprovider
    ```
 
-2. **Create entry point** (`src/myprovider/index.js`):
+3. **Create entry point** (`src/myprovider/index.js`):
    ```javascript
    import { fetchPage } from './http.js';
    import { extractStreams } from './extractor.js';
@@ -72,30 +121,17 @@ npm install
    module.exports = { getStreams };
    ```
 
-3. **Add helper modules** as needed:
+4. **Add helper modules** as needed:
    - `src/myprovider/http.js` — HTTP utilities
    - `src/myprovider/extractor.js` — Extraction logic
    - `src/myprovider/utils.js` — Helper functions
 
-4. **Build:**
+5. **Build:**
    ```bash
    node build.js myprovider
    ```
 
-5. **Add to manifest.json:**
-   ```json
-   {
-     "id": "myprovider",
-     "name": "My Provider",
-     "description": "Description of your provider",
-     "version": "1.0.0",
-     "supportedTypes": ["movie", "tv"],
-     "filename": "providers/myprovider.js",
-     "enabled": true,
-     "logo": "https://example.com/logo.png",
-     "contentLanguage": ["en"]
-   }
-   ```
+6. **Add to manifest.json** (same as simple approach)
 
 ---
 
