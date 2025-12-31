@@ -63,7 +63,7 @@ async function buildProvider(providerName) {
             outfile: outFile,
             format: 'cjs',              // CommonJS for module.exports compatibility
             platform: 'neutral',        // Works in both browser and node-like environments
-            target: 'es2020',
+            target: 'es2016',           // Transpile async/await to generators for Hermes
             minify: false,              // Keep readable for debugging
             sourcemap: false,
             external: EXTERNAL_MODULES,
