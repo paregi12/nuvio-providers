@@ -83,7 +83,77 @@ async function buildProvider(providerName) {
     }
 }
 
+// Transpile a single file in providers/ (for developers writing single-file providers with async)
+async function transpileSingleFile(filename) {
+    const inputPath = path.join(outDir, filename);
+
+    if (!fs.existsSync(inputPath)) {
+        console.warn(`⚠️  File not found: providers/${filename}`);
+        return false;
+    }
+
+    // Read original file
+    const originalContent = fs.readFileSync(inputPath, 'utf-8');
+
+    // Check if it needs transpilation (has async/await)
+    if (!originalContent.includes('async ') && !originalContent.includes('await ')) {
+        console.log(`⏭️  ${filename} - no async/await, skipping`);
+        return true;
+    }
+
+    try {
+        const result = await esbuild.transform(originalContent, {
+            loader: 'js',
+            target: 'es2016',           // Transpile async/await to generators
+            format: 'cjs'
+        });
+
+        // Write transpiled content back
+        fs.writeFileSync(inputPath, result.code);
+
+        const stats = fs.statSync(inputPath);
+        const sizeKB = (stats.size / 1024).toFixed(1);
+        console.log(`✅ ${filename} transpiled (${sizeKB} KB)`);
+        return true;
+    } catch (err) {
+        console.error(`❌ Failed to transpile ${filename}:`, err.message);
+        return false;
+    }
+}
+
 async function main() {
+    const args = process.argv.slice(2);
+
+    // Handle --transpile flag for single-file providers
+    if (args.includes('--transpile')) {
+        const files = args.filter(a => a !== '--transpile' && !a.startsWith('-'));
+
+        if (files.length === 0) {
+            // Transpile all .js files in providers/ that aren't from src/
+            const srcProviders = fs.existsSync(srcDir)
+                ? fs.readdirSync(srcDir, { withFileTypes: true })
+                    .filter(d => d.isDirectory())
+                    .map(d => d.name + '.js')
+                : [];
+
+            const allProviderFiles = fs.readdirSync(outDir)
+                .filter(f => f.endsWith('.js') && !srcProviders.includes(f));
+
+            console.log(`\n🔄 Transpiling ${allProviderFiles.length} single-file provider(s)...\n`);
+
+            for (const file of allProviderFiles) {
+                await transpileSingleFile(file);
+            }
+        } else {
+            console.log(`\n🔄 Transpiling ${files.length} file(s)...\n`);
+            for (const file of files) {
+                const filename = file.endsWith('.js') ? file : file + '.js';
+                await transpileSingleFile(filename);
+            }
+        }
+        return;
+    }
+
     const providers = getProvidersToBuild();
 
     if (providers.length === 0) {
@@ -115,3 +185,4 @@ main().catch(err => {
     console.error('Build failed:', err);
     process.exit(1);
 });
+

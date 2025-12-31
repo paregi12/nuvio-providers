@@ -2,7 +2,7 @@
 
 A collection of streaming providers for the Nuvio app. Providers are JavaScript modules that fetch streams from various sources.
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Using in Nuvio App
 
@@ -58,18 +58,23 @@ For straightforward providers, just create a single file directly in `providers/
 ```javascript
 // providers/myprovider.js
 
-async function getStreams(tmdbId, mediaType, season, episode) {
+function getStreams(tmdbId, mediaType, season, episode) {
   console.log(`[MyProvider] Fetching ${mediaType} ${tmdbId}`);
   
-  const response = await fetch(`https://api.example.com/streams/${tmdbId}`);
-  const data = await response.json();
-  
-  return data.streams.map(s => ({
-    name: "MyProvider",
-    title: s.title,
-    url: s.url,
-    quality: s.quality
-  }));
+  return fetch(`https://api.example.com/streams/${tmdbId}`)
+    .then(response => response.json())
+    .then(data => {
+      return data.streams.map(s => ({
+        name: "MyProvider",
+        title: s.title,
+        url: s.url,
+        quality: s.quality
+      }));
+    })
+    .catch(error => {
+      console.error('[MyProvider] Error:', error.message);
+      return [];
+    });
 }
 
 module.exports = { getStreams };
@@ -87,6 +92,12 @@ Then add to `manifest.json`:
 ```
 
 **Done!** No build step needed.
+
+> ⚠️ **Note about async/await**: Single-file providers should use **Promise chains** (`.then()`) 
+> instead of `async/await`. If you prefer async/await, run the transpiler:
+> ```bash
+> node build.js --transpile myprovider
+> ```
 
 ---
 
