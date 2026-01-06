@@ -16,5 +16,8 @@
         "streaming",
         "providers"
     ],
-    "license": "GPL-3.0"
+    "license": "GPL-3.0",
+    "dependencies": {
+        "cheerio-without-node-native": "^0.20.2"
+    }
 }
