@@ -222,7 +222,8 @@ async function getStreams(tmdbId, mediaType, season, episode) { ... }
         This will host your `manifest.json` and providers on your local network.
 
     2.  **Connect the App**:
-        - Open Nuvio and go to **Settings** > **Developer Mode**.
+        - **Note:** You must use the **development build** of Nuvio (`npx expo run:android` or `npx expo run:ios`).
+        - Open Nuvio and go to **Settings** > **Developer Section**.
         - Select **Plugin Tester**.
         - Enter your local manifest URL (displayed in the terminal, e.g., `http://192.168.1.X:3000/manifest.json`).
 
