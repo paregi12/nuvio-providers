@@ -189,55 +189,71 @@ async function getStreams(tmdbId, mediaType, season, episode) { ... }
 
 ## 7. Testing & Debugging
 
-**Never** rely on testing inside the app alone. It is slow and hard to debug.
+While local Node.js scripts are useful for initial logic verification, providers must be tested within the Nuvio application to ensure compatibility with the Hermes engine and the app's runtime environment.
 
-1.  **Create a local test file** (e.g., `test.js`):
-    ```javascript
-    const { getStreams } = require('./providers/myprovider.js');
+### 7.1. Local Logic Verification (Node.js)
 
-    async function run() {
-        console.log("Fetching streams...");
-        try {
-            const streams = await getStreams('550', 'movie'); // Fight Club
-            console.log(streams);
-        } catch (e) {
-            console.error(e);
-        }
+Create a temporary test script (e.g., `test.js`) to verify your provider's scraping logic on your computer.
+
+```javascript
+const { getStreams } = require('./providers/myprovider.js');
+
+async function run() {
+    console.log("Fetching streams...");
+    try {
+        const streams = await getStreams('550', 'movie'); // Fight Club
+        console.log(streams);
+    } catch (e) {
+        console.error(e);
     }
-    run();
-    ```
+}
+run();
+```
 
-2.  **Run it**:
+Run it using:
+```bash
+node test.js
+```
+
+### 7.2. In-App Testing (Plugin Tester)
+
+The **Plugin Tester** is a dedicated developer tool within the Nuvio app that allows you to load, run, and debug providers directly on your device interactively.
+
+#### Prerequisites
+1.  Ensure your computer and mobile device are on the same Wi-Fi network.
+2.  Start the local development server in this repository:
     ```bash
-    node test.js
+    npm start
     ```
+    This serves your `providers/` directory and `manifest.json` over HTTP (e.g., `http://192.168.1.X:3000`).
 
-3.  **Using the Local Testing Server**
+#### Accessing the Plugin Tester
+1.  Open the Nuvio application.
+2.  Navigate to **Settings**.
+3.  Scroll down to the **Developer Section** and select **Plugin Tester**.
 
-    > [!IMPORTANT]
-    > **Recommended:** The in-app **Plugin Tester** is the best way to verify your provider works correctly. Providers may run fine on your local machine (Node.js) but fail in the React Native (Hermes) environment due to runtime differences. Always test in the app before publishing.
+#### Testing Individual Providers
+The "Individual Plugin" tab is designed for rapid iteration on a single provider script.
 
-    You can test your changes directly in the Nuvio app without pushing to GitHub.
+1.  **Load Source**:
+    -   **From URL**: Enter the direct URL to your provider file hosted by your local server (e.g., `http://192.168.1.5:3000/providers/myprovider.js`) and tap **Load**.
+    -   **Direct Input**: Alternatively, paste your provider code directly into the code editor.
+2.  **Parameters**: Set the test parameters (TMDB ID, Media Type, Season, Episode).
+3.  **Run Test**: Tap the **Run Test** button.
+4.  **View Results**:
+    -   **Logs**: Check the "Logs" tab for `console.log` output and errors.
+    -   **Results**: View the list of discovered streams in the "Results" tab.
+    -   **Playback**: Tap the **Play** button on any stream result to verify that the URL is playable in the native player (KSPlayer on iOS, AndroidVideoPlayer on Android).
 
-    1.  **Start the local server**:
-        ```bash
-        npm start
-        ```
-        This will host your `manifest.json` and providers on your local network.
+#### Testing Repositories
+The "Repo Tester" tab allows you to validate an entire plugin repository manifest.
 
-    2.  **Connect the App**:
+1.  Enter your local manifest URL (e.g., `http://192.168.1.5:3000/manifest.json`).
+2.  Tap **Fetch Manifest** to load the list of available providers.
+3.  Tap **Test All** to run a connectivity test on all enabled providers in the manifest, or test specific providers individually.
 
-        > [!IMPORTANT]
-        > You must use the **development build** of Nuvio (`npx expo run:android` or `npx expo run:ios`).
-        > Some providers may work on your local machine (Node.js) but fail in the React Native environment due to differences in the JavaScript runtime.
-
-        - Open Nuvio and go to **Settings** > **Developer Section**.
-        - Select **Plugin Tester**.
-        - Enter your local manifest URL (displayed in the terminal, e.g., `http://192.168.1.X:3000/manifest.json`).
-
-    3.  **Test Individual Providers**:
-        - In the **Plugin Tester**, you can also enter the direct URL to a provider file (e.g., `http://192.168.1.X:3000/providers/myprovider.js`).
-        - This allows you to rapidly iterate on a single provider.
+> [!NOTE]
+> The Plugin Tester behaves exactly like the production app environment (Hermes), so if a provider works here, it will work for users.
 
 ---
 
