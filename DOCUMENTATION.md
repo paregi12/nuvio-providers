@@ -213,6 +213,10 @@ async function getStreams(tmdbId, mediaType, season, episode) { ... }
     ```
 
 3.  **Using the Local Testing Server**
+
+    > [!IMPORTANT]
+    > **Recommended:** The in-app **Plugin Tester** is the best way to verify your provider works correctly. Providers may run fine on your local machine (Node.js) but fail in the React Native (Hermes) environment due to runtime differences. Always test in the app before publishing.
+
     You can test your changes directly in the Nuvio app without pushing to GitHub.
 
     1.  **Start the local server**:
