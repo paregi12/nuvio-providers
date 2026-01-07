@@ -14,6 +14,10 @@ A collection of streaming providers for the Nuvio app. Providers are JavaScript 
    https://raw.githubusercontent.com/tapframe/nuvio-providers/refs/heads/main
    ```
 3. Refresh and enable the providers you want
+4. **Developer Mode**: To test local changes, run `npm start` on your computer.
+   - Go to **Settings** > **Developer** > **Plugin Tester** in the app.
+   - Enter your local server URL (e.g., `http://192.168.1.5:3000/manifest.json`).
+   - You can also test individual provider URLs here.
 
 ---
 

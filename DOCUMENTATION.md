@@ -212,6 +212,24 @@ async function getStreams(tmdbId, mediaType, season, episode) { ... }
     node test.js
     ```
 
+3.  **Using the Local Testing Server**
+    You can test your changes directly in the Nuvio app without pushing to GitHub.
+
+    1.  **Start the local server**:
+        ```bash
+        npm start
+        ```
+        This will host your `manifest.json` and providers on your local network.
+
+    2.  **Connect the App**:
+        - Open Nuvio and go to **Settings** > **Developer Mode**.
+        - Select **Plugin Tester**.
+        - Enter your local manifest URL (displayed in the terminal, e.g., `http://192.168.1.X:3000/manifest.json`).
+
+    3.  **Test Individual Providers**:
+        - In the **Plugin Tester**, you can also enter the direct URL to a provider file (e.g., `http://192.168.1.X:3000/providers/myprovider.js`).
+        - This allows you to rapidly iterate on a single provider.
+
 ---
 
 ## 8. Publishing
