@@ -220,8 +220,13 @@ node test.js
 The **Plugin Tester** is a dedicated developer tool within the Nuvio app that allows you to load, run, and debug providers directly on your device interactively.
 
 #### Prerequisites
-1.  Ensure your computer and mobile device are on the same Wi-Fi network.
-2.  Start the local development server in this repository:
+1.  **Get the App**: You need the **debug version** of Nuvio.
+    -   **Download**: Get the latest `debug.apk` from the **Releases** tab on GitHub.
+    -   **Build**: Or run `npx expo run:android` / `npx expo run:ios` locally.
+    > *Note: Production versions do not include the Plugin Tester.*
+
+2.  Ensure your computer and mobile device are on the same Wi-Fi network.
+3.  Start the local development server in this repository:
     ```bash
     npm start
     ```
@@ -235,9 +240,13 @@ The **Plugin Tester** is a dedicated developer tool within the Nuvio app that al
 #### Testing Individual Providers
 The "Individual Plugin" tab is designed for rapid iteration on a single provider script.
 
+> [!IMPORTANT]
+> **Code Requirements:** You must use the **compiled/bundled** file (found in `providers/`) or a standalone **single-file** provider.
+> The app **cannot** execute source files that use `import` to load other local files (e.g., from `src/`). If you are using the multi-file workflow, you must build your provider first (`node build.js myprovider`) and test the generated output file.
+
 1.  **Load Source**:
-    -   **From URL**: Enter the direct URL to your provider file hosted by your local server (e.g., `http://192.168.1.5:3000/providers/myprovider.js`) and tap **Load**.
-    -   **Direct Input**: Alternatively, paste your provider code directly into the code editor.
+    -   **From URL**: Enter the direct URL to your *compiled* provider file hosted by your local server (e.g., `http://192.168.1.5:3000/providers/myprovider.js`) and tap **Load**.
+    -   **Direct Input**: Alternatively, paste your *compiled* provider code directly into the code editor.
 2.  **Parameters**: Set the test parameters (TMDB ID, Media Type, Season, Episode).
 3.  **Run Test**: Tap the **Run Test** button.
 4.  **View Results**:
