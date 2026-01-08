@@ -1,7 +1,6 @@
 import { fetchText } from './http.js';
 import cheerio from 'cheerio-without-node-native';
 
-// Dean Edwards Unpacker implementation
 function detect(source) {
     return /eval\(function\(/.test(source);
 }
@@ -58,8 +57,7 @@ function decrypt(fullString, key, v1, v2) {
     return r;
 }
 
-// Fixed Decryptor based on Kotlin Logic
-function decryptKotlinPort(fullString, key, v1, v2) {
+function decryptWithKey(fullString, key, v1, v2) {
     // keyIndexMap not needed if we use indexOf
     let sb = "";
     let i = 0;
@@ -96,7 +94,6 @@ export async function extractKwik(url) {
             if (redirectResponse.status === 302 || redirectResponse.status === 301) {
                 const loc = redirectResponse.headers.get('location');
                 if (loc) {
-                    // Kotlin logic: .substringAfterLast("https://")
                     // Example loc: https://image.thum.io/get/.../https://kwik.cx/f/DHJBozjF1Usc
                     const lastHttpsIndex = loc.lastIndexOf("https://");
                     if (lastHttpsIndex !== -1) {
@@ -133,7 +130,7 @@ export async function extractKwik(url) {
     if (paramsMatch) {
         console.log("[Kwik] Found obfuscated parameters, decrypting...");
         const [_, fullString, key, v1, v2] = paramsMatch;
-        const decrypted = decryptKotlinPort(fullString, key, parseInt(v1), parseInt(v2));
+        const decrypted = decryptWithKey(fullString, key, parseInt(v1), parseInt(v2));
         
         // Extract URI and Token from decrypted string
         const uriMatch = decrypted.match(/action=\"([^\"]+)\"/);
@@ -164,7 +161,7 @@ export async function extractKwik(url) {
         }
     }
 
-    // 3. Try Unpack (Dean Edwards) as last resort
+    // 3. Try Unpack as last resort
     // ... existing logic ...
     if (detect(html)) {
         // ... (simplified for brevity, the advanced decrypt usually covers Kwik now)

@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-01-08T19:15:05.225Z
+ * Generated: 2026-01-08T19:36:27.377Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -141,7 +141,7 @@ function unpack(source) {
     return source;
   }
 }
-function decryptKotlinPort(fullString, key, v1, v2) {
+function decryptWithKey(fullString, key, v1, v2) {
   let sb = "";
   let i = 0;
   const toFind = key[v2];
@@ -200,7 +200,7 @@ function extractKwik(url) {
     if (paramsMatch) {
       console.log("[Kwik] Found obfuscated parameters, decrypting...");
       const [_, fullString, key, v1, v2] = paramsMatch;
-      const decrypted = decryptKotlinPort(fullString, key, parseInt(v1), parseInt(v2));
+      const decrypted = decryptWithKey(fullString, key, parseInt(v1), parseInt(v2));
       const uriMatch = decrypted.match(/action=\"([^\"]+)\"/);
       const tokenMatch = decrypted.match(/value=\"([^\"]+)\"/);
       if (uriMatch && tokenMatch) {

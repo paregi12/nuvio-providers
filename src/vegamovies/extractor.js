@@ -43,27 +43,35 @@ export async function extractVCloud(url) {
             const link = $(el).attr('href');
             const text = $(el).text();
             const lowerText = text.toLowerCase();
-            
-            if (lowerText.includes("fsl") || lowerText.includes("server") || lowerText.includes("original") || lowerText.includes("cloud")) {
-                extractedLinks.push({
-                    name: "V-Cloud",
-                    title: text.trim(),
-                    url: link,
-                    quality: quality
-                });
+
+            // Extract Quality
+            const qualityMatch = text.match(/(\d{3,4}p)/);
+            const res = qualityMatch ? qualityMatch[1] : (quality.match(/(\d{3,4}p)/) ? quality.match(/(\d{3,4}p)/)[1] : "Unknown");
+
+            // Extract Server Name
+            // Expected format: "Download [Server Name] (Filename)"
+            let serverName = "Server";
+            const serverMatch = text.match(/\[(.*?)\]/);
+            if (serverMatch) {
+                serverName = serverMatch[1].replace("Server", "").replace(":", "").trim();
             } else if (lowerText.includes("pixeldrain")) {
-                 extractedLinks.push({
-                    name: "Pixeldrain",
-                    title: text.trim(),
+                serverName = "Pixeldrain";
+            } else if (lowerText.includes("fsl")) {
+                serverName = "FSL";
+            } else if (lowerText.includes("10gbps")) {
+                serverName = "10Gbps";
+            }
+            
+            if (serverName === "") serverName = "Server";
+
+            const cleanTitle = `VegaMovies ${res} [${serverName}]`;
+            
+            if (lowerText.includes("fsl") || lowerText.includes("server") || lowerText.includes("original") || lowerText.includes("cloud") || lowerText.includes("pixeldrain") || link.endsWith(".mkv") || link.endsWith(".mp4")) {
+                extractedLinks.push({
+                    name: `VegaMovies ${serverName}`,
+                    title: cleanTitle,
                     url: link,
-                    quality: quality
-                });
-            } else if (link.endsWith(".mkv") || link.endsWith(".mp4")) {
-                 extractedLinks.push({
-                    name: "Direct",
-                    title: text.trim(),
-                    url: link,
-                    quality: quality
+                    quality: res
                 });
             }
         });
