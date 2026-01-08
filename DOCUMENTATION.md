@@ -32,6 +32,10 @@ Providers run locally on the user's device. The Nuvio app uses the **Hermes** Ja
 **Crucial Limitation:** Hermes does not natively support `async/await` syntax inside dynamically loaded code (plugins).
 **Our Solution:** We provide a build script that automatically transpiles your modern `async/await` code into generator functions that Hermes can execute safely.
 
+**Also Important (Runtime Differences):** Local Node.js tests can pass even when the provider fails in-app.
+The Nuvio runtime is React Native + Hermes, so many Node-specific APIs/modules are not available (for example Node built-ins like `crypto`, and some crypto libraries that assume a Node/browser environment such as `node-forge`).
+If your provider uses encryption/decryption or heavy parsing dependencies, always test it in the Nuvio app (Plugin Tester) even if it works locally.
+
 ---
 
 ## 2. Getting Started
@@ -152,6 +156,38 @@ Automatically rebuilds source providers when you modify files in `src/`.
 ```bash
 npm run build:watch
 ```
+
+### Minification
+
+By default, builds keep code readable for debugging. You can enable minification to reduce file size.
+
+Usage: `node build.js --minify [provider_names...]`
+
+| Command | Description |
+|---------|-------------|
+| `node build.js --minify` | Builds **ALL** providers with minification. |
+| `node build.js --minify vidlink` | Builds only `vidlink` provider, minified. |
+| `node build.js --minify vidlink castle` | Builds multiple providers, all minified. |
+
+#### Advantages of Minification
+
+- **Smaller File Size**: ~50% reduction for providers with heavy dependencies (e.g., using `node-forge`, `cheerio`).
+  - Example: A 1.0 MB unminified bundle becomes ~473 KB when minified.
+- **Faster Load Time**: Smaller files load quicker in the Nuvio app and over network transfers.
+- **Reduced Storage**: Less disk space consumed on user devices.
+- **Production Ready**: Recommended for final releases.
+
+#### Disadvantages of Minification
+
+- **Hard to Debug**: Variable and function names are mangled (e.g., `getStreams()` → `u()`), making it difficult to troubleshoot errors from crash reports or logs.
+- **Longer Build Time**: Minification adds a slight overhead to the build process.
+- **Stack Traces Unreadable**: Error messages won't map back to original function names.
+
+#### Recommendation
+
+- **Development**: Use unminified builds (`node build.js`) for easier debugging.
+- **Testing**: Test both minified and unminified versions before publishing.
+- **Production/Release**: Use minified builds (`node build.js --minify`) for deployment to users.
 
 ---
 
