@@ -1,5 +1,5 @@
 const cheerio = require('cheerio-without-node-native');
-const { fetchText } = require('./http');
+const { fetchText } = require('../http');
 
 /**
  * Extract direct links from a V-Cloud (or similar) URL
