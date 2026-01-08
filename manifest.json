@@ -1,47 +1,78 @@
 {
   "name": "Paregi's repo",
   "version": "1.0.0",
-  "scrapers": 
- [
-   {
-     "id": "template-provider",
-     "name": "Template Provider",
-     "description": "A starter template for creating Nuvio providers.",
-     "version": "1.0.0",
-     "author": "paregi12",
-     "supportedTypes": [
-       "movie",
-       "tv"
-     ],
-     "filename": "providers/template.js",
-     "enabled": true,
-     "logo": "",
-     "contentLanguage": [
-       "en"
-     ],
-     "formats": [
-       "mp4",
-       "mkv"
-     ],
-     "limited": false,
-     "disabledPlatforms": [],
-     "supportsExternalPlayer": true
-   },
-   {
-     "id": "vegamovies",
-     "name": "VegaMovies",
-     "description": "VegaMovies Provider",
-     "version": "1.0.0",
-     "author": "paregi12",
-     "supportedTypes": ["movie"],
-     "filename": "providers/vegamovies.js",
-     "enabled": true,
-     "logo": "https://vegamovies.cricket/wp-content/uploads/2020/01/Vegamovies-Logo.png",
-     "contentLanguage": ["hi", "en"],
-     "formats": ["mkv", "mp4"],
-     "limited": false,
-     "disabledPlatforms": [],
-     "supportsExternalPlayer": true
-   }
- ]
+  "scrapers": [
+    {
+      "id": "template-provider",
+      "name": "Template Provider",
+      "description": "A starter template for creating Nuvio providers.",
+      "version": "1.0.0",
+      "author": "paregi12",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/template.js",
+      "enabled": true,
+      "logo": "",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "mp4",
+        "mkv"
+      ],
+      "limited": false,
+      "disabledPlatforms": [],
+      "supportsExternalPlayer": true
+    },
+    {
+      "id": "vegamovies",
+      "name": "VegaMovies",
+      "description": "VegaMovies Provider ported from CSX",
+      "version": "1.0.0",
+      "author": "paregi12",
+      "supportedTypes": [
+        "movie"
+      ],
+      "filename": "providers/vegamovies.js",
+      "enabled": true,
+      "logo": "https://vegamovies.cricket/wp-content/uploads/2020/01/Vegamovies-Logo.png",
+      "contentLanguage": [
+        "hi",
+        "en"
+      ],
+      "formats": [
+        "mkv",
+        "mp4"
+      ],
+      "limited": false,
+      "disabledPlatforms": [],
+      "supportsExternalPlayer": true
+    },
+    {
+      "id": "cinestream",
+      "name": "CineStream",
+      "description": "Aggregator of VegaMovies, MoviesMod, and UHDMovies",
+      "version": "1.0.0",
+      "author": "paregi12",
+      "supportedTypes": [
+        "movie"
+      ],
+      "filename": "providers/cinestream.js",
+      "enabled": true,
+      "logo": "https://github.com/SaurabhKaperwan/CSX/raw/main/CineStream/icon.jpg",
+      "contentLanguage": [
+        "en",
+        "hi"
+      ],
+      "formats": [
+        "mkv",
+        "mp4"
+      ],
+      "limited": false,
+      "disabledPlatforms": [],
+      "supportsExternalPlayer": true
+    }
+  ]
 }
