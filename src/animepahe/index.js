@@ -6,6 +6,10 @@ import cheerio from 'cheerio-without-node-native';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
     try {
+        // Default to S1 E1 for movies or missing info
+        if (!season) season = 1;
+        if (!episode) episode = 1;
+
         // 1. Get Title from TMDB
         const tmdb = await getTmdbInfo(tmdbId, mediaType);
         if (!tmdb) return [];

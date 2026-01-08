@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-01-08T19:36:27.377Z
+ * Generated: 2026-01-08T19:47:42.710Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -248,6 +248,10 @@ var import_cheerio_without_node_native2 = __toESM(require("cheerio-without-node-
 function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
     try {
+      if (!season)
+        season = 1;
+      if (!episode)
+        episode = 1;
       const tmdb = yield getTmdbInfo(tmdbId, mediaType);
       if (!tmdb)
         return [];
