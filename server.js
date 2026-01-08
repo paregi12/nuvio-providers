@@ -81,7 +81,7 @@ const server = http.createServer((req, res) => {
     });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     const ip = getLocalIp();
     console.log(`\n🚀 Server running at: http://${ip}:${PORT}/`);
     console.log(`📝 Manifest URL:      http://${ip}:${PORT}/manifest.json`);

@@ -22,5 +22,21 @@
     "limited": false,
     "disabledPlatforms": [],
     "supportsExternalPlayer": true
+  },
+  {
+    "id": "vegamovies",
+    "name": "VegaMovies",
+    "description": "VegaMovies Provider ported from CSX",
+    "version": "1.0.0",
+    "author": "Nuvio",
+    "supportedTypes": ["movie"],
+    "filename": "providers/vegamovies.js",
+    "enabled": true,
+    "logo": "https://vegamovies.cricket/wp-content/uploads/2020/01/Vegamovies-Logo.png",
+    "contentLanguage": ["hi", "en"],
+    "formats": ["mkv", "mp4"],
+    "limited": false,
+    "disabledPlatforms": [],
+    "supportsExternalPlayer": true
   }
 ]
