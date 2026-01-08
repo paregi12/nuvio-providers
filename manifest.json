@@ -30,7 +30,7 @@
    {
      "id": "vegamovies",
      "name": "VegaMovies",
-     "description": "VegaMovies Provider ported from CSX",
+     "description": "VegaMovies Provider",
      "version": "1.0.0",
      "author": "paregi12",
      "supportedTypes": ["movie"],
