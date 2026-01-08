@@ -63,7 +63,8 @@
           ],
           "filename": "providers/animepahe.js",
           "enabled": true,
-          "logo": "https://animepahe.sa.com/files/logo.jpeg",
+          "logo": "https://raw.githubusercontent.com/keiyoushi/extensions-sourc
+  e/main/src/en/animepahe/res/mipmap-hdpi/ic_launcher.png",
           "contentLanguage": [
             "en"
           ],
