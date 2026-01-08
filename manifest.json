@@ -1,42 +1,47 @@
-[
-  {
-    "id": "template-provider",
-    "name": "Template Provider",
-    "description": "A starter template for creating Nuvio providers.",
-    "version": "1.0.0",
-    "author": "paregi12",
-    "supportedTypes": [
-      "movie",
-      "tv"
-    ],
-    "filename": "providers/template.js",
-    "enabled": true,
-    "logo": "",
-    "contentLanguage": [
-      "en"
-    ],
-    "formats": [
-      "mp4",
-      "mkv"
-    ],
-    "limited": false,
-    "disabledPlatforms": [],
-    "supportsExternalPlayer": true
-  },
-  {
-    "id": "vegamovies",
-    "name": "VegaMovies",
-    "description": "VegaMovies Provider ported from CSX",
-    "version": "1.0.0",
-    "author": "paregi12",
-    "supportedTypes": ["movie"],
-    "filename": "providers/vegamovies.js",
-    "enabled": true,
-    "logo": "https://vegamovies.cricket/wp-content/uploads/2020/01/Vegamovies-Logo.png",
-    "contentLanguage": ["hi", "en"],
-    "formats": ["mkv", "mp4"],
-    "limited": false,
-    "disabledPlatforms": [],
-    "supportsExternalPlayer": true
-  }
-]
+{
+  "name": "Paregi's repo",
+  "version": "1.0.0",
+  "scrapers": 
+ [
+   {
+     "id": "template-provider",
+     "name": "Template Provider",
+     "description": "A starter template for creating Nuvio providers.",
+     "version": "1.0.0",
+     "author": "paregi12",
+     "supportedTypes": [
+       "movie",
+       "tv"
+     ],
+     "filename": "providers/template.js",
+     "enabled": true,
+     "logo": "",
+     "contentLanguage": [
+       "en"
+     ],
+     "formats": [
+       "mp4",
+       "mkv"
+     ],
+     "limited": false,
+     "disabledPlatforms": [],
+     "supportsExternalPlayer": true
+   },
+   {
+     "id": "vegamovies",
+     "name": "VegaMovies",
+     "description": "VegaMovies Provider ported from CSX",
+     "version": "1.0.0",
+     "author": "paregi12",
+     "supportedTypes": ["movie"],
+     "filename": "providers/vegamovies.js",
+     "enabled": true,
+     "logo": "https://vegamovies.cricket/wp-content/uploads/2020/01/Vegamovies-Logo.png",
+     "contentLanguage": ["hi", "en"],
+     "formats": ["mkv", "mp4"],
+     "limited": false,
+     "disabledPlatforms": [],
+     "supportsExternalPlayer": true
+   }
+ ]
+}
