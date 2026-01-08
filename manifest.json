@@ -38,7 +38,7 @@
           ],
           "filename": "providers/vegamovies.js",
           "enabled": true,
-          "logo": "https://vegamovies.cricket/wp-content/uploads/2020/01/Vegamovies-Logo.png",
+          "logo": "https://vegamovies.gt/wp-content/uploads/2020/01/Vegamovies-Logo.png",
           "contentLanguage": [
             "hi",
             "en"
@@ -63,7 +63,7 @@
           ],
           "filename": "providers/animepahe.js",
           "enabled": true,
-          "logo": "https://animepahe.si/pikacon.ico",
+          "logo": "https://img.icons8.com/color/48/anime.png",
           "contentLanguage": [
             "en"
           ],
