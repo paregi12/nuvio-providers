@@ -1,6 +1,6 @@
 /**
  * vegamovies - Built from src/vegamovies/
- * Generated: 2026-01-08T03:25:55.103Z
+ * Generated: 2026-01-08T12:56:11.093Z
  */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -138,14 +138,15 @@ var require_extractor = __commonJS({
             const link = $(el).attr("href");
             const text = $(el).text();
             console.log(`[VCloud] Found button: ${text} -> ${link}`);
-            if (text.includes("FSL Server") || text.includes("Server : 1") || text.includes("Original")) {
+            const lowerText = text.toLowerCase();
+            if (lowerText.includes("fsl") || lowerText.includes("server") || lowerText.includes("original") || lowerText.includes("cloud")) {
               extractedLinks.push({
-                name: "V-Cloud (Original)",
+                name: "V-Cloud",
                 title: text.trim(),
                 url: link,
                 quality
               });
-            } else if (text.includes("Pixeldrain")) {
+            } else if (lowerText.includes("pixeldrain")) {
               extractedLinks.push({
                 name: "Pixeldrain",
                 title: text.trim(),
@@ -210,25 +211,64 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const title = meta.title || meta.name;
       const year = (meta.release_date || meta.first_air_date || "").substring(0, 4);
       console.log(`[VegaMovies] Searching for: ${title} (${year})`);
-      const searchUrl = `${baseUrl}/page/1/?s=${encodeURIComponent(title)}`;
-      const searchHtml = yield fetchText2(searchUrl);
-      const $ = cheerio.load(searchHtml);
+      let searchUrl = `${baseUrl}/page/1/?s=${encodeURIComponent(title + " Season " + season)}`;
+      let searchHtml = yield fetchText2(searchUrl);
+      let $ = cheerio.load(searchHtml);
       let targetLink = null;
+      let bestMatch = null;
       $("article.entry").each((i, el) => {
-        if (targetLink)
-          return;
         const itemTitle = $(el).find("h2 > a").text() || "";
         const itemLink = $(el).find("a").attr("href");
-        if (itemTitle.toLowerCase().includes(title.toLowerCase())) {
-          if (mediaType === "movie") {
-            if (itemTitle.includes(year)) {
-              targetLink = itemLink;
+        const lowerTitle = itemTitle.toLowerCase();
+        const lowerQuery = title.toLowerCase();
+        if (lowerTitle.includes(lowerQuery)) {
+          if (mediaType !== "movie") {
+            const seasonStr = `season ${season}`;
+            const s0SeasonStr = `season 0${season}`;
+            const sStr = `s${season}`;
+            if (lowerTitle.includes(seasonStr) || lowerTitle.includes(s0SeasonStr)) {
+              if (!bestMatch || !bestMatch.title.includes(seasonStr) && !bestMatch.title.includes(s0SeasonStr)) {
+                bestMatch = { link: itemLink, title: lowerTitle, priority: 10 };
+              }
+            } else if (lowerTitle.includes("series") || lowerTitle.includes("complete")) {
+              if (!bestMatch || bestMatch.priority < 5) {
+                bestMatch = { link: itemLink, title: lowerTitle, priority: 5 };
+              }
             }
           } else {
-            targetLink = itemLink;
+            if (year && lowerTitle.includes(year)) {
+              bestMatch = { link: itemLink, title: lowerTitle, priority: 10 };
+            } else if (!bestMatch) {
+              bestMatch = { link: itemLink, title: lowerTitle, priority: 1 };
+            }
           }
         }
       });
+      if (bestMatch)
+        targetLink = bestMatch.link;
+      if (!targetLink) {
+        console.log(`[VegaMovies] Strict search failed, trying general search...`);
+        searchUrl = `${baseUrl}/page/1/?s=${encodeURIComponent(title)}`;
+        searchHtml = yield fetchText2(searchUrl);
+        $ = cheerio.load(searchHtml);
+        $("article.entry").each((i, el) => {
+          if (targetLink)
+            return;
+          const itemTitle = $(el).find("h2 > a").text() || "";
+          const itemLink = $(el).find("a").attr("href");
+          if (itemTitle.toLowerCase().includes(title.toLowerCase())) {
+            if (mediaType === "movie") {
+              if (itemTitle.includes(year)) {
+                targetLink = itemLink;
+              }
+            } else {
+              if (itemTitle.toLowerCase().includes(`season ${season}`) || itemTitle.toLowerCase().includes(`season 0${season}`)) {
+                targetLink = itemLink;
+              }
+            }
+          }
+        });
+      }
       if (!targetLink) {
         console.log("[VegaMovies] No results found.");
         return [];
@@ -281,7 +321,60 @@ function getStreams(tmdbId, mediaType, season, episode) {
           }
         }
       } else {
-        console.log("[VegaMovies] TV Series support is WIP");
+        console.log(`[VegaMovies] Processing TV Series: S${season} E${episode}`);
+        const seasonHeaders = $page("h3, h4, h5").filter((i, el) => {
+          const text = $(el).text();
+          if (text.includes("Zip"))
+            return false;
+          return text.toLowerCase().includes(`season ${season}`) || text.toLowerCase().includes(`season 0${season}`);
+        });
+        console.log(`[VegaMovies] Found ${seasonHeaders.length} season headers.`);
+        const candidateLinks = [];
+        seasonHeaders.each((i, header) => {
+          let nextNode = $(header).next();
+          let attempts = 0;
+          while (nextNode.length && attempts < 5) {
+            if (nextNode.is("h3, h4, h5"))
+              break;
+            const links = nextNode.find("a");
+            links.each((j, link) => {
+              const href = $(link).attr("href");
+              const text = $(link).text();
+              if (href && (text.includes("V-Cloud") || text.includes("Episode") || text.includes("Download"))) {
+                candidateLinks.push({ text, link: href });
+              }
+            });
+            nextNode = nextNode.next();
+            attempts++;
+          }
+        });
+        console.log(`[VegaMovies] Found ${candidateLinks.length} candidate intermediate pages.`);
+        for (const item of candidateLinks) {
+          try {
+            console.log(`[VegaMovies] Visiting intermediate: ${item.link}`);
+            const interHtml = yield fetchText2(item.link);
+            const $inter = cheerio.load(interHtml);
+            const vcloudLinks = [];
+            $inter("p > a").each((j, el) => {
+              const href = $(el).attr("href");
+              if (href && (href.includes("vcloud") || href.includes("hubcloud"))) {
+                vcloudLinks.push(href);
+              }
+            });
+            console.log(`[VegaMovies] Found ${vcloudLinks.length} V-Cloud links on page.`);
+            const targetIndex = episode - 1;
+            if (targetIndex >= 0 && targetIndex < vcloudLinks.length) {
+              const targetUrl = vcloudLinks[targetIndex];
+              console.log(`[VegaMovies] Found match for Episode ${episode} at index ${targetIndex}: ${targetUrl}`);
+              const extracted = yield extractVCloud(targetUrl);
+              streams.push(...extracted);
+            } else {
+              console.log(`[VegaMovies] No link found for Episode ${episode} (Index ${targetIndex}) in this list.`);
+            }
+          } catch (e) {
+            console.error(`[VegaMovies] Error processing TV link: ${e.message}`);
+          }
+        }
       }
       return streams;
     } catch (error) {

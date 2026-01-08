@@ -55,14 +55,15 @@ async function extractVCloud(url) {
             console.log(`[VCloud] Found button: ${text} -> ${link}`);
 
             // Logic for different servers
-            if (text.includes("FSL Server") || text.includes("Server : 1") || text.includes("Original")) {
+            const lowerText = text.toLowerCase();
+            if (lowerText.includes("fsl") || lowerText.includes("server") || lowerText.includes("original") || lowerText.includes("cloud")) {
                 extractedLinks.push({
-                    name: "V-Cloud (Original)",
+                    name: "V-Cloud",
                     title: text.trim(),
                     url: link,
                     quality: quality
                 });
-            } else if (text.includes("Pixeldrain")) {
+            } else if (lowerText.includes("pixeldrain")) {
                 // Handle Pixeldrain conversion if needed
                  extractedLinks.push({
                     name: "Pixeldrain",

@@ -33,7 +33,8 @@
           "version": "1.0.0",
           "author": "paregi12",
           "supportedTypes": [
-            "movie"
+            "movie",
+            "tv"
           ],
           "filename": "providers/vegamovies.js",
           "enabled": true,
