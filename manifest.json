@@ -4,7 +4,7 @@
     "name": "Template Provider",
     "description": "A starter template for creating Nuvio providers.",
     "version": "1.0.0",
-    "author": "Your Name",
+    "author": "paregi12",
     "supportedTypes": [
       "movie",
       "tv"
@@ -28,7 +28,7 @@
     "name": "VegaMovies",
     "description": "VegaMovies Provider ported from CSX",
     "version": "1.0.0",
-    "author": "Nuvio",
+    "author": "paregi12",
     "supportedTypes": ["movie"],
     "filename": "providers/vegamovies.js",
     "enabled": true,

@@ -2,6 +2,7 @@
     "name": "nuvio-providers",
     "version": "1.0.0",
     "description": "Providers for Nuvio Streaming",
+    "author": "paregi12",
     "scripts": {
         "build": "node build.js",
         "build:watch": "nodemon --watch src -e js,json --exec 'node build.js'",
