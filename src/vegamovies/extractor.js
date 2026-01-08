@@ -1,20 +1,16 @@
-const cheerio = require('cheerio-without-node-native');
-const { fetchText } = require('./http');
+import cheerio from 'cheerio-without-node-native';
+import { fetchText } from './http.js';
 
 /**
  * Extract direct links from a V-Cloud (or similar) URL
- * @param {string} url 
  */
-async function extractVCloud(url) {
+export async function extractVCloud(url) {
     console.log(`[VCloud] Extracting: ${url}`);
     try {
         let finalUrl = url;
-        
-        // 1. Fetch initial page
         let html = await fetchText(url);
         let $ = cheerio.load(html);
         
-        // 2. Check for "api/index.php" redirect (sometimes used)
         if (url.includes("api/index.php")) {
             const redirect = $('div.main h4 a').attr('href');
             if (redirect) {
@@ -24,15 +20,11 @@ async function extractVCloud(url) {
             }
         }
 
-        // 3. Find the 'var url = ...' inside script
-        // This is the "landing" page that hides the real content
         const scriptContent = $('script:contains("var url =")').html();
         let nextUrl = null;
         if (scriptContent) {
             const match = scriptContent.match(/var url = '([^']+)'/);
-            if (match) {
-                nextUrl = match[1];
-            }
+            if (match) nextUrl = match[1];
         }
 
         if (!nextUrl) {
@@ -47,15 +39,11 @@ async function extractVCloud(url) {
         const extractedLinks = [];
         const quality = $final('div.card-header').text().trim() || "Unknown";
 
-        // 4. Parse the buttons
         $final('div.card-body h2 a.btn').each((i, el) => {
             const link = $(el).attr('href');
             const text = $(el).text();
-            
-            console.log(`[VCloud] Found button: ${text} -> ${link}`);
-
-            // Logic for different servers
             const lowerText = text.toLowerCase();
+            
             if (lowerText.includes("fsl") || lowerText.includes("server") || lowerText.includes("original") || lowerText.includes("cloud")) {
                 extractedLinks.push({
                     name: "V-Cloud",
@@ -64,7 +52,6 @@ async function extractVCloud(url) {
                     quality: quality
                 });
             } else if (lowerText.includes("pixeldrain")) {
-                // Handle Pixeldrain conversion if needed
                  extractedLinks.push({
                     name: "Pixeldrain",
                     title: text.trim(),
@@ -82,11 +69,8 @@ async function extractVCloud(url) {
         });
 
         return extractedLinks;
-
     } catch (e) {
         console.error(`[VCloud] Error: ${e.message}`);
         return [];
     }
 }
-
-module.exports = { extractVCloud };
