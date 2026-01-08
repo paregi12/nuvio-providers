@@ -8,7 +8,9 @@
  * Usage:
  *   node build.js              # Build all providers
  *   node build.js vixsrc       # Build only vixsrc
+ *   node build.js --minify     # Build all with minification
  *   node build.js --watch      # Watch mode (requires nodemon)
+ *   node build.js --transpile  # Transpile async/await in providers/
  */
 
 const esbuild = require('esbuild');
@@ -46,7 +48,7 @@ function getProvidersToBuild() {
         .map(d => d.name);
 }
 
-async function buildProvider(providerName) {
+async function buildProvider(providerName, options = {}) {
     const providerDir = path.join(srcDir, providerName);
     const entryPoint = path.join(providerDir, 'index.js');
     const outFile = path.join(outDir, `${providerName}.js`);
@@ -64,7 +66,7 @@ async function buildProvider(providerName) {
             format: 'cjs',              // CommonJS for module.exports compatibility
             platform: 'neutral',        // Works in both browser and node-like environments
             target: 'es2016',           // Transpile async/await to generators for Hermes
-            minify: false,              // Keep readable for debugging
+            minify: options.minify || false, // Minify if --minify flag is set
             sourcemap: false,
             external: EXTERNAL_MODULES,
             banner: {
@@ -75,7 +77,8 @@ async function buildProvider(providerName) {
 
         const stats = fs.statSync(outFile);
         const sizeKB = (stats.size / 1024).toFixed(1);
-        console.log(`✅ ${providerName}.js (${sizeKB} KB)`);
+        const minifyIndicator = options.minify ? ' (minified)' : '';
+        console.log(`✅ ${providerName}.js (${sizeKB} KB)${minifyIndicator}`);
         return true;
     } catch (err) {
         console.error(`❌ Failed to build ${providerName}:`, err.message);
@@ -123,6 +126,7 @@ async function transpileSingleFile(filename) {
 
 async function main() {
     const args = process.argv.slice(2);
+    const shouldMinify = args.includes('--minify');
 
     // Handle --transpile flag for single-file providers
     if (args.includes('--transpile')) {
@@ -162,7 +166,8 @@ async function main() {
         return;
     }
 
-    console.log(`\n📦 Building ${providers.length} provider(s)...\n`);
+    const minifyLabel = shouldMinify ? ' (minified)' : '';
+    console.log(`\n📦 Building ${providers.length} provider(s)${minifyLabel}...\n`);
 
     // Ensure output directory exists
     if (!fs.existsSync(outDir)) {
@@ -173,7 +178,7 @@ async function main() {
     let failed = 0;
 
     for (const provider of providers) {
-        const result = await buildProvider(provider);
+        const result = await buildProvider(provider, { minify: shouldMinify });
         if (result) success++;
         else failed++;
     }
