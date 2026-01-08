@@ -25,7 +25,7 @@
       "limited": false,
       "disabledPlatforms": [],
       "supportsExternalPlayer": true
-     },
+    },
         {
           "id": "vegamovies",
           "name": "VegaMovies",
@@ -38,7 +38,7 @@
           ],
           "filename": "providers/vegamovies.js",
           "enabled": true,
-          "logo": "https://vegamovies.gt/wp-content/uploads/2020/01/Vegamovies-Logo.png",
+          "logo": "https://vegamovies.cricket/wp-content/uploads/2020/01/Vegamovies-Logo.png",
           "contentLanguage": [
             "hi",
             "en"
