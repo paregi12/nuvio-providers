@@ -10,7 +10,7 @@
       "tv"
     ],
     "filename": "providers/template.js",
-    "enabled": false,
+    "enabled": true,
     "logo": "",
     "contentLanguage": [
       "en"
