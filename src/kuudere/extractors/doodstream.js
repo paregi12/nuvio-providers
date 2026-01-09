@@ -28,7 +28,8 @@ export async function getDoodstream(embedUrl) {
             return result;
         };
         
-        return `${urlPart}${randomString(10)}?token=${token}&expiry=${Date.now()}`;
+        const streamUrl = `${urlPart}${randomString(10)}?token=${token}&expiry=${Date.now()}`;
+        return { url: streamUrl, subtitles: [] };
     } catch (error) {
         return null;
     }

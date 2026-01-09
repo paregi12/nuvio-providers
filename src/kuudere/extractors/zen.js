@@ -33,10 +33,61 @@ function findKeyInObj(obj, key) {
     return null;
 }
 
+function extractSubtitlesFromData(data) {
+    const subtitles = [];
+    
+    // 1. Direct API response structure
+    const subLinks = data.subtitle_links || [];
+    if (Array.isArray(subLinks)) {
+        for (const sub of subLinks) {
+            if (sub.url) {
+                subtitles.push({
+                    url: sub.url,
+                    lang: sub.language || 'English',
+                    label: sub.language || 'English'
+                });
+            }
+        }
+    }
+
+    // 2. SvelteKit state structure (__data.json inside page)
+    if (data.nodes) {
+        for (const node of data.nodes) {
+            if (node && node.data) {
+                const dataArray = node.data;
+                const meta = dataArray.find(item => item && (item.subtitles || item.tracks));
+                if (meta) {
+                    let subIndices = meta.subtitles || meta.tracks || [];
+                    
+                    if (typeof subIndices === 'number') {
+                        subIndices = dataArray[subIndices] || [];
+                    }
+
+                    if (Array.isArray(subIndices)) {
+                        for (const idx of subIndices) {
+                            const sub = resolveValue(idx, dataArray);
+                            if (sub && sub.url) {
+                                subtitles.push({
+                                    url: sub.url,
+                                    lang: sub.language || sub.label || 'English',
+                                    label: sub.language || sub.label || 'English'
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return subtitles;
+}
+
 export async function getZenStream(embedUrl) {
     try {
         const urlObj = new URL(embedUrl);
-        const dataUrl = `${urlObj.origin}${urlObj.pathname.replace(/\/e\//, '/e/')}/__data.json${urlObj.search}`;
+        // Zen uses __data.json for metadata
+        const dataUrl = `${urlObj.origin}${urlObj.pathname}/__data.json${urlObj.search}`;
         
         const response = await axios.get(dataUrl, {
             headers: {
@@ -46,8 +97,14 @@ export async function getZenStream(embedUrl) {
         });
         const data = response.data;
 
-        const node = data.nodes.find(n => n && n.data && n.data.some(item => item && item.obfuscation_seed));
-        if (!node) return null;
+        // Subtitles are in plain data
+        const subtitles = extractSubtitlesFromData(data);
+
+        // AES logic for m3u8 token
+        const node = data.nodes?.find(n => n && n.data && n.data.some(item => item && item.obfuscation_seed));
+        if (!node) {
+            return { url: null, subtitles };
+        }
 
         const dataArray = node.data;
         const metaIdx = dataArray.findIndex(item => item && item.obfuscation_seed);
@@ -66,7 +123,7 @@ export async function getZenStream(embedUrl) {
         const encryptedIv = findKeyInObj(resolvedMeta, fields.ivField);
         const token = resolvedMeta[fields.tokenField];
 
-        if (!token || !encryptedKey || !encryptedIv) return null;
+        if (!token || !encryptedKey || !encryptedIv) return { url: null, subtitles };
 
         const manifestRes = await axios.get(`${urlObj.origin}/api/m3u8/${token}`, {
             headers: {
@@ -87,7 +144,9 @@ export async function getZenStream(embedUrl) {
             { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
         );
 
-        return decrypted.toString(CryptoJS.enc.Utf8);
+        const url = decrypted.toString(CryptoJS.enc.Utf8);
+
+        return { url, subtitles };
     } catch (error) {
         return null;
     }

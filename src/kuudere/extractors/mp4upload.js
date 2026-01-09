@@ -9,7 +9,7 @@ export async function getMp4Upload(embedUrl) {
         const html = response.data;
         
         const srcMatch = html.match(/src\s*:\s*"([^"]+\.mp4)"/);
-        return srcMatch ? srcMatch[1] : null;
+        return srcMatch ? { url: srcMatch[1], subtitles: [] } : null;
     } catch (error) {
         return null;
     }

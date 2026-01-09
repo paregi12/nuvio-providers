@@ -1,6 +1,6 @@
 /**
  * kuudere - Built from src/kuudere/
- * Generated: 2026-01-09T19:16:34.616Z
+ * Generated: 2026-01-09T20:56:28.220Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -148,11 +148,54 @@ function findKeyInObj(obj, key) {
   }
   return null;
 }
+function extractSubtitlesFromData(data) {
+  const subtitles = [];
+  const subLinks = data.subtitle_links || [];
+  if (Array.isArray(subLinks)) {
+    for (const sub of subLinks) {
+      if (sub.url) {
+        subtitles.push({
+          url: sub.url,
+          lang: sub.language || "English",
+          label: sub.language || "English"
+        });
+      }
+    }
+  }
+  if (data.nodes) {
+    for (const node of data.nodes) {
+      if (node && node.data) {
+        const dataArray = node.data;
+        const meta = dataArray.find((item) => item && (item.subtitles || item.tracks));
+        if (meta) {
+          let subIndices = meta.subtitles || meta.tracks || [];
+          if (typeof subIndices === "number") {
+            subIndices = dataArray[subIndices] || [];
+          }
+          if (Array.isArray(subIndices)) {
+            for (const idx of subIndices) {
+              const sub = resolveValue(idx, dataArray);
+              if (sub && sub.url) {
+                subtitles.push({
+                  url: sub.url,
+                  lang: sub.language || sub.label || "English",
+                  label: sub.language || sub.label || "English"
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return subtitles;
+}
 function getZenStream(embedUrl) {
   return __async(this, null, function* () {
+    var _a;
     try {
       const urlObj = new URL(embedUrl);
-      const dataUrl = `${urlObj.origin}${urlObj.pathname.replace(/\/e\//, "/e/")}/__data.json${urlObj.search}`;
+      const dataUrl = `${urlObj.origin}${urlObj.pathname}/__data.json${urlObj.search}`;
       const response = yield import_axios3.default.get(dataUrl, {
         headers: {
           "Referer": "https://kuudere.ru/",
@@ -160,9 +203,11 @@ function getZenStream(embedUrl) {
         }
       });
       const data = response.data;
-      const node = data.nodes.find((n) => n && n.data && n.data.some((item) => item && item.obfuscation_seed));
-      if (!node)
-        return null;
+      const subtitles = extractSubtitlesFromData(data);
+      const node = (_a = data.nodes) == null ? void 0 : _a.find((n) => n && n.data && n.data.some((item) => item && item.obfuscation_seed));
+      if (!node) {
+        return { url: null, subtitles };
+      }
       const dataArray = node.data;
       const metaIdx = dataArray.findIndex((item) => item && item.obfuscation_seed);
       const meta = dataArray[metaIdx];
@@ -178,7 +223,7 @@ function getZenStream(embedUrl) {
       const encryptedIv = findKeyInObj(resolvedMeta, fields.ivField);
       const token = resolvedMeta[fields.tokenField];
       if (!token || !encryptedKey || !encryptedIv)
-        return null;
+        return { url: null, subtitles };
       const manifestRes = yield import_axios3.default.get(`${urlObj.origin}/api/m3u8/${token}`, {
         headers: {
           "Referer": embedUrl,
@@ -195,7 +240,8 @@ function getZenStream(embedUrl) {
         key,
         { iv, mode: import_crypto_js.default.mode.CBC, padding: import_crypto_js.default.pad.Pkcs7 }
       );
-      return decrypted.toString(import_crypto_js.default.enc.Utf8);
+      const url = decrypted.toString(import_crypto_js.default.enc.Utf8);
+      return { url, subtitles };
     } catch (error) {
       return null;
     }
@@ -204,6 +250,25 @@ function getZenStream(embedUrl) {
 
 // src/kuudere/extractors/streamwish.js
 var import_axios4 = __toESM(require("axios"));
+function extractSubtitlesFromUrl(url) {
+  const subtitles = [];
+  try {
+    const urlObj = new URL(url);
+    for (const [key, value] of urlObj.searchParams.entries()) {
+      if (key.startsWith("caption_")) {
+        const langCode = key.replace("caption_", "");
+        subtitles.push({
+          url: value,
+          lang: `Caption ${langCode}`,
+          // We don't know the language name, just index
+          label: `Caption ${langCode}`
+        });
+      }
+    }
+  } catch (e) {
+  }
+  return subtitles;
+}
 function getStreamWish(embedUrl) {
   return __async(this, null, function* () {
     try {
@@ -214,16 +279,22 @@ function getStreamWish(embedUrl) {
         }
       });
       const html = response.data;
+      let streamUrl = null;
       const m3u8Match = html.match(/file\s*:\s*"([^"]+\.m3u8[^"]*)"/) || html.match(/file\s*:\s*"([^"]+\.txt[^"]*)"/) || html.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
-      if (m3u8Match)
-        return m3u8Match[1];
-      const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\).+?\)\)/);
-      if (packedMatch) {
-        const innerM3u8 = packedMatch[0].match(/https?:\/\/[^"']+\.m3u8/);
-        if (innerM3u8)
-          return innerM3u8[0];
+      if (m3u8Match) {
+        streamUrl = m3u8Match[1];
+      } else {
+        const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\).+?\)\)/);
+        if (packedMatch) {
+          const innerM3u8 = packedMatch[0].match(/https?:\/\/[^"']+\.m3u8/);
+          if (innerM3u8)
+            streamUrl = innerM3u8[0];
+        }
       }
-      return null;
+      if (!streamUrl)
+        return null;
+      const subtitles = extractSubtitlesFromUrl(embedUrl);
+      return { url: streamUrl, subtitles };
     } catch (error) {
       return null;
     }
@@ -232,6 +303,24 @@ function getStreamWish(embedUrl) {
 
 // src/kuudere/extractors/vidhide.js
 var import_axios5 = __toESM(require("axios"));
+function extractSubtitlesFromUrl2(url) {
+  const subtitles = [];
+  try {
+    const urlObj = new URL(url);
+    for (const [key, value] of urlObj.searchParams.entries()) {
+      if (key.startsWith("caption_")) {
+        const langCode = key.replace("caption_", "");
+        subtitles.push({
+          url: value,
+          lang: `Caption ${langCode}`,
+          label: `Caption ${langCode}`
+        });
+      }
+    }
+  } catch (e) {
+  }
+  return subtitles;
+}
 function getVidhideStream(embedUrl) {
   return __async(this, null, function* () {
     try {
@@ -242,16 +331,22 @@ function getVidhideStream(embedUrl) {
         }
       });
       const html = response.data;
+      let streamUrl = null;
       const m3u8Match = html.match(/file\s*:\s*"([^"]+\.m3u8[^"]*)"/) || html.match(/file\s*:\s*"([^"]+\.txt[^"]*)"/) || html.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
-      if (m3u8Match)
-        return m3u8Match[1];
-      const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\).+?\)\)/);
-      if (packedMatch) {
-        const innerM3u8 = packedMatch[0].match(/https?:\/\/[^"']+\.m3u8/);
-        if (innerM3u8)
-          return innerM3u8[0];
+      if (m3u8Match) {
+        streamUrl = m3u8Match[1];
+      } else {
+        const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\).+?\)\)/);
+        if (packedMatch) {
+          const innerM3u8 = packedMatch[0].match(/https?:\/\/[^"']+\.m3u8/);
+          if (innerM3u8)
+            streamUrl = innerM3u8[0];
+        }
       }
-      return null;
+      if (!streamUrl)
+        return null;
+      const subtitles = extractSubtitlesFromUrl2(embedUrl);
+      return { url: streamUrl, subtitles };
     } catch (error) {
       return null;
     }
@@ -284,7 +379,8 @@ function getDoodstream(embedUrl) {
         }
         return result;
       };
-      return `${urlPart}${randomString(10)}?token=${token}&expiry=${Date.now()}`;
+      const streamUrl = `${urlPart}${randomString(10)}?token=${token}&expiry=${Date.now()}`;
+      return { url: streamUrl, subtitles: [] };
     } catch (error) {
       return null;
     }
@@ -301,7 +397,7 @@ function getMp4Upload(embedUrl) {
       });
       const html = response.data;
       const srcMatch = html.match(/src\s*:\s*"([^"]+\.mp4)"/);
-      return srcMatch ? srcMatch[1] : null;
+      return srcMatch ? { url: srcMatch[1], subtitles: [] } : null;
     } catch (error) {
       return null;
     }
@@ -323,36 +419,39 @@ function extractStreams(links) {
       try {
         const serverName = link.serverName;
         const embedUrl = link.dataLink;
-        let directUrl = null;
+        let extractionResult = null;
         let quality = "Auto";
         let headers = {};
         if (serverName === "Zen" || serverName === "Zen-2") {
-          directUrl = yield getZenStream(embedUrl);
+          extractionResult = yield getZenStream(embedUrl);
           quality = "1080p";
           headers = { "Referer": "https://zencloudz.cc/" };
         } else if (serverName === "StreamWish" || serverName === "Streamwish" || serverName === "S-Wish" || serverName === "H-Wish") {
-          directUrl = yield getStreamWish(embedUrl);
+          extractionResult = yield getStreamWish(embedUrl);
           headers = { "Referer": new URL(embedUrl).origin };
         } else if (serverName === "Vidhide" || serverName === "S-Hide" || serverName === "H-Hide") {
-          directUrl = yield getVidhideStream(embedUrl);
+          extractionResult = yield getVidhideStream(embedUrl);
           headers = { "Referer": new URL(embedUrl).origin };
         } else if (serverName === "Doodstream") {
-          directUrl = yield getDoodstream(embedUrl);
+          extractionResult = yield getDoodstream(embedUrl);
           headers = { "Referer": "https://dood.li/" };
         } else if (serverName === "Mp4upload") {
-          directUrl = yield getMp4Upload(embedUrl);
+          extractionResult = yield getMp4Upload(embedUrl);
           headers = { "Referer": "https://www.mp4upload.com/" };
         } else if (serverName.startsWith("Kumi")) {
-          directUrl = yield getKumiStream(embedUrl);
+          extractionResult = yield getKumiStream(embedUrl);
           headers = { "Referer": new URL(embedUrl).origin };
         }
-        if (directUrl) {
+        if (extractionResult && extractionResult.url) {
+          const directUrl = extractionResult.url;
+          const subtitles = extractionResult.subtitles || [];
           streams.push({
             name: `Kuudere (${serverName})`,
             title: `${link.dataType.toUpperCase()} - Direct`,
             url: directUrl,
             quality,
-            headers
+            headers,
+            subtitles
           });
         } else {
           const embedServers = ["Kumi", "Kumi-v2", "Kumi-v3", "Kumi-v4"];

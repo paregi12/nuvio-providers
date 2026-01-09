@@ -12,51 +12,55 @@ export async function extractStreams(links) {
         try {
             const serverName = link.serverName;
             const embedUrl = link.dataLink;
-            let directUrl = null;
+            
+            let extractionResult = null;
             let quality = 'Auto';
             let headers = {};
 
             // Prioritize specific extractors
             if (serverName === 'Zen' || serverName === 'Zen-2') {
-                directUrl = await getZenStream(embedUrl);
+                extractionResult = await getZenStream(embedUrl);
                 quality = '1080p';
                 headers = { "Referer": "https://zencloudz.cc/" };
             } 
             else if (serverName === 'StreamWish' || serverName === 'Streamwish' || serverName === 'S-Wish' || serverName === 'H-Wish') {
-                directUrl = await getStreamWish(embedUrl);
+                extractionResult = await getStreamWish(embedUrl);
                 headers = { "Referer": new URL(embedUrl).origin };
             } 
             else if (serverName === 'Vidhide' || serverName === 'S-Hide' || serverName === 'H-Hide') {
-                directUrl = await getVidhideStream(embedUrl);
+                extractionResult = await getVidhideStream(embedUrl);
                 headers = { "Referer": new URL(embedUrl).origin };
             } 
             else if (serverName === 'Doodstream') {
-                directUrl = await getDoodstream(embedUrl);
+                extractionResult = await getDoodstream(embedUrl);
                 headers = { "Referer": "https://dood.li/" };
             } 
             else if (serverName === 'Mp4upload') {
-                directUrl = await getMp4Upload(embedUrl);
+                extractionResult = await getMp4Upload(embedUrl);
                 headers = { "Referer": "https://www.mp4upload.com/" };
             }
             else if (serverName.startsWith('Kumi')) {
-                directUrl = await getKumiStream(embedUrl);
+                extractionResult = await getKumiStream(embedUrl);
                 headers = { "Referer": new URL(embedUrl).origin };
             }
 
-            if (directUrl) {
+            if (extractionResult && extractionResult.url) {
+                const directUrl = extractionResult.url;
+                const subtitles = extractionResult.subtitles || [];
+
                 streams.push({
                     name: `Kuudere (${serverName})`,
                     title: `${link.dataType.toUpperCase()} - Direct`,
                     url: directUrl,
                     quality: quality,
-                    headers: headers
+                    headers: headers,
+                    subtitles: subtitles
                 });
             } else {
-                // If extraction failed or it's a server we only support via embed (like Kumi for now)
+                // Fallback / Embed Logic
                 const embedServers = ['Kumi', 'Kumi-v2', 'Kumi-v3', 'Kumi-v4'];
                 const isEmbedOnly = embedServers.includes(serverName);
                 
-                // For Kumi, always show embed. For others, only if they aren't known broken.
                 if (isEmbedOnly) {
                     streams.push({
                         name: `Kuudere (${serverName})`,
@@ -73,7 +77,7 @@ export async function extractStreams(links) {
                     ];
                     
                     if (!knownTypes.includes(serverName)) {
-                         streams.push({
+                        streams.push({
                             name: `Kuudere (${serverName})`,
                             title: `${link.dataType.toUpperCase()} - Embed`,
                             url: embedUrl,
@@ -84,7 +88,7 @@ export async function extractStreams(links) {
                 }
             }
         } catch (error) {
-            // Silently ignore individual link errors to not break the whole process
+            // Silently ignore individual link errors
         }
     }
     
