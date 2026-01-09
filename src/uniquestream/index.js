@@ -1,5 +1,5 @@
 import { getTmdbInfo } from './tmdb.js';
-import { fetchJson, fetchText } from './http.js';
+import { fetchJson } from './http.js';
 import { API_URL } from './constants.js';
 
 const LOCALE_MAP = {
@@ -16,40 +16,6 @@ const LOCALE_MAP = {
 
 function getLangName(locale) {
     return LOCALE_MAP[locale] || locale;
-}
-
-async function resolveHlsVariants(masterUrl, headers) {
-    try {
-        const content = await fetchText(masterUrl, { headers });
-        const lines = content.split('\n');
-        const variants = [];
-        let currentInfo = null;
-
-        const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf('/') + 1);
-
-        for (let line of lines) {
-            line = line.trim();
-            if (line.startsWith('#EXT-X-STREAM-INF:')) {
-                const resolutionMatch = line.match(/RESOLUTION=(\d+x\d+)/);
-                currentInfo = {
-                    resolution: resolutionMatch ? resolutionMatch[1] : "Unknown"
-                };
-            } else if (line && !line.startsWith('#') && currentInfo) {
-                const fullUrl = line.startsWith('http') ? line : baseUrl + line;
-                const height = currentInfo.resolution !== "Unknown" ? parseInt(currentInfo.resolution.split('x')[1]) : 0;
-                variants.push({
-                    url: fullUrl,
-                    quality: height > 0 ? height + 'p' : "Auto",
-                    height: height
-                });
-                currentInfo = null;
-            }
-        }
-        return variants;
-    } catch (e) {
-        console.error(`[UniqueStream] Failed to resolve variants: ${e.message}`);
-        return [];
-    }
 }
 
 async function getStreams(tmdbId, mediaType, season, episode) {
@@ -131,20 +97,15 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         if (!targetEp) return [];
         
         const streams = [];
-        const processedKeys = new Set();
+        const processedUrls = new Set();
         
-        try {
-            const mediaUrl = `${API_URL}/${endpointType}/${targetEp.content_id}/media/hls/ja-JP`;
-            const mediaData = await fetchJson(mediaUrl);
-            await processMediaData(mediaData, streams, processedKeys);
-        } catch (e) {}
-
-        const hasEnglish = streams.some(s => s.title.toLowerCase().includes('english') || s.title.toLowerCase().includes('(en-us)'));
-        if (!hasEnglish) {
+        // Fetch locales
+        const endpoints = ['ja-JP', 'en-US'];
+        for (const locale of endpoints) {
             try {
-                const mediaUrl = `${API_URL}/${endpointType}/${targetEp.content_id}/media/hls/en-US`;
+                const mediaUrl = `${API_URL}/${endpointType}/${targetEp.content_id}/media/hls/${locale}`;
                 const mediaData = await fetchJson(mediaUrl);
-                await processMediaData(mediaData, streams, processedKeys);
+                processMediaData(mediaData, streams, processedUrls);
             } catch (e) {}
         }
 
@@ -154,8 +115,6 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                 const t = s.title.toLowerCase();
                 if (t.includes('english')) score += 100;
                 if (t.includes('japanese') || t.includes('raw')) score += 50;
-                if (t.includes('1080p')) score += 10;
-                if (t.includes('720p')) score += 5;
                 return score;
             };
             return getScore(b) - getScore(a);
@@ -167,7 +126,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     }
 }
 
-async function processMediaData(data, streams, processedKeys) {
+function processMediaData(data, streams, processedUrls) {
     if (!data) return;
 
     const headers = {
@@ -175,65 +134,37 @@ async function processMediaData(data, streams, processedKeys) {
         "Referer": "https://anime.uniquestream.net/"
     };
 
-    const handleHls = async (hls) => {
+    const handleHls = (hls) => {
         if (!hls) return;
         const locale = hls.locale;
         const langName = getLangName(locale);
         
-        const processPlaylist = async (url, isSub, subLocale) => {
-            if (!url) return;
+        const addStream = (url, isSub, subLocale) => {
+            if (!url || processedUrls.has(url)) return;
+            processedUrls.add(url);
+
+            let title = isSub ? `UniqueStream Sub (${getLangName(subLocale)})` : 
+                       (locale === 'ja-JP' ? `UniqueStream Raw (${langName})` : `UniqueStream Dub (${langName})`);
             
-            if (processedKeys.has(url)) return;
-            processedKeys.add(url);
-
-            if (url.includes('master.m3u8')) {
-                const variants = await resolveHlsVariants(url, headers);
-                const highQualities = variants.filter(v => v.height >= 720);
-                const toProcess = highQualities.length > 0 ? highQualities : variants.slice(0, 1);
-
-                toProcess.forEach(v => {
-                    let title = isSub ? `UniqueStream Sub (${getLangName(subLocale)})` : 
-                               (locale === 'ja-JP' ? `UniqueStream Raw (${langName})` : `UniqueStream Dub (${langName})`);
-                    
-                    title += ` [${v.quality}]`;
-                    
-                    streams.push({
-                        name: "UniqueStream",
-                        title: title,
-                        url: v.url,
-                        quality: v.quality,
-                        type: "hls",
-                        headers: headers
-                    });
-                });
-            } else {
-                let title = isSub ? `UniqueStream Sub (${getLangName(subLocale)})` : 
-                           (locale === 'ja-JP' ? `UniqueStream Raw (${langName})` : `UniqueStream Dub (${langName})`);
-                
-                streams.push({
-                    name: "UniqueStream",
-                    title: title,
-                    url: url,
-                    quality: "Auto",
-                    type: "hls",
-                    headers: headers
-                });
-            }
+            streams.push({
+                name: "UniqueStream",
+                title: `${title} [Multi-Quality]`,
+                url: url,
+                quality: "Auto",
+                type: "hls",
+                headers: headers
+            });
         };
 
-        if (hls.playlist) await processPlaylist(hls.playlist, false);
+        if (hls.playlist) addStream(hls.playlist, false);
         if (hls.hard_subs) {
-            for (const sub of hls.hard_subs) {
-                await processPlaylist(sub.playlist, true, sub.locale);
-            }
+            hls.hard_subs.forEach(sub => addStream(sub.playlist, true, sub.locale));
         }
     };
 
-    if (data.hls) await handleHls(data.hls);
+    if (data.hls) handleHls(data.hls);
     if (data.versions && data.versions.hls) {
-        for (const vHls of data.versions.hls) {
-            await handleHls(vHls);
-        }
+        data.versions.hls.forEach(handleHls);
     }
 }
 
