@@ -1,6 +1,6 @@
 /**
  * kuudere - Built from src/kuudere/
- * Generated: 2026-01-09T17:59:02.622Z
+ * Generated: 2026-01-09T18:16:44.113Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
