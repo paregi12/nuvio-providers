@@ -1,5 +1,349 @@
 /**
  * vegamovies - Built from src/vegamovies/
- * Generated: 2026-01-08T20:22:54.908Z
+ * Generated: 2026-01-09T17:59:02.648Z
  */
-var B=Object.create;var b=Object.defineProperty;var I=Object.getOwnPropertyDescriptor;var K=Object.getOwnPropertyNames,T=Object.getOwnPropertySymbols,G=Object.getPrototypeOf,H=Object.prototype.hasOwnProperty,W=Object.prototype.propertyIsEnumerable;var A=(e,t,o)=>t in e?b(e,t,{enumerable:!0,configurable:!0,writable:!0,value:o}):e[t]=o,M=(e,t)=>{for(var o in t||(t={}))H.call(t,o)&&A(e,o,t[o]);if(T)for(var o of T(t))W.call(t,o)&&A(e,o,t[o]);return e};var j=(e,t,o,n)=>{if(t&&typeof t=="object"||typeof t=="function")for(let s of K(t))!H.call(e,s)&&s!==o&&b(e,s,{get:()=>t[s],enumerable:!(n=I(t,s))||n.enumerable});return e};var E=(e,t,o)=>(o=e!=null?B(G(e)):{},j(t||!e||!e.__esModule?b(o,"default",{value:e,enumerable:!0}):o,e));var $=(e,t,o)=>new Promise((n,s)=>{var i=a=>{try{p(o.next(a))}catch(f){s(f)}},x=a=>{try{p(o.throw(a))}catch(f){s(f)}},p=a=>a.done?n(a.value):Promise.resolve(a.value).then(i,x);p((o=o.apply(e,t)).next())});var V=E(require("cheerio-without-node-native"));var R="68e094699525b18a70bab2f86b1fa706",_="https://vegamovies.gt",q="Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";var J={"User-Agent":q,Accept:"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",cookie:"xla=s4t"};function v(o){return $(this,arguments,function*(e,t={}){console.log(`[VegaMovies] Fetching: ${e}`);let n=yield fetch(e,M({headers:M(M({},J),t.headers)},t));if(!n.ok)throw new Error(`HTTP error ${n.status} for ${e}`);return yield n.text()})}function D(o){return $(this,arguments,function*(e,t={}){let n=yield v(e,t);return JSON.parse(n)})}function F(e,t){return $(this,null,function*(){let o=t==="series"||t==="tv",s=`https://api.themoviedb.org/3/${o?"tv":"movie"}/${e}?api_key=${R}`;console.log(`[VegaMovies] Fetching TMDB details from: ${s}`);try{let i=yield D(s);return o?{title:i.name,year:i.first_air_date?i.first_air_date.split("-")[0]:""}:{title:i.title,year:i.release_date?i.release_date.split("-")[0]:""}}catch(i){return console.error("[VegaMovies] Failed to fetch metadata",i),null}})}var U=E(require("cheerio-without-node-native"));function P(e,t,o,n){return $(this,null,function*(){let s=o==="movie"?`${e} ${t}`:`${e} Season ${n}`,i=`${_}/page/1/?s=${encodeURIComponent(s)}`,x=yield v(i),p=U.default.load(x),a=N(p,e,t,o,n);return a||(console.log("[VegaMovies] Strict search failed, trying general search..."),i=`${_}/page/1/?s=${encodeURIComponent(e)}`,x=yield v(i),p=U.default.load(x),a=N(p,e,t,o,n)),a})}function N(e,t,o,n,s){let i=null,x=t.toLowerCase();return e("article.entry").each((p,a)=>{let f=e(a).find("h2 > a").text()||"",h=e(a).find("a").attr("href"),l=f.toLowerCase();if(l.includes(x))if(n!=="movie"){let m=`season ${s}`,d=`season 0${s}`;l.includes(m)||l.includes(d)?(!i||!i.title.includes(m)&&!i.title.includes(d))&&(i={link:h,title:l,priority:10}):(l.includes("series")||l.includes("complete"))&&(!i||i.priority<5)&&(i={link:h,title:l,priority:5})}else o&&l.includes(o)?i={link:h,title:l,priority:10}:i||(i={link:h,title:l,priority:1})}),i==null?void 0:i.link}var C=E(require("cheerio-without-node-native"));function S(e){return $(this,null,function*(){console.log(`[VCloud] Extracting: ${e}`);try{let t=e,o=yield v(e),n=C.default.load(o);if(e.includes("api/index.php")){let h=n("div.main h4 a").attr("href");h&&(t=h,o=yield v(t),n=C.default.load(o))}let s=n('script:contains("var url =")').html(),i=null;if(s){let h=s.match(/var url = '([^']+)'/);h&&(i=h[1])}if(!i)return console.log("[VCloud] Could not find redirect URL in script."),[];console.log(`[VCloud] Following redirect: ${i}`);let x=yield v(i),p=C.default.load(x),a=[],f=p("div.card-header").text().trim()||"Unknown";return p("div.card-body h2 a.btn").each((h,l)=>{let m=n(l).attr("href"),d=n(l).text(),c=d.toLowerCase(),r=d.match(/(\d{3,4}p)/),g=r?r[1]:f.match(/(\d{3,4}p)/)?f.match(/(\d{3,4}p)/)[1]:"Unknown",u="Server",w=d.match(/\[(.*?)\]/);w?u=w[1].replace("Server","").replace(":","").trim():c.includes("pixeldrain")?u="Pixeldrain":c.includes("fsl")?u="FSL":c.includes("10gbps")&&(u="10Gbps"),u===""&&(u="Server");let k=`VegaMovies ${g} [${u}]`;(c.includes("fsl")||c.includes("server")||c.includes("original")||c.includes("cloud")||c.includes("pixeldrain")||m.endsWith(".mkv")||m.endsWith(".mp4"))&&a.push({name:`VegaMovies ${u}`,title:k,url:m,quality:g})}),a}catch(t){return console.error(`[VCloud] Error: ${t.message}`),[]}})}function Y(e,t,o,n){return $(this,null,function*(){try{let s=yield F(e,t);if(!s)return[];let{title:i,year:x}=s;console.log(`[VegaMovies] Request: ${i} (${x}) S${o}E${n}`);let p=yield P(i,x,t,o);if(!p)return console.log("[VegaMovies] No results found on provider site."),[];console.log(`[VegaMovies] Found page: ${p}`);let a=yield v(p),f=V.default.load(a),h=[];if(t==="movie"){let l=[];f("p > a, h3 > a, h4 > a").each((m,d)=>{let c=f(d).attr("href"),r=f(d).text();c&&(r.includes("Download")||r.includes("V-Cloud")||r.includes("480p")||r.includes("720p")||r.includes("1080p"))&&c.startsWith("http")&&l.push({text:r,link:c})});for(let m of l)try{if(m.link.includes("vcloud")||m.link.includes("hubcloud")){let d=yield S(m.link);h.push(...d)}else{let d=yield v(m.link),c=V.default.load(d),r=[];c("a").each((g,u)=>{let w=c(u).attr("href"),k=c(u).text()||"";w&&(k.includes("V-Cloud")||w.includes("vcloud")||w.includes("hubcloud"))&&r.push(w)});for(let g of r){let u=yield S(g);h.push(...u)}}}catch(d){}}else{let l=f("h3, h4, h5").filter((d,c)=>{let r=f(c).text();return r.includes("Zip")?!1:r.toLowerCase().includes(`season ${o}`)||r.toLowerCase().includes(`season 0${o}`)}),m=[];l.each((d,c)=>{let r=f(c).next(),g=0;for(;r.length&&g<5&&!r.is("h3, h4, h5");)r.find("a").each((w,k)=>{let y=f(k).attr("href"),L=f(k).text();y&&(L.includes("V-Cloud")||L.includes("Episode")||L.includes("Download"))&&m.push({text:L,link:y})}),r=r.next(),g++});for(let d of m)try{let c=yield v(d.link),r=V.default.load(c),g=[];r("p > a").each((w,k)=>{let y=r(k).attr("href");y&&(y.includes("vcloud")||y.includes("hubcloud"))&&g.push(y)});let u=n-1;if(u>=0&&u<g.length){let w=yield S(g[u]);h.push(...w)}}catch(c){}}return h}catch(s){return console.error(`[VegaMovies] Error: ${s.message}`),[]}})}module.exports={getStreams:Y};
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __propIsEnum = Object.prototype.propertyIsEnumerable;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __spreadValues = (a, b) => {
+  for (var prop in b || (b = {}))
+    if (__hasOwnProp.call(b, prop))
+      __defNormalProp(a, prop, b[prop]);
+  if (__getOwnPropSymbols)
+    for (var prop of __getOwnPropSymbols(b)) {
+      if (__propIsEnum.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    }
+  return a;
+};
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
+var __async = (__this, __arguments, generator) => {
+  return new Promise((resolve, reject) => {
+    var fulfilled = (value) => {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    var rejected = (value) => {
+      try {
+        step(generator.throw(value));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    var step = (x) => x.done ? resolve(x.value) : Promise.resolve(x.value).then(fulfilled, rejected);
+    step((generator = generator.apply(__this, __arguments)).next());
+  });
+};
+
+// src/vegamovies/index.js
+var import_cheerio_without_node_native3 = __toESM(require("cheerio-without-node-native"));
+
+// src/vegamovies/constants.js
+var TMDB_API_KEY = "68e094699525b18a70bab2f86b1fa706";
+var BASE_URL = "https://vegamovies.gt";
+var USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
+
+// src/vegamovies/http.js
+var HEADERS = {
+  "User-Agent": USER_AGENT,
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+  "cookie": "xla=s4t"
+};
+function fetchText(_0) {
+  return __async(this, arguments, function* (url, options = {}) {
+    console.log(`[VegaMovies] Fetching: ${url}`);
+    const response = yield fetch(url, __spreadValues({
+      headers: __spreadValues(__spreadValues({}, HEADERS), options.headers)
+    }, options));
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status} for ${url}`);
+    }
+    return yield response.text();
+  });
+}
+function fetchJson(_0) {
+  return __async(this, arguments, function* (url, options = {}) {
+    const raw = yield fetchText(url, options);
+    return JSON.parse(raw);
+  });
+}
+
+// src/vegamovies/tmdb.js
+function getMetadata(tmdbId, mediaType) {
+  return __async(this, null, function* () {
+    const isSeries = mediaType === "series" || mediaType === "tv";
+    const endpoint = isSeries ? "tv" : "movie";
+    const url = `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+    console.log(`[VegaMovies] Fetching TMDB details from: ${url}`);
+    try {
+      const data = yield fetchJson(url);
+      if (isSeries) {
+        return {
+          title: data.name,
+          year: data.first_air_date ? data.first_air_date.split("-")[0] : ""
+        };
+      } else {
+        return {
+          title: data.title,
+          year: data.release_date ? data.release_date.split("-")[0] : ""
+        };
+      }
+    } catch (e) {
+      console.error("[VegaMovies] Failed to fetch metadata", e);
+      return null;
+    }
+  });
+}
+
+// src/vegamovies/search.js
+var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
+function searchProvider(title, year, mediaType, season) {
+  return __async(this, null, function* () {
+    let query = mediaType === "movie" ? `${title} ${year}` : `${title} Season ${season}`;
+    let searchUrl = `${BASE_URL}/page/1/?s=${encodeURIComponent(query)}`;
+    let searchHtml = yield fetchText(searchUrl);
+    let $ = import_cheerio_without_node_native.default.load(searchHtml);
+    let targetLink = findMatch($, title, year, mediaType, season);
+    if (!targetLink) {
+      console.log(`[VegaMovies] Strict search failed, trying general search...`);
+      searchUrl = `${BASE_URL}/page/1/?s=${encodeURIComponent(title)}`;
+      searchHtml = yield fetchText(searchUrl);
+      $ = import_cheerio_without_node_native.default.load(searchHtml);
+      targetLink = findMatch($, title, year, mediaType, season);
+    }
+    return targetLink;
+  });
+}
+function findMatch($, title, year, mediaType, season) {
+  let bestMatch = null;
+  const lowerQuery = title.toLowerCase();
+  $("article.entry").each((i, el) => {
+    const itemTitle = $(el).find("h2 > a").text() || "";
+    const itemLink = $(el).find("a").attr("href");
+    const lowerTitle = itemTitle.toLowerCase();
+    if (lowerTitle.includes(lowerQuery)) {
+      if (mediaType !== "movie") {
+        const seasonStr = `season ${season}`;
+        const s0SeasonStr = `season 0${season}`;
+        if (lowerTitle.includes(seasonStr) || lowerTitle.includes(s0SeasonStr)) {
+          if (!bestMatch || !bestMatch.title.includes(seasonStr) && !bestMatch.title.includes(s0SeasonStr)) {
+            bestMatch = { link: itemLink, title: lowerTitle, priority: 10 };
+          }
+        } else if (lowerTitle.includes("series") || lowerTitle.includes("complete")) {
+          if (!bestMatch || bestMatch.priority < 5) {
+            bestMatch = { link: itemLink, title: lowerTitle, priority: 5 };
+          }
+        }
+      } else {
+        if (year && lowerTitle.includes(year)) {
+          bestMatch = { link: itemLink, title: lowerTitle, priority: 10 };
+        } else if (!bestMatch) {
+          bestMatch = { link: itemLink, title: lowerTitle, priority: 1 };
+        }
+      }
+    }
+  });
+  return bestMatch == null ? void 0 : bestMatch.link;
+}
+
+// src/vegamovies/extractor.js
+var import_cheerio_without_node_native2 = __toESM(require("cheerio-without-node-native"));
+function extractVCloud(url) {
+  return __async(this, null, function* () {
+    console.log(`[VCloud] Extracting: ${url}`);
+    try {
+      let finalUrl = url;
+      let html = yield fetchText(url);
+      let $ = import_cheerio_without_node_native2.default.load(html);
+      if (url.includes("api/index.php")) {
+        const redirect = $("div.main h4 a").attr("href");
+        if (redirect) {
+          finalUrl = redirect;
+          html = yield fetchText(finalUrl);
+          $ = import_cheerio_without_node_native2.default.load(html);
+        }
+      }
+      const scriptContent = $('script:contains("var url =")').html();
+      let nextUrl = null;
+      if (scriptContent) {
+        const match = scriptContent.match(/var url = '([^']+)'/);
+        if (match)
+          nextUrl = match[1];
+      }
+      if (!nextUrl) {
+        console.log("[VCloud] Could not find redirect URL in script.");
+        return [];
+      }
+      console.log(`[VCloud] Following redirect: ${nextUrl}`);
+      const finalHtml = yield fetchText(nextUrl);
+      const $final = import_cheerio_without_node_native2.default.load(finalHtml);
+      const extractedLinks = [];
+      const quality = $final("div.card-header").text().trim() || "Unknown";
+      $final("div.card-body h2 a.btn").each((i, el) => {
+        const link = $(el).attr("href");
+        const text = $(el).text();
+        const lowerText = text.toLowerCase();
+        const qualityMatch = text.match(/(\d{3,4}p)/);
+        const res = qualityMatch ? qualityMatch[1] : quality.match(/(\d{3,4}p)/) ? quality.match(/(\d{3,4}p)/)[1] : "Unknown";
+        let serverName = "Server";
+        const serverMatch = text.match(/\[(.*?)\]/);
+        if (serverMatch) {
+          serverName = serverMatch[1].replace("Server", "").replace(":", "").trim();
+        } else if (lowerText.includes("pixeldrain")) {
+          serverName = "Pixeldrain";
+        } else if (lowerText.includes("fsl")) {
+          serverName = "FSL";
+        } else if (lowerText.includes("10gbps")) {
+          serverName = "10Gbps";
+        }
+        if (serverName === "")
+          serverName = "Server";
+        const cleanTitle = `VegaMovies ${res} [${serverName}]`;
+        if (lowerText.includes("fsl") || lowerText.includes("server") || lowerText.includes("original") || lowerText.includes("cloud") || lowerText.includes("pixeldrain") || link.endsWith(".mkv") || link.endsWith(".mp4")) {
+          extractedLinks.push({
+            name: `VegaMovies ${serverName}`,
+            title: cleanTitle,
+            url: link,
+            quality: res
+          });
+        }
+      });
+      return extractedLinks;
+    } catch (e) {
+      console.error(`[VCloud] Error: ${e.message}`);
+      return [];
+    }
+  });
+}
+
+// src/vegamovies/index.js
+function getStreams(tmdbId, mediaType, season, episode) {
+  return __async(this, null, function* () {
+    try {
+      const meta = yield getMetadata(tmdbId, mediaType);
+      if (!meta)
+        return [];
+      const { title, year } = meta;
+      console.log(`[VegaMovies] Request: ${title} (${year}) S${season}E${episode}`);
+      const targetLink = yield searchProvider(title, year, mediaType, season);
+      if (!targetLink) {
+        console.log("[VegaMovies] No results found on provider site.");
+        return [];
+      }
+      console.log(`[VegaMovies] Found page: ${targetLink}`);
+      const pageHtml = yield fetchText(targetLink);
+      const $page = import_cheerio_without_node_native3.default.load(pageHtml);
+      const streams = [];
+      if (mediaType === "movie") {
+        const downloadLinks = [];
+        $page("p > a, h3 > a, h4 > a").each((i, el) => {
+          const link = $page(el).attr("href");
+          const text = $page(el).text();
+          if (link && (text.includes("Download") || text.includes("V-Cloud") || text.includes("480p") || text.includes("720p") || text.includes("1080p"))) {
+            if (link.startsWith("http")) {
+              downloadLinks.push({ text, link });
+            }
+          }
+        });
+        for (const item of downloadLinks) {
+          try {
+            if (item.link.includes("vcloud") || item.link.includes("hubcloud")) {
+              const extracted = yield extractVCloud(item.link);
+              streams.push(...extracted);
+            } else {
+              const interHtml = yield fetchText(item.link);
+              const $inter = import_cheerio_without_node_native3.default.load(interHtml);
+              const cloudLinks = [];
+              $inter("a").each((j, el2) => {
+                const sourceLink = $inter(el2).attr("href");
+                const sourceText = $inter(el2).text() || "";
+                if (sourceLink && (sourceText.includes("V-Cloud") || sourceLink.includes("vcloud") || sourceLink.includes("hubcloud"))) {
+                  cloudLinks.push(sourceLink);
+                }
+              });
+              for (const cl of cloudLinks) {
+                const extracted = yield extractVCloud(cl);
+                streams.push(...extracted);
+              }
+            }
+          } catch (e) {
+          }
+        }
+      } else {
+        const seasonHeaders = $page("h3, h4, h5").filter((i, el) => {
+          const text = $page(el).text();
+          if (text.includes("Zip"))
+            return false;
+          return text.toLowerCase().includes(`season ${season}`) || text.toLowerCase().includes(`season 0${season}`);
+        });
+        const candidateLinks = [];
+        seasonHeaders.each((i, header) => {
+          let nextNode = $page(header).next();
+          let attempts = 0;
+          while (nextNode.length && attempts < 5) {
+            if (nextNode.is("h3, h4, h5"))
+              break;
+            const links = nextNode.find("a");
+            links.each((j, link) => {
+              const href = $page(link).attr("href");
+              const text = $page(link).text();
+              if (href && (text.includes("V-Cloud") || text.includes("Episode") || text.includes("Download"))) {
+                candidateLinks.push({ text, link: href });
+              }
+            });
+            nextNode = nextNode.next();
+            attempts++;
+          }
+        });
+        for (const item of candidateLinks) {
+          try {
+            const interHtml = yield fetchText(item.link);
+            const $inter = import_cheerio_without_node_native3.default.load(interHtml);
+            const vcloudLinks = [];
+            $inter("p > a").each((j, el) => {
+              const href = $inter(el).attr("href");
+              if (href && (href.includes("vcloud") || href.includes("hubcloud"))) {
+                vcloudLinks.push(href);
+              }
+            });
+            const targetIndex = episode - 1;
+            if (targetIndex >= 0 && targetIndex < vcloudLinks.length) {
+              const extracted = yield extractVCloud(vcloudLinks[targetIndex]);
+              streams.push(...extracted);
+            }
+          } catch (e) {
+          }
+        }
+      }
+      return streams;
+    } catch (error) {
+      console.error(`[VegaMovies] Error: ${error.message}`);
+      return [];
+    }
+  });
+}
+module.exports = { getStreams };

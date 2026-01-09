@@ -50,6 +50,55 @@
       "limited": false,
       "disabledPlatforms": [],
       "supportsExternalPlayer": true
+    },
+    {
+      "id": "crunchyroll",
+      "name": "Crunchyroll",
+      "description": "Anime from Crunchyroll (Beta API)",
+      "version": "1.0.0",
+      "author": "paregi12",
+      "supportedTypes": [
+        "tv",
+        "movie"
+      ],
+      "filename": "providers/crunchyroll.js",
+      "enabled": true,
+      "logo": "https://www.crunchyroll.com/static/config/i18n/common_images/favicon-32x32.png",
+      "contentLanguage": [
+        "en",
+        "ja"
+      ],
+      "formats": [
+        "hls"
+      ],
+      "limited": false,
+      "disabledPlatforms": [],
+      "supportsExternalPlayer": true
+    },
+    {
+      "id": "kuudere",
+      "name": "Kuudere",
+      "description": "Watch Anime Online Free on Kuudere.ru",
+      "version": "1.0.0",
+      "author": "paregi12",
+      "supportedTypes": [
+        "tv",
+        "movie"
+      ],
+      "filename": "providers/kuudere.js",
+      "enabled": true,
+      "logo": "https://kuudere.ru/favicon.png",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "mp4",
+        "mkv",
+        "hls"
+      ],
+      "limited": false,
+      "disabledPlatforms": [],
+      "supportsExternalPlayer": true
     }
   ]
 }
