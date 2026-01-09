@@ -73,6 +73,35 @@
           "limited": false,
           "disabledPlatforms": [],
           "supportsExternalPlayer": true
+        },
+        {
+          "id": "uniquestream",
+          "name": "UniqueStream",
+          "description": "Anime from UniqueStream",
+          "version": "1.0.0",
+          "author": "paregi12",
+          "supportedTypes": [
+            "tv",
+            "movie"
+          ],
+          "filename": "providers/uniquestream.js",
+          "enabled": true,
+          "logo": "https://anime.uniquestream.net/public/images/site/logo.png",
+          "contentLanguage": [
+            "en",
+            "ja",
+            "es",
+            "pt",
+            "fr",
+            "de",
+            "it"
+          ],
+          "formats": [
+            "hls"
+          ],
+          "limited": false,
+          "disabledPlatforms": [],
+          "supportsExternalPlayer": true
         }
       ]
     }
