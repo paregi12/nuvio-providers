@@ -1,6 +1,6 @@
 import { request } from './http.js';
 import { getMetadata } from './tmdb.js';
-import { extractStreams } from './extractor.js';
+import { extractStreams } from './extractors/index.js';
 
 function parseSvelteData(data) {
     if (!data || !data.nodes) return [];

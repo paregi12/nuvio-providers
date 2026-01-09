@@ -1,6 +1,6 @@
 /**
  * kuudere - Built from src/kuudere/
- * Generated: 2026-01-09T18:53:14.831Z
+ * Generated: 2026-01-09T19:16:34.616Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -112,10 +112,9 @@ function getMetadata(tmdbId, mediaType) {
   });
 }
 
-// src/kuudere/extractor.js
+// src/kuudere/extractors/zen.js
 var import_axios3 = __toESM(require("axios"));
 var import_crypto_js = __toESM(require("crypto-js"));
-var USER_AGENT2 = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 function resolveValue(idx, dataArray, visited = /* @__PURE__ */ new Set()) {
   if (visited.has(idx))
     return null;
@@ -157,7 +156,7 @@ function getZenStream(embedUrl) {
       const response = yield import_axios3.default.get(dataUrl, {
         headers: {
           "Referer": "https://kuudere.ru/",
-          "User-Agent": USER_AGENT2
+          "User-Agent": USER_AGENT
         }
       });
       const data = response.data;
@@ -183,7 +182,7 @@ function getZenStream(embedUrl) {
       const manifestRes = yield import_axios3.default.get(`${urlObj.origin}/api/m3u8/${token}`, {
         headers: {
           "Referer": embedUrl,
-          "User-Agent": USER_AGENT2,
+          "User-Agent": USER_AGENT,
           "X-Requested-With": "XMLHttpRequest"
         }
       });
@@ -202,13 +201,16 @@ function getZenStream(embedUrl) {
     }
   });
 }
+
+// src/kuudere/extractors/streamwish.js
+var import_axios4 = __toESM(require("axios"));
 function getStreamWish(embedUrl) {
   return __async(this, null, function* () {
     try {
-      const response = yield import_axios3.default.get(embedUrl, {
+      const response = yield import_axios4.default.get(embedUrl, {
         headers: {
           "Referer": "https://kuudere.to/",
-          "User-Agent": USER_AGENT2
+          "User-Agent": USER_AGENT
         }
       });
       const html = response.data;
@@ -227,11 +229,42 @@ function getStreamWish(embedUrl) {
     }
   });
 }
+
+// src/kuudere/extractors/vidhide.js
+var import_axios5 = __toESM(require("axios"));
+function getVidhideStream(embedUrl) {
+  return __async(this, null, function* () {
+    try {
+      const response = yield import_axios5.default.get(embedUrl, {
+        headers: {
+          "Referer": "https://kuudere.to/",
+          "User-Agent": USER_AGENT
+        }
+      });
+      const html = response.data;
+      const m3u8Match = html.match(/file\s*:\s*"([^"]+\.m3u8[^"]*)"/) || html.match(/file\s*:\s*"([^"]+\.txt[^"]*)"/) || html.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
+      if (m3u8Match)
+        return m3u8Match[1];
+      const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\).+?\)\)/);
+      if (packedMatch) {
+        const innerM3u8 = packedMatch[0].match(/https?:\/\/[^"']+\.m3u8/);
+        if (innerM3u8)
+          return innerM3u8[0];
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
+  });
+}
+
+// src/kuudere/extractors/doodstream.js
+var import_axios6 = __toESM(require("axios"));
 function getDoodstream(embedUrl) {
   return __async(this, null, function* () {
     try {
-      const response = yield import_axios3.default.get(embedUrl, {
-        headers: { "User-Agent": USER_AGENT2 }
+      const response = yield import_axios6.default.get(embedUrl, {
+        headers: { "User-Agent": USER_AGENT }
       });
       const html = response.data;
       const md5Match = html.match(/\/pass_md5\/([^']*)/);
@@ -239,8 +272,8 @@ function getDoodstream(embedUrl) {
         return null;
       const token = md5Match[1];
       const md5Url = `${new URL(embedUrl).origin}/pass_md5/${token}`;
-      const md5Res = yield import_axios3.default.get(md5Url, {
-        headers: { "Referer": embedUrl, "User-Agent": USER_AGENT2 }
+      const md5Res = yield import_axios6.default.get(md5Url, {
+        headers: { "Referer": embedUrl, "User-Agent": USER_AGENT }
       });
       const urlPart = md5Res.data;
       const randomString = (length) => {
@@ -257,11 +290,14 @@ function getDoodstream(embedUrl) {
     }
   });
 }
+
+// src/kuudere/extractors/mp4upload.js
+var import_axios7 = __toESM(require("axios"));
 function getMp4Upload(embedUrl) {
   return __async(this, null, function* () {
     try {
-      const response = yield import_axios3.default.get(embedUrl, {
-        headers: { "User-Agent": USER_AGENT2 }
+      const response = yield import_axios7.default.get(embedUrl, {
+        headers: { "User-Agent": USER_AGENT }
       });
       const html = response.data;
       const srcMatch = html.match(/src\s*:\s*"([^"]+\.mp4)"/);
@@ -271,6 +307,15 @@ function getMp4Upload(embedUrl) {
     }
   });
 }
+
+// src/kuudere/extractors/kumi.js
+function getKumiStream(embedUrl) {
+  return __async(this, null, function* () {
+    return null;
+  });
+}
+
+// src/kuudere/extractors/index.js
 function extractStreams(links) {
   return __async(this, null, function* () {
     const streams = [];
@@ -281,22 +326,25 @@ function extractStreams(links) {
         let directUrl = null;
         let quality = "Auto";
         let headers = {};
-        if (serverName.startsWith("Zen")) {
+        if (serverName === "Zen" || serverName === "Zen-2") {
           directUrl = yield getZenStream(embedUrl);
           quality = "1080p";
           headers = { "Referer": "https://zencloudz.cc/" };
-        } else if (serverName.includes("Wish") || serverName === "Streamwish") {
+        } else if (serverName === "StreamWish" || serverName === "Streamwish" || serverName === "S-Wish" || serverName === "H-Wish") {
           directUrl = yield getStreamWish(embedUrl);
           headers = { "Referer": new URL(embedUrl).origin };
-        } else if (serverName.includes("Hide") || serverName === "Vidhide") {
-          directUrl = yield getStreamWish(embedUrl);
+        } else if (serverName === "Vidhide" || serverName === "S-Hide" || serverName === "H-Hide") {
+          directUrl = yield getVidhideStream(embedUrl);
           headers = { "Referer": new URL(embedUrl).origin };
-        } else if (serverName.includes("Dood") || serverName === "Doodstream") {
+        } else if (serverName === "Doodstream") {
           directUrl = yield getDoodstream(embedUrl);
           headers = { "Referer": "https://dood.li/" };
-        } else if (serverName.includes("Mp4") || serverName === "Mp4upload") {
+        } else if (serverName === "Mp4upload") {
           directUrl = yield getMp4Upload(embedUrl);
           headers = { "Referer": "https://www.mp4upload.com/" };
+        } else if (serverName.startsWith("Kumi")) {
+          directUrl = yield getKumiStream(embedUrl);
+          headers = { "Referer": new URL(embedUrl).origin };
         }
         if (directUrl) {
           streams.push({
@@ -307,9 +355,9 @@ function extractStreams(links) {
             headers
           });
         } else {
-          const knownTypes = ["Zen", "Kumi", "Wish", "Hide", "Streamwish", "Vidhide", "Dood", "Mp4"];
-          const isKnown = knownTypes.some((t) => serverName.includes(t));
-          if (!isKnown) {
+          const embedServers = ["Kumi", "Kumi-v2", "Kumi-v3", "Kumi-v4"];
+          const isEmbedOnly = embedServers.includes(serverName);
+          if (isEmbedOnly) {
             streams.push({
               name: `Kuudere (${serverName})`,
               title: `${link.dataType.toUpperCase()} - Embed`,
@@ -317,10 +365,32 @@ function extractStreams(links) {
               quality: "Auto",
               headers: { "Referer": "https://kuudere.ru/" }
             });
+          } else {
+            const knownTypes = [
+              "Zen",
+              "Zen-2",
+              "StreamWish",
+              "Streamwish",
+              "S-Wish",
+              "H-Wish",
+              "Vidhide",
+              "S-Hide",
+              "H-Hide",
+              "Doodstream",
+              "Mp4upload"
+            ];
+            if (!knownTypes.includes(serverName)) {
+              streams.push({
+                name: `Kuudere (${serverName})`,
+                title: `${link.dataType.toUpperCase()} - Embed`,
+                url: embedUrl,
+                quality: "Auto",
+                headers: { "Referer": "https://kuudere.ru/" }
+              });
+            }
           }
         }
       } catch (error) {
-        console.error(`[Kuudere] Extraction error for ${link.serverName}:`, error.message);
       }
     }
     return streams;
