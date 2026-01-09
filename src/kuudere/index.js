@@ -87,20 +87,37 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         console.log(`[Kuudere] Searching for: ${meta.title} (${meta.year})`);
         
         const searchResults = await search(meta.title.replace(/[^\x00-\x7F]/g, ""));
-        
-        // Match title AND year for accuracy
-        let match = searchResults.find(r => 
-            normalize(r.title) === targetTitle && (String(r.year) === String(targetYear) || !r.year)
-        );
+        let match = null;
 
-        // Fallback to title only
-        if (!match) {
-            match = searchResults.find(r => normalize(r.title) === targetTitle);
+        // Season Specific Matching
+        if (mediaType === 'tv' && season && parseInt(season) > 1) {
+            const seasonTitle = normalize(`${meta.title} Season ${season}`);
+            
+            // Exact match for Season Title
+            match = searchResults.find(r => normalize(r.title) === seasonTitle);
+            
+            // Fuzzy match for Season Title
+            if (!match) {
+                match = searchResults.find(r => normalize(r.title).includes(seasonTitle));
+            }
         }
 
-        // Fallback to fuzzy match
+        // Standard Matching (if no season match or season 1)
         if (!match) {
-            match = searchResults.find(r => normalize(r.title).includes(targetTitle));
+            // Match title AND year
+            match = searchResults.find(r => 
+                normalize(r.title) === targetTitle && (String(r.year) === String(targetYear) || !r.year)
+            );
+
+            // Fallback to title only
+            if (!match) {
+                match = searchResults.find(r => normalize(r.title) === targetTitle);
+            }
+
+            // Fallback to fuzzy match
+            if (!match) {
+                match = searchResults.find(r => normalize(r.title).includes(targetTitle));
+            }
         }
 
         if (!match) {
@@ -120,7 +137,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         return await extractStreams(watchData.episode_links);
     } catch (error) {
-        console.error('[Kuudere] getStreams error:', error.message);
+        // console.error('[Kuudere] getStreams error:', error.message);
         return [];
     }
 }

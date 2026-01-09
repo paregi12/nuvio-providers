@@ -4,7 +4,7 @@ const TMDB_API_KEY = "68e094699525b18a70bab2f86b1fa706";
 
 export async function getMetadata(tmdbId, mediaType) {
     const endpoint = mediaType === 'tv' || mediaType === 'series' ? 'tv' : 'movie';
-    const url = `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+    const url = `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US`;
     
     try {
         const response = await axios.get(url);
