@@ -22,7 +22,7 @@ export async function fetchJson(url, options = {}) {
     try {
         return JSON.parse(raw);
     } catch (e) {
-        console.error(`[AnimePahe] Failed to parse JSON from ${url}:`, raw.substring(0, 100));
+        console.error(`[AnimePahe] Failed to parse JSON from ${url}`);
         throw e;
     }
 }
