@@ -1,6 +1,8 @@
 import { request } from './http.js';
 import { getMetadata } from './tmdb.js';
 import { extractStreams } from './extractors/index.js';
+import { normalize, getSimilarity } from './utils.js';
+import { getExternalIds } from './arm.js';
 
 function parseSvelteData(data) {
     if (!data || !data.nodes) return [];
@@ -41,11 +43,6 @@ function parseSvelteData(data) {
     return animeList;
 }
 
-function normalize(str) {
-    if (!str) return '';
-    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^\w\s]/g, "").trim();
-}
-
 async function search(query) {
     try {
         const response = await request('get', `/search/__data.json?keyword=${encodeURIComponent(query)}`);
@@ -82,41 +79,78 @@ async function getStreams(tmdbId, mediaType, season, episode, tmdbData = null) {
         const meta = tmdbData || await getMetadata(tmdbId, mediaType);
         if (!meta) return [];
 
-        const targetTitle = normalize(meta.title);
-        const targetYear = meta.year;
-        console.log(`[Kuudere] Searching for: ${meta.title} (${meta.year})`);
+        console.log(`[Kuudere] Searching for: ${meta.title} (${meta.year}) [${mediaType}]`);
         
-        const searchResults = await search(meta.title.replace(/[^\x00-\x7F]/g, ""));
+        const armData = await getExternalIds(tmdbId);
+        const anilistId = armData?.anilist;
+
+        const targetType = mediaType === 'movie' ? 'movie' : 'tv';
+
+        // Multi-query search to expand the search results pool
+        const queries = [
+            meta.title.replace(/[^\x00-\x7F]/g, " ").replace(/\s+/g, " ").trim(), // Full title
+            meta.title.split(/[:\-\–\—]/)[0].trim() // Part before first separator (colon, hyphen, etc.)
+        ];
+
+        let allResults = [];
+        for (const q of queries) {
+            if (q.length < 3) continue;
+            const res = await search(q);
+            allResults = [...allResults, ...res];
+        }
+
+        // De-duplicate results by ID
+        const uniqueResults = [];
+        const seenIds = new Set();
+        for (const r of allResults) {
+            if (!seenIds.has(r.url)) {
+                seenIds.add(r.url);
+                uniqueResults.push(r);
+            }
+        }
+        
+        // Filter search results by type immediately
+        const filteredResults = uniqueResults.filter(r => r.type === targetType);
+        
+        if (filteredResults.length === 0) {
+            console.log(`[Kuudere] No search results matching type: ${targetType}`);
+            return [];
+        }
+
         let match = null;
 
-        // Season Specific Matching
-        if (mediaType === 'tv' && season && parseInt(season) > 1) {
-            const seasonTitle = normalize(`${meta.title} Season ${season}`);
-            
-            // Exact match for Season Title
-            match = searchResults.find(r => normalize(r.title) === seasonTitle);
-            
-            // Fuzzy match for Season Title
-            if (!match) {
-                match = searchResults.find(r => normalize(r.title).includes(seasonTitle));
+        // 1. Try AniList ID-based matching (High Priority)
+        if (anilistId) {
+            match = filteredResults.find(r => r.poster && r.poster.includes(`bx${anilistId}`));
+            if (match) console.log(`[Kuudere] Exact AniList match: ${anilistId}`);
+        }
+
+        // 2. Season Specific Matching (TV only)
+        if (!match && targetType === 'tv' && season && parseInt(season) > 1) {
+            const seasonTitle = `${meta.title} Season ${season}`;
+            const scoredResults = filteredResults.map(r => ({
+                ...r,
+                score: getSimilarity(r.title, seasonTitle)
+            })).sort((a, b) => b.score - a.score);
+
+            if (scoredResults.length > 0 && scoredResults[0].score > 0.6) {
+                match = scoredResults[0];
             }
         }
 
-        // Standard Matching (if no season match or season 1)
+        // 3. Similarity Matching
         if (!match) {
-            // Match title AND year
-            match = searchResults.find(r => 
-                normalize(r.title) === targetTitle && (String(r.year) === String(targetYear) || !r.year)
-            );
+            const scoredResults = filteredResults.map(r => {
+                let score = getSimilarity(r.title, meta.title);
+                if (r.year && meta.year && String(r.year) === String(meta.year)) {
+                    score += 0.4;
+                }
+                return { ...r, score };
+            }).sort((a, b) => b.score - a.score);
 
-            // Fallback to title only
-            if (!match) {
-                match = searchResults.find(r => normalize(r.title) === targetTitle);
-            }
-
-            // Fallback to fuzzy match
-            if (!match) {
-                match = searchResults.find(r => normalize(r.title).includes(targetTitle));
+            // Using a strict threshold to avoid false positives
+            if (scoredResults.length > 0 && scoredResults[0].score > 0.75) {
+                match = scoredResults[0];
             }
         }
 
@@ -125,7 +159,7 @@ async function getStreams(tmdbId, mediaType, season, episode, tmdbData = null) {
             return [];
         }
 
-        console.log(`[Kuudere] Found match: ${match.title} (${match.url})`);
+        console.log(`[Kuudere] Found match: ${match.title} (Type: ${match.type}, Score: ${match.score ? match.score.toFixed(2) : 'ID'})`);
 
         const watchResponse = await request('get', `/api/watch/${match.url}/${episode}`);
         const watchData = watchResponse.data;
