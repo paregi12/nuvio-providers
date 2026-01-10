@@ -61,34 +61,15 @@ export async function extractStreams(links) {
                 });
             } else {
                 // Fallback / Embed Logic
-                const embedServers = ['Kumi', 'Kumi-v2', 'Kumi-v3', 'Kumi-v4'];
-                const isEmbedOnly = embedServers.includes(serverName);
-                
-                if (isEmbedOnly) {
-                    streams.push({
-                        name: `Kuudere (${serverName})`,
-                        title: `${link.dataType.toUpperCase()} - Embed`,
-                        url: embedUrl,
-                        quality: "Auto",
-                        headers: { "Referer": "https://kuudere.ru/" }
-                    });
-                } else {
-                    // Filter out known types that failed extraction to keep list clean
-                    const knownTypes = [
-                        'Zen', 'Zen-2', 'StreamWish', 'Streamwish', 'S-Wish', 'H-Wish', 
-                        'Vidhide', 'S-Hide', 'H-Hide', 'Doodstream', 'Mp4upload'
-                    ];
-                    
-                    if (!knownTypes.includes(serverName)) {
-                        streams.push({
-                            name: `Kuudere (${serverName})`,
-                            title: `${link.dataType.toUpperCase()} - Embed`,
-                            url: embedUrl,
-                            quality: "Auto",
-                            headers: { "Referer": "https://kuudere.ru/" }
-                        });
-                    }
-                }
+                // Include ALL links as embeds if extraction fails, 
+                // rather than filtering out "knownTypes".
+                streams.push({
+                    name: `Kuudere (${serverName})`,
+                    title: `${link.dataType.toUpperCase()} - Embed`,
+                    url: embedUrl,
+                    quality: "Auto",
+                    headers: { "Referer": "https://kuudere.ru/" }
+                });
             }
         } catch (error) {
             // Silently ignore individual link errors

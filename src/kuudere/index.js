@@ -77,9 +77,9 @@ async function search(query) {
     }
 }
 
-async function getStreams(tmdbId, mediaType, season, episode) {
+async function getStreams(tmdbId, mediaType, season, episode, tmdbData = null) {
     try {
-        const meta = await getMetadata(tmdbId, mediaType);
+        const meta = tmdbData || await getMetadata(tmdbId, mediaType);
         if (!meta) return [];
 
         const targetTitle = normalize(meta.title);
