@@ -17,29 +17,32 @@ export async function extractStreams(links) {
             let quality = 'Auto';
             let headers = {};
 
+            // Normalize server name for matching
+            const sName = serverName.toLowerCase();
+
             // Prioritize specific extractors
-            if (serverName === 'Zen' || serverName === 'Zen-2') {
+            if (sName.includes('zen')) {
                 extractionResult = await getZenStream(embedUrl);
                 quality = '1080p';
                 headers = { "Referer": "https://zencloudz.cc/" };
             } 
-            else if (serverName === 'StreamWish' || serverName === 'Streamwish' || serverName === 'S-Wish' || serverName === 'H-Wish') {
+            else if (sName.includes('wish') || sName.includes('s-wish') || sName.includes('h-wish')) {
                 extractionResult = await getStreamWish(embedUrl);
                 headers = { "Referer": new URL(embedUrl).origin };
             } 
-            else if (serverName === 'Vidhide' || serverName === 'S-Hide' || serverName === 'H-Hide') {
+            else if (sName.includes('vidhide') || sName.includes('s-hide') || sName.includes('h-hide')) {
                 extractionResult = await getVidhideStream(embedUrl);
                 headers = { "Referer": new URL(embedUrl).origin };
             } 
-            else if (serverName === 'Doodstream') {
+            else if (sName.includes('doodstream')) {
                 extractionResult = await getDoodstream(embedUrl);
                 headers = { "Referer": "https://dood.li/" };
             } 
-            else if (serverName === 'Mp4upload') {
+            else if (sName.includes('mp4upload')) {
                 extractionResult = await getMp4Upload(embedUrl);
                 headers = { "Referer": "https://www.mp4upload.com/" };
             }
-            else if (serverName.startsWith('Kumi')) {
+            else if (sName.startsWith('kumi')) {
                 extractionResult = await getKumiStream(embedUrl);
                 headers = { "Referer": new URL(embedUrl).origin };
             }

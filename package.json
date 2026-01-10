@@ -4,10 +4,10 @@
     "description": "Providers for Nuvio Streaming",
     "author": "paregi12",
     "scripts": {
-        "build": "node build.js",
-        "build:watch": "nodemon --watch src -e js,json --exec 'node build.js'",
-        "build:provider": "node build.js",
-        "start": "node server.js"
+        "build": "node --max-old-space-size=4096 build.js",
+        "build:watch": "nodemon --watch src -e js,json --exec 'node --max-old-space-size=4096 build.js'",
+        "build:provider": "node --max-old-space-size=4096 build.js",
+        "start": "node --max-old-space-size=4096 server.js"
     },
     "devDependencies": {
         "cheerio": "^1.1.2",
