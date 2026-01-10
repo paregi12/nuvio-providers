@@ -28,29 +28,6 @@
       "limited": false,
       "disabledPlatforms": [],
       "supportsExternalPlayer": true
-    },
-    {
-      "id": "animepahe",
-      "name": "AnimePahe",
-      "description": "AnimePahe Provider",
-      "version": "1.0.0",
-      "author": "paregi12",
-      "supportedTypes": [
-        "tv",
-        "movie"
-      ],
-      "filename": "providers/animepahe.js",
-      "enabled": true,
-      "logo": "https://animepahe.si/pikacon.ico",
-      "contentLanguage": [
-        "en"
-      ],
-      "formats": [
-        "mp4"
-      ],
-      "limited": false,
-      "disabledPlatforms": [],
-      "supportsExternalPlayer": true
     }
   ]
 }
