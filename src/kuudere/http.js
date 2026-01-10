@@ -2,7 +2,8 @@ import axios from 'axios';
 import { BASE_URL, USER_AGENT } from './constants.js';
 
 export async function request(method, path, options = {}) {
-    const url = path.startsWith('http') ? path : `${BASE_URL}${path}`;
+    const baseURL = options.baseURL || BASE_URL;
+    const url = path.startsWith('http') ? path : `${baseURL}${path}`;
     
     try {
         return await axios({
@@ -11,7 +12,7 @@ export async function request(method, path, options = {}) {
             ...options,
             headers: {
                 'User-Agent': USER_AGENT,
-                'Referer': BASE_URL,
+                'Referer': baseURL,
                 'X-Requested-With': 'XMLHttpRequest',
                 ...options.headers
             }

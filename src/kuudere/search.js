@@ -39,13 +39,13 @@ function parseSvelteData(data) {
     return animeList;
 }
 
-export async function search(query) {
+export async function search(query, baseURL = null) {
     try {
-        const response = await request('get', `/search/__data.json?keyword=${encodeURIComponent(query)}`);
+        const response = await request('get', `/search/__data.json?keyword=${encodeURIComponent(query)}`, { baseURL });
         let results = parseSvelteData(response.data);
 
         if (results.length === 0) {
-            const quickResponse = await request('get', `/api/search?q=${encodeURIComponent(query)}`);
+            const quickResponse = await request('get', `/api/search?q=${encodeURIComponent(query)}`, { baseURL });
             if (quickResponse.data && quickResponse.data.results) {
                 results = quickResponse.data.results.map(item => ({
                     title: item.title,
@@ -62,10 +62,11 @@ export async function search(query) {
             url: item.id,
             poster: item.poster,
             year: item.year,
-            type: item.type
+            type: item.type,
+            baseURL: baseURL // Keep track of which domain found it
         }));
     } catch (error) {
-        console.error('[Kuudere] Search error:', error.message);
+        // Silently fail for specific domain
         return [];
     }
 }
