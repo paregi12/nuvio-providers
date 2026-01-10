@@ -2,6 +2,8 @@
   "name": "Paregi's Repo",
   "version": "1.0.0",
   "scrapers": [
+
+    
     {
       "id": "kuudere",
       "name": "Kuudere",
