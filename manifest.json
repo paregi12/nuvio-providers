@@ -2,8 +2,7 @@
   "name": "Paregi's Repo",
   "version": "1.0.0",
   "scrapers": [
-        {
-          "id": "template-provider",    {
+    {
       "id": "kuudere",
       "name": "Kuudere",
       "description": "Watch Anime Online Free on Kuudere.ru",
