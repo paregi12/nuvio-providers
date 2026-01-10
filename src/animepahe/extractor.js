@@ -65,7 +65,7 @@ function unpack(code) {
 }
 
 /**
- * Decrypts Kwik's obfuscated parameters using the phisherrepo algorithm.
+ * Decrypts Kwik's obfuscated parameters.
  */
 function decryptWithKey(fullString, key, v1, v2) {
     let sb = "";
@@ -104,7 +104,7 @@ export async function extractKwik(url) {
                 method: 'GET',
                 redirect: 'manual',
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 }
             });
             if (redirectResponse.status === 302 || redirectResponse.status === 301) {
@@ -123,53 +123,79 @@ export async function extractKwik(url) {
         const response = await fetch(targetUrl, {
             headers: { 
                 "Referer": "https://animepahe.si/",
-                "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }
         });
         const html = await response.text();
         const cookie = response.headers.get('set-cookie');
 
-        // Check if blocked by DDoS-Guard
+        // Check if blocked
         if (html.includes("DDoS-Guard")) {
             console.log("[Kwik] Blocked by DDoS-Guard");
             return null;
         }
 
-        // 1. Try unpacking first (most reliable for direct source)
-        const unpacked = unpack(html);
-        if (unpacked !== html) {
-            const m3u8Match = unpacked.match(/source=\s*['"](.*?)['"]/);
-            if (m3u8Match) return m3u8Match[1];
+        // 1. Process all eval blocks (Unpack)
+        const evalBlocks = html.match(/eval\(function\(p,a,c,k,e,d\).*?\}\(.*\)\)/gs);
+        if (evalBlocks) {
+            for (const block of evalBlocks) {
+                const unpacked = unpack(block);
+                // Look for source URL patterns (source=, q=, file=, etc.)
+                const urlMatch = unpacked.match(/(?:source|q|file)\s*[:=]\s*['"](https?:\/\/.*?\.(?:m3u8|mp4|uwu)[^'"]*)['"]/);
+                if (urlMatch) return urlMatch[1];
+
+                // Also check for modern Kwik POST params in this block
+                const uriMatch = unpacked.match(/action=\"([^\"]+)\"/);
+                const tokenMatch = unpacked.match(/value=\"([^\"]+)\"/);
+
+                if (uriMatch && tokenMatch) {
+                    const uri = uriMatch[1];
+                    const token = tokenMatch[1];
+                    for (let tries = 0; tries < 10; tries++) {
+                        const postResp = await fetch(uri, {
+                            method: "POST",
+                            headers: {
+                                "Referer": targetUrl,
+                                "Cookie": cookie || "",
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                                "Content-Type": "application/x-www-form-urlencoded"
+                            },
+                            body: `_token=${token}`,
+                            redirect: 'manual'
+                        });
+                        if (postResp.status === 302 || postResp.status === 301) {
+                            return postResp.headers.get('location');
+                        }
+                    }
+                }
+            }
         }
 
-        // 2. Modern Kwik POST Method
+        // 2. Standard Params in HTML
         const kwikParamsRegex = /\(\"(\w+)\",\d+,\"(\w+)\",(\d+),(\d+),\d+\)/;
         const paramsMatch = html.match(kwikParamsRegex);
 
         if (paramsMatch) {
             const [_, fullString, key, v1, v2] = paramsMatch;
             const decrypted = decryptWithKey(fullString, key, parseInt(v1), parseInt(v2));
-            
             const uriMatch = decrypted.match(/action=\"([^\"]+)\"/);
             const tokenMatch = decrypted.match(/value=\"([^\"]+)\"/);
 
             if (uriMatch && tokenMatch) {
                 const uri = uriMatch[1];
                 const token = tokenMatch[1];
-                
-                for (let tries = 0; tries < 5; tries++) {
+                for (let tries = 0; tries < 10; tries++) {
                     const postResp = await fetch(uri, {
                         method: "POST",
                         headers: {
                             "Referer": targetUrl,
                             "Cookie": cookie || "",
-                            "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                             "Content-Type": "application/x-www-form-urlencoded"
                         },
                         body: `_token=${token}`,
                         redirect: 'manual'
                     });
-
                     if (postResp.status === 302 || postResp.status === 301) {
                         return postResp.headers.get('location');
                     }
@@ -177,9 +203,9 @@ export async function extractKwik(url) {
             }
         }
 
-        // 3. Simple Regex fallback
-        const m3u8Match = html.match(/source=\s*['"](.*?)['"]/);
-        if (m3u8Match) return m3u8Match[1];
+        // 3. Last resort regex
+        const simpleMatch = html.match(/(?:source|q|file)\s*[:=]\s*['"](https?:\/\/.*?\.(?:m3u8|mp4|uwu)[^'"]*)['"]/);
+        if (simpleMatch) return simpleMatch[1];
 
     } catch (error) {
         console.error(`[Kwik] Extraction error: ${error.message}`);
