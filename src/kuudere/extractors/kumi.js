@@ -99,15 +99,38 @@ export async function getKumiStream(embedUrl) {
         const hostname = urlObj.hostname;
         const protocol = "https:";
         const hash = urlObj.hash;
-        const id = hash.substring(1).split('&')[0];
         
+        // 1. Multi-Point ID Extraction
+        let id = null;
+        if (hash) {
+             id = hash.substring(1).split('&')[0];
+        }
+        if (!id && urlObj.searchParams.get('id')) {
+            id = urlObj.searchParams.get('id');
+        }
+        if (!id) {
+            // Try extracting from path (e.g. /v/12345)
+            const parts = urlObj.pathname.split('/');
+            id = parts[parts.length - 1]; 
+        }
+
         if (!id) return null;
 
+        // Use hash for IV if available, else derive from ID/mock
+        // (The original logic strictly relied on hash for IV generation, preserving that if hash exists)
+        const ivSource = hash || `#${id}`; 
         const key = getKumiKey();
-        const iv = getKumiIV(hash);
+        const iv = getKumiIV(ivSource);
 
-        // Try different authorized domains
-        const authorizedDomains = ['kuudere.ru', hostname];
+        // 2. Domain/Referer Rotation
+        // Add known Kumi domains to rotation
+        const authorizedDomains = [
+            'kuudere.ru', 
+            hostname, 
+            'kumi.li', 
+            'kumi.online',
+            'lovetaku.net' 
+        ];
         
         for (const r of authorizedDomains) {
             try {
@@ -115,7 +138,7 @@ export async function getKumiStream(embedUrl) {
                 const response = await axios.get(videoUrl, {
                     headers: { 
                         'User-Agent': USER_AGENT, 
-                        'Referer': embedUrl, 
+                        'Referer': embedUrl, // Keep original embed as referer
                         'X-Requested-With': 'XMLHttpRequest' 
                     },
                     timeout: 5000
@@ -139,7 +162,9 @@ export async function getKumiStream(embedUrl) {
                         subtitles: subtitles
                     };
                 }
-            } catch (e) {}
+            } catch (e) {
+                // Continue to next domain in rotation
+            }
         }
     } catch (error) {
         // console.log('[KumiDebug] Error:', error.message);

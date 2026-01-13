@@ -1,6 +1,6 @@
 /**
  * allmanga - Built from src/allmanga/
- * Generated: 2026-01-13T10:59:03.920Z
+ * Generated: 2026-01-13T11:54:25.571Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -64,44 +64,18 @@ var __async = (__this, __arguments, generator) => {
 
 // src/allmanga/http.js
 var import_axios = __toESM(require("axios"));
-
-// src/allmanga/constants.js
-var BASE_URL = "https://allmanga.to";
-var API_URL = "https://api.allanime.day/api";
-var BLOG_URL = "https://blog.allanime.day";
-var SEARCH_QUERY = `query($search: SearchInput, $limit: Int, $page: Int, $translationType: VaildTranslationTypeEnumType, $countryOrigin: VaildCountryOriginEnumType) {
-  shows(search: $search, limit: $limit, page: $page, translationType: $translationType, countryOrigin: $countryOrigin) {
-    edges {
-      _id
-      name
-      englishName
-      nativeName
-      thumbnail
-      type
-    }
-  }
-}`;
-var EPISODE_QUERY = `query($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) {
-  episode(showId: $showId, translationType: $translationType, episodeString: $episodeString) {
-    episodeString
-    sourceUrls
-  }
-}`;
-
-// src/allmanga/http.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36";
 function request(_0, _1) {
   return __async(this, arguments, function* (method, url, options = {}) {
     try {
+      const headers = __spreadValues({
+        "User-Agent": USER_AGENT
+      }, options.headers);
       return yield (0, import_axios.default)(__spreadProps(__spreadValues({
         method,
         url
       }, options), {
-        headers: __spreadValues({
-          "User-Agent": USER_AGENT,
-          "Referer": BASE_URL,
-          "Origin": BASE_URL
-        }, options.headers)
+        headers
       }));
     } catch (error) {
       console.error(`[AllManga] Request error (${url}):`, error.message);
@@ -148,52 +122,86 @@ function isMatch(title1, title2) {
   return n1 === n2 || n1.includes(n2) || n2.includes(n1);
 }
 
+// src/allmanga/constants.js
+var BASE_URL = "https://allmanga.to";
+var API_URL = "https://api.allanime.day/api";
+var SEARCH_QUERY = `query($search: SearchInput, $limit: Int, $page: Int, $translationType: VaildTranslationTypeEnumType, $countryOrigin: VaildCountryOriginEnumType) {
+  shows(search: $search, limit: $limit, page: $page, translationType: $translationType, countryOrigin: $countryOrigin) {
+    edges {
+      _id
+      name
+      englishName
+      nativeName
+      thumbnail
+      type
+    }
+  }
+}`;
+var EPISODE_QUERY = `query($showId: String!, $translationType: VaildTranslationTypeEnumType!, $episodeString: String!) {
+  episode(showId: $showId, translationType: $translationType, episodeString: $episodeString) {
+    episodeString
+    sourceUrls
+  }
+}`;
+
 // src/allmanga/extractors/index.js
 function extractStreams(sourceUrls) {
   return __async(this, null, function* () {
-    var _a;
     const streams = [];
-    for (const source of sourceUrls) {
-      let url = ((_a = source.downloads) == null ? void 0 : _a.downloadUrl) || source.sourceUrl;
-      if (url.startsWith("--")) {
-        url = decrypt(url);
-      }
-      if (url.startsWith("/apivtwo")) {
-        url = `${BLOG_URL}${url}`;
-      }
-      if (url.includes("/clock") && !url.includes("/clock/dr")) {
-        url = url.replace("/clock", "/clock/dr");
-      }
-      try {
-        if (url.includes("allanime.day/apivtwo/clock") || url.includes("/apivtwo/clock")) {
-          const res = yield request("get", url);
-          if (res.data && res.data.links) {
-            res.data.links.forEach((link) => {
-              streams.push({
-                url: link.link,
-                quality: link.resolution ? `${link.resolution}p` : "Auto",
-                type: link.hls ? "hls" : "mp4",
-                name: `AllManga (${source.sourceName})`
-              });
+    try {
+      const versionRes = yield request("get", `${BASE_URL}/getVersion`);
+      const endPoint = versionRes.data.episodeIframeHead;
+      const endPointUrl = new URL(endPoint);
+      for (const source of sourceUrls) {
+        let url = source.sourceUrl;
+        if (url.startsWith("--")) {
+          url = decrypt(url);
+        }
+        if (url.includes("/clock")) {
+          const clockUrl = url.replace("/clock?", "/clock.json?");
+          const finalUrl = clockUrl.startsWith("http") ? clockUrl : `${endPoint}${clockUrl}`;
+          try {
+            const res = yield request("get", finalUrl, {
+              headers: {
+                "Accept": "*/*",
+                "Origin": endPoint,
+                "Referer": `${endPoint}/`,
+                "Host": endPointUrl.host
+              }
             });
+            const data = res.data;
+            if (data && data.links) {
+              for (const link of data.links) {
+                let videoUrl = link.link;
+                const videoHeaders = {
+                  "Referer": `${endPoint}/`,
+                  "Origin": endPoint,
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+                };
+                if (link.mp4 || link.hls) {
+                  streams.push({
+                    url: videoUrl,
+                    quality: link.resolutionStr || "Auto",
+                    type: link.hls ? "hls" : "mp4",
+                    name: `AllManga (${source.sourceName})`,
+                    headers: videoHeaders
+                  });
+                }
+              }
+            }
+          } catch (e) {
           }
-        } else if (url.includes("filemoon") || url.includes("gogo-stream") || url.includes("mp4upload") || url.includes("ok.ru") || url.includes("streamwish")) {
+        } else if (url.startsWith("http")) {
           streams.push({
             url,
             quality: "Unknown",
             type: "iframe",
             name: source.sourceName
           });
-        } else if (url.startsWith("http")) {
-          streams.push({
-            url,
-            quality: "Auto",
-            type: url.includes(".m3u8") ? "hls" : "mp4",
-            name: source.sourceName
-          });
         }
-      } catch (e) {
       }
+    } catch (error) {
+      console.error(`[AllManga] Extraction initialization failed:`, error.message);
     }
     return streams;
   });

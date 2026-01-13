@@ -1,6 +1,6 @@
 /**
  * kuudere - Built from src/kuudere/
- * Generated: 2026-01-10T19:04:43.545Z
+ * Generated: 2026-01-13T08:12:22.465Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -335,18 +335,57 @@ function handleRedirector(html, embedUrl) {
 }
 function getStreamWish(embedUrl) {
   return __async(this, null, function* () {
+    let finalHtml = null;
+    let finalUrl = embedUrl;
     try {
       const response = yield import_axios3.default.get(embedUrl, {
         headers: {
           "Referer": "https://kuudere.ru/",
           "User-Agent": USER_AGENT
         },
-        timeout: 5e3
+        timeout: 5e3,
+        maxRedirects: 5,
+        validateStatus: (status) => status >= 200 && status < 400
       });
-      let html = response.data;
-      html = yield handleRedirector(html, embedUrl);
+      finalHtml = response.data;
+      if (response.request && response.request.res && response.request.res.responseUrl) {
+        finalUrl = response.request.res.responseUrl;
+      }
+      const redirectedHtml = yield handleRedirector(finalHtml, finalUrl);
+      if (redirectedHtml !== finalHtml) {
+        finalHtml = redirectedHtml;
+      }
+    } catch (error) {
+    }
+    if (!finalHtml || !finalHtml.includes("jwplayer") && !finalHtml.includes("eval(function")) {
+      const referers = [
+        "https://kuudere.ru/",
+        "https://strwish.com/",
+        "https://streamwish.com/",
+        new URL(embedUrl).origin
+      ];
+      for (const referer of referers) {
+        try {
+          const res = yield import_axios3.default.get(finalUrl, {
+            headers: {
+              "Referer": referer,
+              "User-Agent": USER_AGENT
+            },
+            timeout: 5e3
+          });
+          if (res.data && (res.data.includes("jwplayer") || res.data.includes("eval(function"))) {
+            finalHtml = res.data;
+            break;
+          }
+        } catch (e) {
+        }
+      }
+    }
+    if (!finalHtml)
+      return null;
+    try {
       let streamUrl = null;
-      const unpacked = unPack(html);
+      const unpacked = unPack(finalHtml);
       if (unpacked) {
         const hls4 = unpacked.match(/"hls4"\s*:\s*"([^"]+)"/);
         const hls3 = unpacked.match(/"hls3"\s*:\s*"([^"]+)"/);
@@ -360,7 +399,7 @@ function getStreamWish(embedUrl) {
         }
       }
       if (!streamUrl) {
-        const m3u8Match = html.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || html.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
+        const m3u8Match = finalHtml.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || finalHtml.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
         if (m3u8Match) {
           streamUrl = m3u8Match[1];
         }
@@ -368,7 +407,7 @@ function getStreamWish(embedUrl) {
       if (!streamUrl)
         return null;
       if (streamUrl.startsWith("/")) {
-        const origin = new URL(embedUrl).origin;
+        const origin = new URL(finalUrl).origin;
         streamUrl = origin + streamUrl;
       }
       return { url: streamUrl };
@@ -437,20 +476,44 @@ function unPack2(code) {
 }
 function getVidhideStream(embedUrl) {
   return __async(this, null, function* () {
-    try {
-      const response = yield import_axios4.default.get(embedUrl, {
-        headers: {
-          "Referer": "https://kuudere.ru/",
-          "User-Agent": USER_AGENT
+    let finalHtml = null;
+    let finalUrl = embedUrl;
+    const referers = [
+      "https://kuudere.ru/",
+      "https://vidhide.com/",
+      "https://vidhidepro.com/",
+      new URL(embedUrl).origin
+    ];
+    for (const referer of referers) {
+      try {
+        const response = yield import_axios4.default.get(finalUrl, {
+          headers: {
+            "Referer": referer,
+            "User-Agent": USER_AGENT
+          },
+          timeout: 5e3,
+          maxRedirects: 5,
+          validateStatus: (status) => status >= 200 && status < 400
+        });
+        if (response.data && (response.data.includes("eval(function") || response.data.includes("sources:"))) {
+          finalHtml = response.data;
+          if (response.request && response.request.res && response.request.res.responseUrl) {
+            finalUrl = response.request.res.responseUrl;
+          }
+          break;
         }
-      });
-      const html = response.data;
+      } catch (e) {
+      }
+    }
+    if (!finalHtml)
+      return null;
+    try {
       let streamUrl = null;
-      const m3u8Match = html.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || html.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
+      const m3u8Match = finalHtml.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || finalHtml.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
       if (m3u8Match) {
         streamUrl = m3u8Match[1];
       } else {
-        const unpacked = unPack2(html);
+        const unpacked = unPack2(finalHtml);
         if (unpacked) {
           const hls4 = unpacked.match(/"hls4"\s*:\s*"([^"]+)"/);
           const hls3 = unpacked.match(/"hls3"\s*:\s*"([^"]+)"/);
@@ -467,7 +530,7 @@ function getVidhideStream(embedUrl) {
       if (!streamUrl)
         return null;
       if (streamUrl.startsWith("/")) {
-        const origin = new URL(embedUrl).origin;
+        const origin = new URL(finalUrl).origin;
         streamUrl = origin + streamUrl;
       }
       const subtitles = extractSubtitlesFromUrl(embedUrl);
@@ -662,12 +725,29 @@ function getKumiStream(embedUrl) {
       const hostname = urlObj.hostname;
       const protocol = "https:";
       const hash = urlObj.hash;
-      const id = hash.substring(1).split("&")[0];
+      let id = null;
+      if (hash) {
+        id = hash.substring(1).split("&")[0];
+      }
+      if (!id && urlObj.searchParams.get("id")) {
+        id = urlObj.searchParams.get("id");
+      }
+      if (!id) {
+        const parts = urlObj.pathname.split("/");
+        id = parts[parts.length - 1];
+      }
       if (!id)
         return null;
+      const ivSource = hash || `#${id}`;
       const key = getKumiKey();
-      const iv = getKumiIV(hash);
-      const authorizedDomains = ["kuudere.ru", hostname];
+      const iv = getKumiIV(ivSource);
+      const authorizedDomains = [
+        "kuudere.ru",
+        hostname,
+        "kumi.li",
+        "kumi.online",
+        "lovetaku.net"
+      ];
       for (const r of authorizedDomains) {
         try {
           const videoUrl = `${protocol}//${hostname}/api/v1/video?id=${id}&w=1920&h=1080&r=${r}`;
@@ -675,6 +755,7 @@ function getKumiStream(embedUrl) {
             headers: {
               "User-Agent": USER_AGENT,
               "Referer": embedUrl,
+              // Keep original embed as referer
               "X-Requested-With": "XMLHttpRequest"
             },
             timeout: 5e3

@@ -59,26 +59,58 @@ function unPack(code) {
 }
 
 export async function getVidhideStream(embedUrl) {
-    try {
-        const response = await axios.get(embedUrl, {
-            headers: {
-                'Referer': 'https://kuudere.ru/',
-                'User-Agent': USER_AGENT
+    let finalHtml = null;
+    let finalUrl = embedUrl;
+
+    // 1. Follow Redirects & Domain Rotation
+    // VidHide domains rotate frequently (vidhide.com -> vidhidepro.com, etc.)
+    const referers = [
+        'https://kuudere.ru/', 
+        'https://vidhide.com/',
+        'https://vidhidepro.com/', 
+        new URL(embedUrl).origin
+    ];
+
+    for (const referer of referers) {
+        try {
+            const response = await axios.get(finalUrl, {
+                headers: {
+                    'Referer': referer,
+                    'User-Agent': USER_AGENT
+                },
+                timeout: 5000,
+                maxRedirects: 5,
+                validateStatus: status => status >= 200 && status < 400
+            });
+            
+            // Check if we got a valid player page
+            if (response.data && (response.data.includes('eval(function') || response.data.includes('sources:'))) {
+                finalHtml = response.data;
+                // Capture final URL if redirected
+                if (response.request && response.request.res && response.request.res.responseUrl) {
+                    finalUrl = response.request.res.responseUrl;
+                }
+                break;
             }
-        });
-        const html = response.data;
-        
+        } catch (e) {
+            // Try next referer
+        }
+    }
+
+    if (!finalHtml) return null;
+
+    try {
         let streamUrl = null;
 
-        // 1. Check for simple file: "..." match first
-        const m3u8Match = html.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || 
-                          html.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
+        // 2. Check for simple file: "..." match first
+        const m3u8Match = finalHtml.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || 
+                          finalHtml.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
         
         if (m3u8Match) {
             streamUrl = m3u8Match[1];
         } else {
-            // 2. Check for Packed content
-            const unpacked = unPack(html);
+            // 3. Check for Packed content
+            const unpacked = unPack(finalHtml);
             if (unpacked) {
                 // Try to find the links object: var links={"hls2":"...", "hls3":"..."}
                 const hls4 = unpacked.match(/"hls4"\s*:\s*"([^"]+)"/);
@@ -101,7 +133,7 @@ export async function getVidhideStream(embedUrl) {
 
         // Resolve relative URLs
         if (streamUrl.startsWith('/')) {
-            const origin = new URL(embedUrl).origin;
+            const origin = new URL(finalUrl).origin;
             streamUrl = origin + streamUrl;
         }
 

@@ -100,26 +100,75 @@ async function handleRedirector(html, embedUrl) {
 }
 
 export async function getStreamWish(embedUrl) {
+    let finalHtml = null;
+    let finalUrl = embedUrl;
+
+    // 1. Follow Redirects / Resolve Final URL
+    // Some StreamWish links are just redirectors. We need the final player page.
     try {
         const response = await axios.get(embedUrl, {
             headers: {
                 'Referer': 'https://kuudere.ru/',
                 'User-Agent': USER_AGENT
             },
-            timeout: 5000
+            timeout: 5000,
+            maxRedirects: 5,
+            validateStatus: status => status >= 200 && status < 400
         });
         
-        let html = response.data;
-        
-        // Handle redirectors
-        html = await handleRedirector(html, embedUrl);
-        
+        finalHtml = response.data;
+        // In case axios followed HTTP redirects automatically, use the final URL
+        if (response.request && response.request.res && response.request.res.responseUrl) {
+            finalUrl = response.request.res.responseUrl;
+        }
+
+        // Handle JS-based redirectors (like kravaxxa)
+        const redirectedHtml = await handleRedirector(finalHtml, finalUrl);
+        if (redirectedHtml !== finalHtml) {
+             finalHtml = redirectedHtml;
+        }
+
+    } catch (error) {
+        // If initial fetch fails, it might be strict referer. We'll try again in loop below.
+    }
+
+    // 2. Domain/Referer Rotation & Content Scraping
+    // If we haven't successfully got player HTML (or want to retry with better referers)
+    if (!finalHtml || (!finalHtml.includes('jwplayer') && !finalHtml.includes('eval(function'))) {
+        const referers = [
+            'https://kuudere.ru/', 
+            'https://strwish.com/', 
+            'https://streamwish.com/',
+            new URL(embedUrl).origin
+        ];
+
+        for (const referer of referers) {
+            try {
+                const res = await axios.get(finalUrl, {
+                    headers: {
+                        'Referer': referer,
+                        'User-Agent': USER_AGENT
+                    },
+                    timeout: 5000
+                });
+                if (res.data && (res.data.includes('jwplayer') || res.data.includes('eval(function'))) {
+                    finalHtml = res.data;
+                    break;
+                }
+            } catch (e) {
+                // Try next referer
+            }
+        }
+    }
+
+    if (!finalHtml) return null;
+
+    try {
         let streamUrl = null;
 
-        // 1. Try unpacking first as it's the standard for StreamWish
-        const unpacked = unPack(html);
+        // 3. Try unpacking first
+        const unpacked = unPack(finalHtml);
         if (unpacked) {
-            // Find the links object: var links={"hls2":"...", "hls3":"..."}
             const hls4 = unpacked.match(/"hls4"\s*:\s*"([^"]+)"/);
             const hls3 = unpacked.match(/"hls3"\s*:\s*"([^"]+)"/);
             const hls2 = unpacked.match(/"hls2"\s*:\s*"([^"]+)"/);
@@ -135,10 +184,10 @@ export async function getStreamWish(embedUrl) {
             }
         }
 
-        // 2. Fallback to simple regex if unpacking failed or didn't yield a link
+        // 4. Fallback to regex
         if (!streamUrl) {
-            const m3u8Match = html.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || 
-                              html.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
+            const m3u8Match = finalHtml.match(/file\s*:\s*"([^"]+\.(?:m3u8|txt)[^"]*)"/) || 
+                              finalHtml.match(/sources\s*:\s*\[\s*{\s*file\s*:\s*"([^"]+)"/);
             if (m3u8Match) {
                 streamUrl = m3u8Match[1];
             }
@@ -146,9 +195,8 @@ export async function getStreamWish(embedUrl) {
 
         if (!streamUrl) return null;
 
-        // Resolve relative URLs
         if (streamUrl.startsWith('/')) {
-            const origin = new URL(embedUrl).origin;
+            const origin = new URL(finalUrl).origin;
             streamUrl = origin + streamUrl;
         }
 

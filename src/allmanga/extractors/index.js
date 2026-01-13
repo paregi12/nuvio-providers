@@ -1,57 +1,73 @@
 import { decrypt } from '../utils.js';
-import { BLOG_URL } from '../constants.js';
 import { request } from '../http.js';
+import { BASE_URL } from '../constants.js';
 
 export async function extractStreams(sourceUrls) {
     const streams = [];
 
-    for (const source of sourceUrls) {
-        let url = source.downloads?.downloadUrl || source.sourceUrl;
-        
-        if (url.startsWith('--')) {
-            url = decrypt(url);
-        }
+    try {
+        const versionRes = await request('get', `${BASE_URL}/getVersion`);
+        const endPoint = versionRes.data.episodeIframeHead;
+        const endPointUrl = new URL(endPoint);
 
-        if (url.startsWith('/apivtwo')) {
-            url = `${BLOG_URL}${url}`;
-        }
+        for (const source of sourceUrls) {
+            let url = source.sourceUrl;
+            
+            if (url.startsWith('--')) {
+                url = decrypt(url);
+            }
 
-        // Standardize clock URL
-        if (url.includes('/clock') && !url.includes('/clock/dr')) {
-            url = url.replace('/clock', '/clock/dr');
-        }
+            if (url.includes('/clock')) {
+                const clockUrl = url.replace('/clock?', '/clock.json?');
+                const finalUrl = clockUrl.startsWith('http') ? clockUrl : `${endPoint}${clockUrl}`;
 
-        try {
-            if (url.includes('allanime.day/apivtwo/clock') || url.includes('/apivtwo/clock')) {
-                const res = await request('get', url);
-                if (res.data && res.data.links) {
-                    res.data.links.forEach(link => {
-                        streams.push({
-                            url: link.link,
-                            quality: link.resolution ? `${link.resolution}p` : 'Auto',
-                            type: link.hls ? 'hls' : 'mp4',
-                            name: `AllManga (${source.sourceName})`
-                        });
+                try {
+                    const res = await request('get', finalUrl, {
+                        headers: {
+                            'Accept': '*/*',
+                            'Origin': endPoint,
+                            'Referer': `${endPoint}/`,
+                            'Host': endPointUrl.host
+                        }
                     });
+
+                    const data = res.data;
+                    if (data && data.links) {
+                        for (const link of data.links) {
+                            let videoUrl = link.link;
+                            
+                            // Specific fix for SharePoint links - they often need these headers to work
+                            const videoHeaders = {
+                                'Referer': `${endPoint}/`,
+                                'Origin': endPoint,
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+                            };
+
+                            if (link.mp4 || link.hls) {
+                                streams.push({
+                                    url: videoUrl,
+                                    quality: link.resolutionStr || 'Auto',
+                                    type: link.hls ? 'hls' : 'mp4',
+                                    name: `AllManga (${source.sourceName})`,
+                                    headers: videoHeaders
+                                });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // console.error(`[AllManga] Clock request failed: ${finalUrl}`, e.message);
                 }
-            } else if (url.includes('filemoon') || url.includes('gogo-stream') || url.includes('mp4upload') || url.includes('ok.ru') || url.includes('streamwish')) {
+            } else if (url.startsWith('http')) {
                 streams.push({
                     url: url,
                     quality: 'Unknown',
                     type: 'iframe',
                     name: source.sourceName
                 });
-            } else if (url.startsWith('http')) {
-                streams.push({
-                    url: url,
-                    quality: 'Auto',
-                    type: url.includes('.m3u8') ? 'hls' : 'mp4',
-                    name: source.sourceName
-                });
             }
-        } catch (e) {
-            // Skip failed extractions
         }
+    } catch (error) {
+        console.error(`[AllManga] Extraction initialization failed:`, error.message);
     }
 
     return streams;
