@@ -103,7 +103,7 @@ function decryptAesGcm(encryptedB64, passphraseB64) {
     console.log('[Vidnest] Starting AES-GCM decryption via server...');
     
     // Use local server for development, remote for production
-    const decryptServerUrl = process.env.DECRYPT_SERVER_URL || 'http://localhost:3050/decrypt';
+    const decryptServerUrl = process.env.DECRYPT_SERVER_URL || 'https://aesdec.nuvioapp.space/decrypt';
     
     return fetch(decryptServerUrl, {
         method: 'POST',
