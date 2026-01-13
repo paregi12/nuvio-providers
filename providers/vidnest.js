@@ -7,19 +7,25 @@ const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 
 // Vidnest Configuration
-const VIDNEST_BASE_URL = 'https://backend.vidnest.fun';
-const PASSPHRASE = 'T8c8PQlSQVU4mBuW4CbE/g57VBbM5009QHd+ym93aZZ5pEeVpToY6OdpYPvRMVYp';
-const SERVERS = ['allmovies', 'hollymoviehd'];
+const VIDNEST_BASE_URL = 'https://first.vidnest.fun';
+const VIDNEST_PROXY_URL = 'https://vidnest.animanga.fun/proxy';
+const PASSPHRASE = 'A7kP9mQeXU2BWcD4fRZV+Sg8yN0/M5tLbC1HJQwYe6o=';
+const SERVERS = ['hollymoviehd', 'primesrc', 'ophim', 'flixhq', 'vidlink', 'rogflix'];
 
-// Working headers for Vidnest API
+// Working headers for Vidnest API (exact headers from browser)
 const WORKING_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Mobile Safari/537.36',
-    'Accept': 'application/json, text/plain, */*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Referer': 'https://vidnest.fun/',
-    'Origin': 'https://vidnest.fun',
-    'DNT': '1'
+    'accept': '*/*',
+    'accept-encoding': 'gzip, deflate, br, zstd',
+    'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+    'origin': 'https://vidnest.fun',
+    'referer': 'https://vidnest.fun/',
+    'sec-ch-ua': '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+    'sec-ch-ua-mobile': '?1',
+    'sec-ch-ua-platform': '"Android"',
+    'sec-fetch-dest': 'empty',
+    'sec-fetch-mode': 'cors',
+    'sec-fetch-site': 'same-site',
+    'user-agent': 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36'
 };
 
 // Headers for stream playback (separate from API headers)
@@ -96,7 +102,10 @@ function atob(str) {
 function decryptAesGcm(encryptedB64, passphraseB64) {
     console.log('[Vidnest] Starting AES-GCM decryption via server...');
     
-    return fetch('https://aesdec.nuvioapp.space/decrypt', {
+    // Use local server for development, remote for production
+    const decryptServerUrl = process.env.DECRYPT_SERVER_URL || 'http://localhost:3050/decrypt';
+    
+    return fetch(decryptServerUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -120,19 +129,30 @@ function decryptAesGcm(encryptedB64, passphraseB64) {
 function validateStreamUrl(url, headers) {
     console.log(`[Vidnest] Validating stream URL: ${url.substring(0, 60)}...`);
     
+    // Skip validation for HLS streams (.m3u8) - they're often protected and return 403
+    // but work fine in video players
+    if (url.includes('.m3u8') || url.includes('/streamsvr/') || url.includes('/stream2/')) {
+        console.log(`[Vidnest] Skipping validation for HLS/protected stream`);
+        return Promise.resolve(true);
+    }
+    
     return fetch(url, {
         method: 'HEAD',
         headers: headers,
         timeout: 5000
     })
     .then(response => {
-        // Accept 200 OK, 206 Partial Content, or 302 redirects
-        const isValid = response.ok || response.status === 206 || response.status === 302;
+        // Accept 200 OK, 206 Partial Content, 302 redirects, or 403 (protected but valid)
+        const isValid = response.ok || response.status === 206 || response.status === 302 || response.status === 403;
         console.log(`[Vidnest] URL validation result: ${response.status} - ${isValid ? 'VALID' : 'INVALID'}`);
         return isValid;
     })
     .catch(error => {
         console.log(`[Vidnest] URL validation failed: ${error.message}`);
+        // For protected streams, assume valid even if validation fails
+        if (url.includes('.m3u8') || url.includes('/streamsvr/') || url.includes('/stream2/')) {
+            return true;
+        }
         return false;
     });
 }
@@ -211,6 +231,47 @@ function extractQuality(url) {
     return 'Unknown';
 }
 
+// Wrap URLs through Vidnest proxy if needed (for flashstream.cc and other protected domains)
+function wrapUrlWithProxy(url) {
+    // Check if URL needs proxying (flashstream.cc returns 403 without proxy)
+    // Also check for patterns that typically need proxy (streamsvr, /pl/, etc.)
+    if (url.includes('flashstream.cc') || 
+        url.includes('streamsvr/') || 
+        url.includes('/pl/') ||
+        url.includes('rogflix') ||
+        (url.includes('lethe399key.com') && url.includes('/stream2/'))) {
+        
+        // Determine origin and referer based on URL domain
+        let origin = 'https://flashstream.cc';
+        let referer = 'https://flashstream.cc/';
+        
+        if (url.includes('lethe399key.com')) {
+            origin = 'https://lethe399key.com';
+            referer = 'https://lethe399key.com/';
+        }
+        
+        const proxyHeaders = {
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:137.0) Gecko/20100101 Firefox/137.0',
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.5',
+            'sec-fetch-dest': 'empty',
+            'sec-fetch-mode': 'cors',
+            'sec-fetch-site': 'cross-site',
+            'origin': origin,
+            'referer': referer
+        };
+        
+        const encodedUrl = encodeURIComponent(url);
+        const encodedHeaders = encodeURIComponent(JSON.stringify(proxyHeaders));
+        const proxiedUrl = `${VIDNEST_PROXY_URL}?url=${encodedUrl}&headers=${encodedHeaders}`;
+        
+        console.log(`[Vidnest] Wrapping URL through proxy: ${url.substring(0, 60)}...`);
+        return proxiedUrl;
+    }
+    
+    return url;
+}
+
 // Process Vidnest API response
 function processVidnestResponse(data, serverName, mediaInfo, seasonNum, episodeNum) {
     const streams = [];
@@ -218,17 +279,30 @@ function processVidnestResponse(data, serverName, mediaInfo, seasonNum, episodeN
     try {
         console.log(`[Vidnest] Processing response from ${serverName}:`, JSON.stringify(data, null, 2));
         
-        // Check if response has success field and streams/sources
-        if (!data.success && !data.streams && !data.sources) {
-            console.log(`[Vidnest] ${serverName}: No valid streams found in response`);
-            return streams;
+        // Handle different response formats for different servers
+        let sources = [];
+        
+        // Standard format: sources or streams array
+        if (data.sources && Array.isArray(data.sources)) {
+            sources = data.sources;
+        } else if (data.streams && Array.isArray(data.streams)) {
+            sources = data.streams;
+        }
+        // Flixhq format: url directly in response
+        else if (data.url && typeof data.url === 'string') {
+            sources = [{ url: data.url, type: 'hls', headers: data.headers, subtitles: data.subtitles }];
+        }
+        // Vidlink format: data field contains the URL
+        else if (data.data && typeof data.data === 'string') {
+            sources = [{ url: data.data, type: 'hls', headers: data.headers, provider: data.provider }];
+        }
+        // Check if response has success field
+        else if (data.success && (data.sources || data.streams)) {
+            sources = data.sources || data.streams || [];
         }
         
-        // Extract sources or streams array
-        const sources = data.sources || data.streams || [];
-        
         if (!Array.isArray(sources) || sources.length === 0) {
-            console.log(`[Vidnest] ${serverName}: No sources/streams array found`);
+            console.log(`[Vidnest] ${serverName}: No sources/streams found in response`);
             return streams;
         }
         
@@ -237,15 +311,15 @@ function processVidnestResponse(data, serverName, mediaInfo, seasonNum, episodeN
             if (!source) return;
             
             // Extract video URL from various possible fields
-            const videoUrl = source.file || source.url || source.src || source.link;
+            let videoUrl = source.file || source.url || source.src || source.link;
             
             if (!videoUrl) {
                 console.log(`[Vidnest] ${serverName}: Source ${index} has no video URL`);
                 return;
             }
             
-            // Extract quality
-            let quality = extractQuality(videoUrl);
+            // Wrap URL through Vidnest proxy if needed (for flashstream.cc)
+            videoUrl = wrapUrlWithProxy(videoUrl);
             
             // Extract language information
             let languageInfo = '';
@@ -253,23 +327,12 @@ function processVidnestResponse(data, serverName, mediaInfo, seasonNum, episodeN
                 languageInfo = ` [${source.language}]`;
             }
             
-            // Extract label information for better naming
+            // Extract label/source information for better naming
             let labelInfo = '';
             if (source.label) {
                 labelInfo = ` - ${source.label}`;
-            }
-            
-            // Determine stream type
-            let streamType = 'Unknown';
-            if (source.type === 'hls' || videoUrl.includes('.m3u8')) {
-                streamType = 'HLS';
-                if (quality === 'Unknown') {
-                    quality = 'Adaptive'; // HLS streams are usually adaptive
-                }
-            } else if (videoUrl.includes('.mp4')) {
-                streamType = 'MP4';
-            } else if (videoUrl.includes('.mkv')) {
-                streamType = 'MKV';
+            } else if (source.source) {
+                labelInfo = ` - ${source.source}`;
             }
             
             // Create media title
@@ -281,8 +344,11 @@ function processVidnestResponse(data, serverName, mediaInfo, seasonNum, episodeN
                 mediaTitle = `${mediaInfo.title} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`;
             }
             
+            // Use "auto" quality for all streams
+            const quality = 'auto';
+            
             streams.push({
-                name: `Vidnest ${serverName.charAt(0).toUpperCase() + serverName.slice(1)}${labelInfo}${languageInfo} - ${quality}`,
+                name: `Vidnest ${serverName.charAt(0).toUpperCase() + serverName.slice(1)}${labelInfo}${languageInfo}`,
                 title: mediaTitle,
                 url: videoUrl,
                 quality: quality,
@@ -310,6 +376,12 @@ function fetchFromServer(serverName, mediaType, tmdbId, mediaInfo, seasonNum, ep
         apiUrl = `${VIDNEST_BASE_URL}/${serverName}/${mediaType}/${tmdbId}/${seasonNum}/${episodeNum}`;
     } else {
         apiUrl = `${VIDNEST_BASE_URL}/${serverName}/${mediaType}/${tmdbId}`;
+    }
+    
+    // Handle special query parameters for specific servers
+    // Flixhq supports ?server=upcloud parameter
+    if (serverName === 'flixhq') {
+        apiUrl += '?server=upcloud';
     }
     
     console.log(`[Vidnest] ${serverName} API URL: ${apiUrl}`);
