@@ -28,6 +28,30 @@
       "limited": false,
       "disabledPlatforms": [],
       "supportsExternalPlayer": true
+    },
+    {
+      "id": "allmanga",
+      "name": "AllManga",
+      "description": "Watch Anime Online Free on AllManga.to",
+      "version": "1.0.0",
+      "author": "paregi12",
+      "supportedTypes": [
+        "tv",
+        "movie"
+      ],
+      "filename": "providers/allmanga.js",
+      "enabled": true,
+      "logo": "https://allmanga.to/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "mp4",
+        "hls"
+      ],
+      "limited": false,
+      "disabledPlatforms": [],
+      "supportsExternalPlayer": true
     }
   ]
 }
