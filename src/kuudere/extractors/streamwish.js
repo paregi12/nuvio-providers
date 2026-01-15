@@ -135,12 +135,15 @@ export async function getStreamWish(embedUrl) {
     // 2. Domain/Referer Rotation & Content Scraping
     // If we haven't successfully got player HTML (or want to retry with better referers)
     if (!finalHtml || (!finalHtml.includes('jwplayer') && !finalHtml.includes('eval(function'))) {
+        let origin = '';
+        try { origin = new URL(embedUrl).origin; } catch(e) {}
+        
         const referers = [
             'https://kuudere.ru/', 
             'https://strwish.com/', 
             'https://streamwish.com/',
-            new URL(embedUrl).origin
-        ];
+            origin
+        ].filter(Boolean);
 
         for (const referer of referers) {
             try {

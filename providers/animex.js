@@ -1,6 +1,6 @@
 /**
  * animex - Built from src/animex/
- * Generated: 2026-01-15T11:50:16.774Z
+ * Generated: 2026-01-15T12:27:14.494Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -139,9 +139,87 @@ function encryptGCM(data, key, iv) {
       const result = yield crypto.subtle.encrypt({ name: "AES-GCM", iv }, cryptoKey, data);
       return new Uint8Array(result);
     }
-    console.error("AES-GCM fallback not fully implemented in pure JS yet.");
-    throw new Error("Missing crypto.subtle");
+    const keyWA = import_crypto_js.default.lib.WordArray.create(key);
+    const ivWA = import_crypto_js.default.lib.WordArray.create(iv);
+    const dataWA = import_crypto_js.default.lib.WordArray.create(data);
+    const counter = new Uint8Array(16);
+    counter.set(iv);
+    counter[15] = 2;
+    const counterWA = import_crypto_js.default.lib.WordArray.create(counter);
+    const encrypted = import_crypto_js.default.AES.encrypt(dataWA, keyWA, {
+      iv: counterWA,
+      mode: import_crypto_js.default.mode.CTR,
+      padding: import_crypto_js.default.pad.NoPadding
+    });
+    const cipherBuffer = encrypted.ciphertext;
+    const cipherBytes = wordToByteArray(cipherBuffer.words, cipherBuffer.sigBytes);
+    const hBuffer = import_crypto_js.default.AES.encrypt(import_crypto_js.default.lib.WordArray.create(new Uint8Array(16)), keyWA, {
+      mode: import_crypto_js.default.mode.ECB,
+      padding: import_crypto_js.default.pad.NoPadding
+    }).ciphertext;
+    const hBytes = wordToByteArray(hBuffer.words, hBuffer.sigBytes);
+    const tag = calculateTag(cipherBytes, hBytes, iv, keyWA);
+    const finalResult = new Uint8Array(cipherBytes.length + tag.length);
+    finalResult.set(cipherBytes);
+    finalResult.set(tag, cipherBytes.length);
+    return finalResult;
   });
+}
+function wordToByteArray(words, length) {
+  const array = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    array[i] = words[i >>> 2] >>> 24 - i % 4 * 8 & 255;
+  }
+  return array;
+}
+function calculateTag(ciphertext, h, iv, keyWA) {
+  let y = new Uint8Array(16);
+  const blocks = Math.ceil(ciphertext.length / 16);
+  for (let i = 0; i < blocks; i++) {
+    const block = new Uint8Array(16);
+    block.set(ciphertext.slice(i * 16, (i + 1) * 16));
+    for (let j = 0; j < 16; j++)
+      y[j] ^= block[j];
+    y = gmultiply(y, h);
+  }
+  const lenBlock = new Uint8Array(16);
+  const cipherLenBits = ciphertext.length * 8;
+  lenBlock[15] = cipherLenBits & 255;
+  lenBlock[14] = cipherLenBits >>> 8 & 255;
+  lenBlock[13] = cipherLenBits >>> 16 & 255;
+  lenBlock[12] = cipherLenBits >>> 24 & 255;
+  for (let j = 0; j < 16; j++)
+    y[j] ^= lenBlock[j];
+  y = gmultiply(y, h);
+  const j0 = new Uint8Array(16);
+  j0.set(iv);
+  j0[15] = 1;
+  const ej0Buffer = import_crypto_js.default.AES.encrypt(import_crypto_js.default.lib.WordArray.create(j0), keyWA, {
+    mode: import_crypto_js.default.mode.ECB,
+    padding: import_crypto_js.default.pad.NoPadding
+  }).ciphertext;
+  const ej0 = wordToByteArray(ej0Buffer.words, ej0Buffer.sigBytes);
+  for (let j = 0; j < 16; j++)
+    y[j] ^= ej0[j];
+  return y;
+}
+function gmultiply(x, y) {
+  const res = new Uint8Array(16);
+  const v = new Uint8Array(y);
+  for (let i = 0; i < 128; i++) {
+    if (x[i >>> 3] >>> 7 - i % 8 & 1) {
+      for (let j = 0; j < 16; j++)
+        res[j] ^= v[j];
+    }
+    const msb = v[15] & 1;
+    for (let j = 15; j > 0; j--) {
+      v[j] = v[j] >>> 1 | (v[j - 1] & 1) << 7;
+    }
+    v[0] >>>= 1;
+    if (msb)
+      v[0] ^= 225;
+  }
+  return res;
 }
 function encrypt(n) {
   return __async(this, null, function* () {
@@ -153,10 +231,7 @@ function encrypt(n) {
     const i = new Uint8Array(iv.length + encrypted.length);
     i.set(iv);
     i.set(encrypted, iv.length);
-    let str = "";
-    for (let k = 0; k < i.length; k++)
-      str += String.fromCharCode(i[k]);
-    return m(str);
+    return m(Array.from(i).map((b2) => String.fromCharCode(b2)).join(""));
   });
 }
 function generateId(_0) {
@@ -238,8 +313,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
         { type: "softsub", providers: targetEp.subProviders || [], label: "Softsub" },
         { type: "dub", providers: targetEp.dubProviders || [], label: "Dub" }
       ];
-      for (const cat of categories) {
-        for (const provider of cat.providers) {
+      const fetchCategorySources = (cat) => __async(this, null, function* () {
+        const providerPromises = cat.providers.map((provider) => __async(this, null, function* () {
           try {
             const encryptedId = yield generateId(match.id, {
               host: provider,
@@ -250,23 +325,26 @@ function getStreams(tmdbId, mediaType, season, episode) {
             const sourcesResponse = yield request("get", `${BASE_URL}/api/anime/sources/${encryptedId}`);
             const sourcesData = sourcesResponse.data;
             if (sourcesData.sources) {
-              for (const s of sourcesData.sources) {
-                streams.push({
-                  name: `AnimeX - ${provider} (${cat.label})`,
-                  title: `${cat.label} - ${s.quality || "Auto"}`,
-                  url: s.url,
-                  quality: s.quality || "auto",
-                  headers: {
-                    "Referer": BASE_URL,
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                  }
-                });
-              }
+              return sourcesData.sources.map((s) => ({
+                name: `AnimeX - ${provider} (${cat.label})`,
+                title: `${cat.label} - ${s.quality || "Auto"}`,
+                url: s.url,
+                quality: s.quality || "auto",
+                headers: {
+                  "Referer": BASE_URL,
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+              }));
             }
           } catch (e) {
           }
-        }
-      }
+          return [];
+        }));
+        const results = yield Promise.all(providerPromises);
+        return results.flat();
+      });
+      const categoryResults = yield Promise.all(categories.map(fetchCategorySources));
+      streams.push(...categoryResults.flat());
       return streams;
     } catch (error) {
       return [];

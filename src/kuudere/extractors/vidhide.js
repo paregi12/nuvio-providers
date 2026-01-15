@@ -64,12 +64,15 @@ export async function getVidhideStream(embedUrl) {
 
     // 1. Follow Redirects & Domain Rotation
     // VidHide domains rotate frequently (vidhide.com -> vidhidepro.com, etc.)
+    let origin = '';
+    try { origin = new URL(embedUrl).origin; } catch(e) {}
+
     const referers = [
         'https://kuudere.ru/', 
         'https://vidhide.com/',
         'https://vidhidepro.com/', 
-        new URL(embedUrl).origin
-    ];
+        origin
+    ].filter(Boolean);
 
     for (const referer of referers) {
         try {

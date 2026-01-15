@@ -68,8 +68,8 @@ async function getStreams(tmdbId, mediaType, season, episode) {
             { type: 'dub', providers: targetEp.dubProviders || [], label: 'Dub' }
         ];
 
-        for (const cat of categories) {
-            for (const provider of cat.providers) {
+        const fetchCategorySources = async (cat) => {
+            const providerPromises = cat.providers.map(async (provider) => {
                 try {
                     const encryptedId = await generateId(match.id, {
                         host: provider,
@@ -82,24 +82,28 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                     const sourcesData = sourcesResponse.data;
 
                     if (sourcesData.sources) {
-                        for (const s of sourcesData.sources) {
-                            streams.push({
-                                name: `AnimeX - ${provider} (${cat.label})`,
-                                title: `${cat.label} - ${s.quality || 'Auto'}`,
-                                url: s.url,
-                                quality: s.quality || 'auto',
-                                headers: {
-                                    "Referer": BASE_URL,
-                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                                }
-                            });
-                        }
+                        return sourcesData.sources.map(s => ({
+                            name: `AnimeX - ${provider} (${cat.label})`,
+                            title: `${cat.label} - ${s.quality || 'Auto'}`,
+                            url: s.url,
+                            quality: s.quality || 'auto',
+                            headers: {
+                                "Referer": BASE_URL,
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                            }
+                        }));
                     }
                 } catch (e) {
-                    // Skip failed providers silently
+                    // Skip failed providers
                 }
-            }
-        }
+                return [];
+            });
+            const results = await Promise.all(providerPromises);
+            return results.flat();
+        };
+
+        const categoryResults = await Promise.all(categories.map(fetchCategorySources));
+        streams.push(...categoryResults.flat());
 
         return streams;
     } catch (error) {
