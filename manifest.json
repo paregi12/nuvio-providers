@@ -28,6 +28,29 @@
       "limited": false,
       "disabledPlatforms": [],
       "supportsExternalPlayer": true
+    },
+    {
+      "id": "animex",
+      "name": "AnimeX",
+      "description": "Watch Anime Online for Free with English Subbed & Dubbed in HD Quality - AnimeX",
+      "version": "1.0.0",
+      "author": "paregi12",
+      "supportedTypes": [
+        "tv",
+        "movie"
+      ],
+      "filename": "providers/animex.js",
+      "enabled": true,
+      "logo": "https://animex.one/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ],
+      "formats": [
+        "hls"
+      ],
+      "limited": false,
+      "disabledPlatforms": [],
+      "supportsExternalPlayer": true
     }
   ]
 }
