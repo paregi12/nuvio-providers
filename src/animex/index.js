@@ -43,6 +43,14 @@ async function search(query) {
     }
 }
 
+function getSlug(title, id, episode) {
+    const slug = title.toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    return `${slug}-${id}-episode-${episode}`;
+}
+
 async function getStreams(tmdbId, mediaType, season, episode) {
     const tmdbMeta = await getTmdbMetadata(tmdbId, mediaType);
     if (!tmdbMeta) return [];
@@ -56,20 +64,21 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         const episodesResponse = await request('get', `${BASE_URL}/api/anime/episodes/${match.id}?refresh=false`);
         const episodes = episodesResponse.data;
         
-        const targetEp = episodes.find(e => e.number === (episode || 1));
+        const targetEpNum = episode || 1;
+        const targetEp = episodes.find(e => e.number === targetEpNum);
         if (!targetEp) return [];
 
         const streams = [];
+        const watchUrl = `${BASE_URL}/watch/${getSlug(match.title, match.id, targetEpNum)}`;
         
-        // Define the categories to fetch
         const categories = [
             { type: 'sub', providers: targetEp.subProviders || [], label: 'Hardsub' },
             { type: 'softsub', providers: targetEp.subProviders || [], label: 'Softsub' },
             { type: 'dub', providers: targetEp.dubProviders || [], label: 'Dub' }
         ];
 
-        const fetchCategorySources = async (cat) => {
-            const providerPromises = cat.providers.map(async (provider) => {
+        for (const cat of categories) {
+            for (const provider of cat.providers) {
                 try {
                     const encryptedId = await generateId(match.id, {
                         host: provider,
@@ -78,32 +87,34 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                         cache: "true"
                     });
 
-                    const sourcesResponse = await request('get', `${BASE_URL}/api/anime/sources/${encryptedId}`);
+                    const sourcesResponse = await request('get', `${BASE_URL}/api/anime/sources/${encryptedId}`, {
+                        headers: {
+                            "Referer": watchUrl,
+                            "Origin": BASE_URL
+                        }
+                    });
                     const sourcesData = sourcesResponse.data;
 
                     if (sourcesData.sources) {
-                        return sourcesData.sources.map(s => ({
-                            name: `AnimeX - ${provider} (${cat.label})`,
-                            title: `${cat.label} - ${s.quality || 'Auto'}`,
-                            url: s.url,
-                            quality: s.quality || 'auto',
-                            headers: {
-                                "Referer": BASE_URL,
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                            }
-                        }));
+                        for (const s of sourcesData.sources) {
+                            streams.push({
+                                name: `AnimeX - ${provider} (${cat.label})`,
+                                title: `${cat.label} - ${s.quality || 'Auto'}`,
+                                url: s.url,
+                                quality: s.quality || 'auto',
+                                headers: {
+                                    "Referer": watchUrl,
+                                    "Origin": BASE_URL,
+                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                                }
+                            });
+                        }
                     }
                 } catch (e) {
-                    // Skip failed providers
+                    // Skip failed
                 }
-                return [];
-            });
-            const results = await Promise.all(providerPromises);
-            return results.flat();
-        };
-
-        const categoryResults = await Promise.all(categories.map(fetchCategorySources));
-        streams.push(...categoryResults.flat());
+            }
+        }
 
         return streams;
     } catch (error) {

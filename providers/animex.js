@@ -1,6 +1,6 @@
 /**
  * animex - Built from src/animex/
- * Generated: 2026-01-15T12:27:14.494Z
+ * Generated: 2026-01-15T13:29:21.041Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -292,6 +292,10 @@ function search(query) {
     }
   });
 }
+function getSlug(title, id, episode) {
+  const slug = title.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `${slug}-${id}-episode-${episode}`;
+}
 function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
     const tmdbMeta = yield getTmdbMetadata(tmdbId, mediaType);
@@ -304,17 +308,19 @@ function getStreams(tmdbId, mediaType, season, episode) {
     try {
       const episodesResponse = yield request("get", `${BASE_URL}/api/anime/episodes/${match.id}?refresh=false`);
       const episodes = episodesResponse.data;
-      const targetEp = episodes.find((e) => e.number === (episode || 1));
+      const targetEpNum = episode || 1;
+      const targetEp = episodes.find((e) => e.number === targetEpNum);
       if (!targetEp)
         return [];
       const streams = [];
+      const watchUrl = `${BASE_URL}/watch/${getSlug(match.title, match.id, targetEpNum)}`;
       const categories = [
         { type: "sub", providers: targetEp.subProviders || [], label: "Hardsub" },
         { type: "softsub", providers: targetEp.subProviders || [], label: "Softsub" },
         { type: "dub", providers: targetEp.dubProviders || [], label: "Dub" }
       ];
-      const fetchCategorySources = (cat) => __async(this, null, function* () {
-        const providerPromises = cat.providers.map((provider) => __async(this, null, function* () {
+      for (const cat of categories) {
+        for (const provider of cat.providers) {
           try {
             const encryptedId = yield generateId(match.id, {
               host: provider,
@@ -322,29 +328,32 @@ function getStreams(tmdbId, mediaType, season, episode) {
               type: cat.type,
               cache: "true"
             });
-            const sourcesResponse = yield request("get", `${BASE_URL}/api/anime/sources/${encryptedId}`);
+            const sourcesResponse = yield request("get", `${BASE_URL}/api/anime/sources/${encryptedId}`, {
+              headers: {
+                "Referer": watchUrl,
+                "Origin": BASE_URL
+              }
+            });
             const sourcesData = sourcesResponse.data;
             if (sourcesData.sources) {
-              return sourcesData.sources.map((s) => ({
-                name: `AnimeX - ${provider} (${cat.label})`,
-                title: `${cat.label} - ${s.quality || "Auto"}`,
-                url: s.url,
-                quality: s.quality || "auto",
-                headers: {
-                  "Referer": BASE_URL,
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                }
-              }));
+              for (const s of sourcesData.sources) {
+                streams.push({
+                  name: `AnimeX - ${provider} (${cat.label})`,
+                  title: `${cat.label} - ${s.quality || "Auto"}`,
+                  url: s.url,
+                  quality: s.quality || "auto",
+                  headers: {
+                    "Referer": watchUrl,
+                    "Origin": BASE_URL,
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                  }
+                });
+              }
             }
           } catch (e) {
           }
-          return [];
-        }));
-        const results = yield Promise.all(providerPromises);
-        return results.flat();
-      });
-      const categoryResults = yield Promise.all(categories.map(fetchCategorySources));
-      streams.push(...categoryResults.flat());
+        }
+      }
       return streams;
     } catch (error) {
       return [];
