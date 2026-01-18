@@ -1,5 +1,5 @@
 {
-  "name": "Tapframe's Repo",
+  "name": "Yoru's Repo",
   "version": "1.0.0",
   "scrapers": [
     {
@@ -144,17 +144,18 @@
     {
       "id": "moviebox",
       "name": "MovieBox",
-      "description": "MovieBox streaming with multiple language support",
-      "version": "1.0.1",
+      "description": "MovieBox streaming with multiple language support (DASH + MP4)",
+      "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
         "tv"
       ],
       "filename": "providers/moviebox.js",
-      "enabled": false,
+      "enabled": true,
       "formats": [
-        "mp4"
+        "mp4",
+        "mpd"
       ],
       "logo": "https://h5-static.aoneroom.com/oneroomStatic/public/_nuxt/web-logo.apJjVir2.svg",
       "contentLanguage": [
