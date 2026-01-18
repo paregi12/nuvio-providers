@@ -19,6 +19,7 @@
     ],
     "license": "GPL-3.0",
     "dependencies": {
-        "cheerio-without-node-native": "^0.20.2"
+        "cheerio-without-node-native": "^0.20.2",
+        "crypto-js": "^4.2.0"
     }
 }
