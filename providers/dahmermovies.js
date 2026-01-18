@@ -35,7 +35,7 @@ function makeRequest(url, options = {}) {
         ...options
     };
 
-    return fetch(url, requestOptions).then(function(response) {
+    return fetch(url, requestOptions).then(function (response) {
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
@@ -62,35 +62,35 @@ function getIndexQuality(str) {
 // Extract quality with codec information
 function getQualityWithCodecs(str) {
     if (!str) return 'Unknown';
-    
+
     // Extract base quality (resolution)
     const qualityMatch = str.match(/(\d{3,4})[pP]/);
     const baseQuality = qualityMatch ? `${qualityMatch[1]}p` : 'Unknown';
-    
+
     // Extract codec information (excluding HEVC and bit depth)
     const codecs = [];
     const lowerStr = str.toLowerCase();
-    
+
     // HDR formats
     if (lowerStr.includes('dv') || lowerStr.includes('dolby vision')) codecs.push('DV');
     if (lowerStr.includes('hdr10+')) codecs.push('HDR10+');
     else if (lowerStr.includes('hdr10') || lowerStr.includes('hdr')) codecs.push('HDR');
-    
+
     // Special formats
     if (lowerStr.includes('remux')) codecs.push('REMUX');
     if (lowerStr.includes('imax')) codecs.push('IMAX');
-    
+
     // Combine quality with codecs using pipeline separator
     if (codecs.length > 0) {
         return `${baseQuality} | ${codecs.join(' | ')}`;
     }
-    
+
     return baseQuality;
 }
 
 function getIndexQualityTags(str, fullTag = false) {
     if (!str) return '';
-    
+
     if (fullTag) {
         const match = str.match(/(.*)\.(?:mkv|mp4|avi)/i);
         return match ? match[1].trim() : str;
@@ -119,22 +119,22 @@ function decode(input) {
 // Format file size from bytes to human readable format
 function formatFileSize(sizeText) {
     if (!sizeText) return null;
-    
+
     // If it's already formatted (contains GB, MB, etc.), return as is
     if (/\d+(\.\d+)?\s*(GB|MB|KB|TB)/i.test(sizeText)) {
         return sizeText;
     }
-    
+
     // If it's a number (bytes), convert to human readable
     const bytes = parseInt(sizeText);
     if (isNaN(bytes)) return sizeText;
-    
+
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     if (bytes === 0) return '0 Bytes';
-    
+
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     const size = (bytes / Math.pow(1024, i)).toFixed(2);
-    
+
     return `${size} ${sizes[i]}`;
 }
 
@@ -163,9 +163,9 @@ function parseLinks(html) {
         let size = null;
 
         // Pattern 1: DahmerMovies specific - data-sort attribute with byte size
-        const sizeMatch1 = rowContent.match(/<td[^>]*data-sort=["']?(\d+)["']?[^>]*>(\d+)<\/td>/i);
+        const sizeMatch1 = rowContent.match(/<td[^>]*data-sort=["']?(\d+)["']?[^>]*>/i);
         if (sizeMatch1) {
-            size = sizeMatch1[2]; // Use the displayed number (already in bytes)
+            size = sizeMatch1[1]; // Use the data-sort value (bytes)
         }
 
         // Pattern 2: Standard Apache directory listing with filesize class
@@ -194,12 +194,12 @@ function parseLinks(html) {
 
         links.push({ text, href, size });
     }
-    
+
     // Fallback to simple link parsing if table parsing fails
     if (links.length === 0) {
         const linkRegex = /<a[^>]*href=["']([^"']*)["'][^>]*>([^<]*)<\/a>/gi;
         let match;
-        
+
         while ((match = linkRegex.exec(html)) !== null) {
             const href = match[1];
             const text = match[2].trim();
@@ -208,35 +208,35 @@ function parseLinks(html) {
             }
         }
     }
-    
+
     return links;
 }
 
 // Main Dahmer Movies fetcher function
 function invokeDahmerMovies(title, year, season = null, episode = null) {
     console.log(`[DahmerMovies] Searching for: ${title} (${year})${season ? ` Season ${season}` : ''}${episode ? ` Episode ${episode}` : ''}`);
-    
+
     // Construct URL based on content type (with proper encoding)
-    const encodedUrl = season === null 
+    const encodedUrl = season === null
         ? `${DAHMER_MOVIES_API}/movies/${encodeURIComponent(title.replace(/:/g, '') + ' (' + year + ')')}/`
         : `${DAHMER_MOVIES_API}/tvs/${encodeURIComponent(title.replace(/:/g, ' -'))}/Season ${season}/`;
-    
+
     console.log(`[DahmerMovies] Fetching from: ${encodedUrl}`);
-    
-    return makeRequest(encodedUrl).then(function(response) {
+
+    return makeRequest(encodedUrl).then(function (response) {
         return response.text();
-    }).then(function(html) {
+    }).then(function (html) {
         console.log(`[DahmerMovies] Response length: ${html.length}`);
-        
+
         // Parse HTML to extract links
         const paths = parseLinks(html);
         console.log(`[DahmerMovies] Found ${paths.length} total links`);
-        
+
         // Filter based on content type
         let filteredPaths;
         if (season === null) {
             // For movies, filter by quality (1080p or 2160p)
-            filteredPaths = paths.filter(path => 
+            filteredPaths = paths.filter(path =>
                 /(1080p|2160p)/i.test(path.text)
             );
             console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} movie links (1080p/2160p only)`);
@@ -244,48 +244,50 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
             // For TV shows, filter by season and episode
             const [seasonSlug, episodeSlug] = getEpisodeSlug(season, episode);
             const episodePattern = new RegExp(`S${seasonSlug}E${episodeSlug}`, 'i');
-            filteredPaths = paths.filter(path => 
+            filteredPaths = paths.filter(path =>
                 episodePattern.test(path.text)
             );
             console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} TV episode links (S${seasonSlug}E${episodeSlug})`);
         }
-        
+
         if (filteredPaths.length === 0) {
             console.log('[DahmerMovies] No matching content found');
             return [];
         }
-        
+
         // Process and return results
         const results = filteredPaths.map(path => {
             const quality = getIndexQuality(path.text);
             const qualityWithCodecs = getQualityWithCodecs(path.text);
             const tags = getIndexQualityTags(path.text);
-            
+
             // Construct proper URL - handle relative paths correctly
             let fullUrl;
             if (path.href.startsWith('http')) {
-                // Already a full URL - need to encode it properly
+                // Already a full URL
                 try {
-                    // Parse the URL and let the URL constructor handle encoding
                     const url = new URL(path.href);
-                    // Reconstruct the URL with properly encoded pathname
                     fullUrl = `${url.protocol}//${url.host}${url.pathname}`;
                 } catch (error) {
-                    // Fallback: manually encode if URL parsing fails
-                    console.log(`[DahmerMovies] URL parsing failed, manually encoding: ${path.href}`);
                     fullUrl = path.href.replace(/ /g, '%20');
                 }
+            } else if (path.href.startsWith('/')) {
+                // Absolute path from root
+                const urlObj = new URL(DAHMER_MOVIES_API);
+                // Encode path parts but keep slashes (decode first to avoid double encoding)
+                const encodedPath = path.href.split('/').map(p => encodeURIComponent(decode(p))).join('/');
+                fullUrl = `${urlObj.protocol}//${urlObj.host}${encodedPath}`;
             } else {
                 // Relative path - combine with encoded base URL
                 const baseUrl = encodedUrl.endsWith('/') ? encodedUrl : encodedUrl + '/';
-                const relativePath = path.href.startsWith('/') ? path.href.substring(1) : path.href;
-                const encodedFilename = encodeURIComponent(relativePath);
-                fullUrl = baseUrl + encodedFilename;
+                // Encode the path (decode first to avoid double encoding)
+                const encodedPath = path.href.split('/').map(p => encodeURIComponent(decode(p))).join('/');
+                fullUrl = baseUrl + encodedPath;
             }
-            
+
             return {
                 name: "DahmerMovies",
-                title: `DahmerMovies ${tags || path.text}`,
+                title: path.text,
                 url: fullUrl,
                 quality: qualityWithCodecs, // Use enhanced quality with codecs
                 size: formatFileSize(path.size), // Format file size
@@ -294,18 +296,18 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
                 filename: path.text
             };
         });
-        
+
         // Sort by quality (highest first)
         results.sort((a, b) => {
             const qualityA = getIndexQuality(a.filename);
             const qualityB = getIndexQuality(b.filename);
             return qualityB - qualityA;
         });
-        
+
         console.log(`[DahmerMovies] Successfully processed ${results.length} streams`);
         return results;
-        
-    }).catch(function(error) {
+
+    }).catch(function (error) {
         if (error.name === 'AbortError') {
             console.log('[DahmerMovies] Request timeout - server took too long to respond');
         } else {
@@ -321,9 +323,9 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
 
     // Get TMDB info
     const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
-    return makeRequest(tmdbUrl).then(function(tmdbResponse) {
+    return makeRequest(tmdbUrl).then(function (tmdbResponse) {
         return tmdbResponse.json();
-    }).then(function(tmdbData) {
+    }).then(function (tmdbData) {
         const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
         const year = mediaType === 'tv' ? tmdbData.first_air_date?.substring(0, 4) : tmdbData.release_date?.substring(0, 4);
 
@@ -340,8 +342,8 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
             seasonNum,
             episodeNum
         );
-        
-    }).catch(function(error) {
+
+    }).catch(function (error) {
         console.error(`[DahmerMovies] Error in getStreams: ${error.message}`);
         return [];
     });
