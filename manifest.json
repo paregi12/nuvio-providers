@@ -186,7 +186,7 @@
       "id": "dvdplay",
       "name": "DVDPlay",
       "description": "DVDPlay direct download links with HubCloud extraction",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -259,7 +259,7 @@
       "id": "mallumv",
       "name": "MalluMV",
       "description": "MalluMV direct links with support for Tamil, Telugu, Hindi, Malayalam, and Kannada movies",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie"

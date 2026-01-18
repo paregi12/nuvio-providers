@@ -660,6 +660,7 @@ function parseSizeForSort(sizeString) {
 }
 
 // Extract quality from text - improved to handle numeric values and normalize labels
+// Extract quality from text - improved to handle numeric values and normalize labels
 function extractQuality(text) {
     if (!text) return 'Unknown';
 
@@ -672,11 +673,10 @@ function extractQuality(text) {
         return quality;
     }
 
-    // Look for numeric quality values (like 2160, 1080, 720, etc.)
-    const numericMatch = text.match(/(\d{3,4})[pP]?/);
-    if (numericMatch) {
-        const numericValue = parseInt(numericMatch[1], 10);
-        // Convert numeric values to standard quality labels (match hdhub4u.js approach)
+    // Look for numeric quality values followed by 'p' (e.g., 2160p, 1080p) - stricter check
+    const strictNumericMatch = text.match(/(\d{3,4})[pP]/);
+    if (strictNumericMatch) {
+        const numericValue = parseInt(strictNumericMatch[1], 10);
         if (numericValue >= 2160) return '4K';
         else if (numericValue >= 1440) return '1440p';
         else if (numericValue >= 1080) return '1080p';
@@ -923,7 +923,7 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
         .then(response => response.body)
         .then(html => {
             // Check for HubCloud links FIRST
-            const hubCloudMatch = html.match(/<a href="(https:\/\/[^"]*hubcloud\.[^"]*)"/);
+            const hubCloudMatch = html.match(/<a href=["'](https:\/\/[^"']*hubcloud\.[^"']*)["']/);
             if (hubCloudMatch) {
                 const hubCloudUrl = hubCloudMatch[1];
                 console.log(`[MalluMV] Found HubCloud URL, extracting streams...`);
@@ -932,23 +932,39 @@ function processInternalLink(internalPageUrl, quality, size, fullTitle) {
                 return extractHubCloudLinks(hubCloudUrl, 'MalluMV')
                     .then(streams => {
                         // Update stream names and metadata
-                        return streams.map(stream => ({
-                            ...stream,
-                            name: stream.name.replace('DVDPlay', 'MalluMV'),
-                            size: size || stream.size,
-                            quality: quality || stream.quality
-                        }));
+                        return streams.map(stream => {
+                            const finalQuality = quality || stream.quality;
+                            let newName = stream.name.replace('DVDPlay', 'MalluMV');
+
+                            // If quality is improved/available and name has 'Unknown', update it
+                            if (finalQuality && finalQuality !== 'Unknown') {
+                                if (newName.includes(' - Unknown')) {
+                                    newName = newName.replace(' - Unknown', ' - ' + finalQuality);
+                                    // Add 'p' if missing
+                                    if (!newName.endsWith('p') && /^\d+$/.test(finalQuality)) {
+                                        newName += 'p';
+                                    }
+                                }
+                            }
+
+                            return {
+                                ...stream,
+                                name: newName,
+                                size: size || stream.size,
+                                quality: finalQuality
+                            };
+                        });
                     });
             }
 
             // Fall back to direct download patterns
             const downloadPatterns = [
                 // OneDrive/SharePoint pattern
-                /<a href="(https:\/\/[^"]*sharepoint\.com[^"]*download\.aspx[^"]*)"/,
+                /<a href=["'](https:\/\/[^"']*sharepoint\.com[^"']*download\.aspx[^"']*)["']/,
                 // Pixeldrain pattern
-                /<a href="(https:\/\/[^"]*pixeldrain\.[^"]*)"/,
+                /<a href=["'](https:\/\/[^"']*pixeldrain\.[^"']*)["']/,
                 // Generic download link
-                /<a href="(https:\/\/[^"]*)"[^>]*>Download/
+                /<a href=["'](https:\/\/[^"']*)["'][^>]*>Download/
             ];
 
             for (const pattern of downloadPatterns) {
