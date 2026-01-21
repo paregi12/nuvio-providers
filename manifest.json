@@ -237,7 +237,7 @@
         "tv"
       ],
       "filename": "providers/videasy.js",
-      "enabled": true,
+      "enabled": false,
       "limited": true,
       "formats": [
         "m3u8",
