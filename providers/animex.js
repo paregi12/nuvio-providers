@@ -1,6 +1,6 @@
 /**
  * animex - Built from src/animex/
- * Generated: 2026-01-15T13:29:21.041Z
+ * Generated: 2026-01-31T11:11:42.324Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -301,15 +301,34 @@ function getStreams(tmdbId, mediaType, season, episode) {
     const tmdbMeta = yield getTmdbMetadata(tmdbId, mediaType);
     if (!tmdbMeta)
       return [];
-    const searchResults = yield search(tmdbMeta.title);
-    const match = searchResults.find((r) => isMatch(r.title, tmdbMeta.title) && (String(r.year) === String(tmdbMeta.year) || !r.year));
+    let match = null;
+    let targetEpNum = episode || 1;
+    let currentSeason = season || 1;
+    if (mediaType === "tv" && currentSeason > 1) {
+      const seasonalSearch = yield search(`${tmdbMeta.title} Season ${currentSeason}`);
+      match = seasonalSearch.find(
+        (r) => isMatch(r.title, tmdbMeta.title) && r.title.toLowerCase().includes(`season ${currentSeason}`) || isMatch(r.title, tmdbMeta.title) && r.title.toLowerCase().includes(` ${currentSeason}`)
+      );
+    }
+    if (!match) {
+      const searchResults = yield search(tmdbMeta.title);
+      if (mediaType === "tv" && currentSeason > 1) {
+        match = searchResults.find(
+          (r) => isMatch(r.title, tmdbMeta.title) && (r.title.toLowerCase().includes(`season ${currentSeason}`) || r.title.toLowerCase().includes(` ${currentSeason}`))
+        );
+      }
+      if (!match) {
+        match = searchResults.find((r) => isMatch(r.title, tmdbMeta.title) && (String(r.year) === String(tmdbMeta.year) || !r.year));
+      }
+    }
     if (!match)
       return [];
     try {
-      const episodesResponse = yield request("get", `${BASE_URL}/api/anime/episodes/${match.id}?refresh=false`);
-      const episodes = episodesResponse.data;
-      const targetEpNum = episode || 1;
-      const targetEp = episodes.find((e) => e.number === targetEpNum);
+      let episodesResponse = yield request("get", `${BASE_URL}/api/anime/episodes/${match.id}?refresh=false`);
+      let episodes = episodesResponse.data;
+      let targetEp = episodes.find((e) => e.number === targetEpNum);
+      if (!targetEp && episodes.length > 0) {
+      }
       if (!targetEp)
         return [];
       const streams = [];
