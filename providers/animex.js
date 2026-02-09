@@ -1,6 +1,6 @@
 /**
  * animex - Built from src/animex/
- * Generated: 2026-01-31T11:11:42.324Z
+ * Generated: 2026-02-07T16:59:53.805Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;

@@ -217,6 +217,14 @@ async function getStreams(tmdbId, mediaType, season, episode) { ... }
   "headers": {                     // (Optional)
     "User-Agent": "Key for playback",
     "Referer": "..."
+  },
+  "subtitles": [                  // (Optional)
+    {
+      "url": "https://...",
+      "lang": "English",
+      "format": "srt"
+    }
+  ]
   }
 }
 ```

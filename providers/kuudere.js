@@ -1,6 +1,6 @@
 /**
  * kuudere - Built from src/kuudere/
- * Generated: 2026-01-13T08:12:22.465Z
+ * Generated: 2026-02-07T16:59:53.964Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -358,12 +358,17 @@ function getStreamWish(embedUrl) {
     } catch (error) {
     }
     if (!finalHtml || !finalHtml.includes("jwplayer") && !finalHtml.includes("eval(function")) {
+      let origin = "";
+      try {
+        origin = new URL(embedUrl).origin;
+      } catch (e) {
+      }
       const referers = [
         "https://kuudere.ru/",
         "https://strwish.com/",
         "https://streamwish.com/",
-        new URL(embedUrl).origin
-      ];
+        origin
+      ].filter(Boolean);
       for (const referer of referers) {
         try {
           const res = yield import_axios3.default.get(finalUrl, {
@@ -478,12 +483,17 @@ function getVidhideStream(embedUrl) {
   return __async(this, null, function* () {
     let finalHtml = null;
     let finalUrl = embedUrl;
+    let origin = "";
+    try {
+      origin = new URL(embedUrl).origin;
+    } catch (e) {
+    }
     const referers = [
       "https://kuudere.ru/",
       "https://vidhide.com/",
       "https://vidhidepro.com/",
-      new URL(embedUrl).origin
-    ];
+      origin
+    ].filter(Boolean);
     for (const referer of referers) {
       try {
         const response = yield import_axios4.default.get(finalUrl, {
@@ -530,8 +540,8 @@ function getVidhideStream(embedUrl) {
       if (!streamUrl)
         return null;
       if (streamUrl.startsWith("/")) {
-        const origin = new URL(finalUrl).origin;
-        streamUrl = origin + streamUrl;
+        const origin2 = new URL(finalUrl).origin;
+        streamUrl = origin2 + streamUrl;
       }
       const subtitles = extractSubtitlesFromUrl(embedUrl);
       return { url: streamUrl, subtitles };
