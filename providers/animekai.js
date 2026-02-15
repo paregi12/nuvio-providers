@@ -311,7 +311,7 @@ function qualityFromResolutionOrBandwidth(stream) {
     return 'Unknown';
 }
 
-function resolveM3U8(url, serverType) {
+function resolveM3U8(url, serverType, serverName) {
     return fetchRequest(url, { headers: Object.assign({}, HEADERS, { 'Accept': 'application/vnd.apple.mpegurl,application/x-mpegURL,application/octet-stream,*/*' }) })
         .then(function (res) { return res.text(); })
         .then(function (content) {
@@ -320,22 +320,22 @@ function resolveM3U8(url, serverType) {
                 var out = [];
                 for (var i = 0; i < variants.length; i++) {
                     var q = qualityFromResolutionOrBandwidth(variants[i]);
-                    out.push({ url: variants[i].url, quality: q, serverType: serverType });
+                    out.push({ url: variants[i].url, quality: q, serverType: serverType, serverName: serverName });
                 }
                 var order = { '4K': 7, '2160p': 7, '1440p': 6, '1080p': 5, '720p': 4, '480p': 3, '360p': 2, '240p': 1, 'Unknown': 0 };
                 out.sort(function (a, b) { return (order[b.quality] || 0) - (order[a.quality] || 0); });
                 return { success: true, streams: out };
             }
             if (content.indexOf('#EXTINF:') !== -1) {
-                return { success: true, streams: [{ url: url, quality: extractQualityFromUrl(url), serverType: serverType }] };
+                return { success: true, streams: [{ url: url, quality: extractQualityFromUrl(url), serverType: serverType, serverName: serverName }] };
             }
             throw new Error('Invalid M3U8');
         })
-        .catch(function () { return { success: false, streams: [{ url: url, quality: extractQualityFromUrl(url), serverType: serverType }] }; });
+        .catch(function () { return { success: false, streams: [{ url: url, quality: extractQualityFromUrl(url), serverType: serverType, serverName: serverName }] }; });
 }
 
 function resolveMultipleM3U8(m3u8Links) {
-    var promises = m3u8Links.map(function (link) { return resolveM3U8(link.url, link.serverType); });
+    var promises = m3u8Links.map(function (link) { return resolveM3U8(link.url, link.serverType, link.serverName); });
     return Promise.allSettled(promises).then(function (results) {
         var out = [];
         for (var i = 0; i < results.length; i++) {
@@ -356,12 +356,32 @@ function formatToNuvioStreams(formattedData, mediaTitle) {
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept-Encoding': 'identity'
     };
+
+    var typeMap = {
+        'sub': 'Hard Sub',
+        'softsub': 'Soft Sub',
+        'dub': 'Dub & S-Sub'
+    };
+
+    // Deduplicate by URL
+    var seenUrls = {};
+
     for (var i = 0; i < streams.length; i++) {
         var s = streams[i];
-        var quality = s.quality || extractQualityFromUrl(s.url) || 'Unknown';
-        var server = (s.serverType || 'server').toUpperCase();
+        if (seenUrls[s.url]) continue;
+        seenUrls[s.url] = true;
+
+        var quality = s.quality || extractQualityFromUrl(s.url);
+        if (quality === 'Unknown') quality = 'Auto';
+
+        var typeLabel = typeMap[s.serverType] || s.serverType || 'Raw';
+        var serverLabel = s.serverName || 'Server';
+        
+        // Name format: ⌜ AnimeKai ⌟ | Server 1 | [Soft Sub] - 1080p
+        var displayName = '⌜ AnimeKai ⌟ | ' + serverLabel + ' | [' + typeLabel + '] - ' + quality;
+
         links.push({
-            name: 'ANIMEKAI ' + server + ' - ' + quality,
+            name: displayName,
             title: mediaTitle || '',
             url: s.url,
             quality: quality,
@@ -394,11 +414,14 @@ function runStreamFetch(token, rid) {
             logRid(rid, 'servers available', byTypeCounts);
 
             var serverPromises = [];
-            var lids = [];
             Object.keys(servers || {}).forEach(function (serverType) {
                 Object.keys(servers[serverType] || {}).forEach(function (serverKey) {
-                    var lid = servers[serverType][serverKey].lid;
-                    lids.push(lid);
+                    var serverData = servers[serverType][serverKey];
+                    var lid = serverData.lid;
+                    var sName = serverData.name || serverData.title || serverData.label;
+                    if (!sName && !isNaN(serverKey)) sName = 'Server ' + serverKey;
+                    var serverName = sName || serverKey;
+
                     var p = encryptKai(lid)
                         .then(function (encLid) {
                             logRid(rid, 'links/view: enc(lid) ready', { serverType: serverType, serverKey: serverKey, lid: lid });
@@ -422,7 +445,8 @@ function runStreamFetch(token, rid) {
                                                     srcs.push({
                                                         url: src.file,
                                                         quality: extractQualityFromUrl(src.file),
-                                                        serverType: serverType
+                                                        serverType: serverType,
+                                                        serverName: serverName
                                                     });
                                                 }
                                             }
@@ -439,8 +463,6 @@ function runStreamFetch(token, rid) {
                     serverPromises.push(p);
                 });
             });
-            var uniqueLids = Array.from(new Set(lids));
-            logRid(rid, 'fan-out lids', { total: lids.length, unique: uniqueLids.length });
 
             return Promise.allSettled(serverPromises).then(function (results) {
                 var allStreams = [];
