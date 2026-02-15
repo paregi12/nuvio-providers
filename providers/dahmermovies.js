@@ -120,7 +120,7 @@ function decode(input) {
 function resolveFinalUrl(startUrl) {
     let currentUrl = startUrl;
     let loopCount = 0;
-    const maxRedirects = 7;
+    const maxRedirects = 5;
 
     function attemptResolve(url, count) {
         if (count >= maxRedirects) {
@@ -128,16 +128,16 @@ function resolveFinalUrl(startUrl) {
         }
 
         return fetch(url, {
-            method: 'GET',
+            method: 'HEAD',
             redirect: 'manual',
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Referer': 'https://a.111477.xyz/'
             }
         }).then(function (response) {
             if (response.status >= 300 && response.status < 400) {
                 const location = response.headers.get('location');
                 if (location) {
-                    // Handle relative redirects
                     const nextUrl = location.startsWith('http') 
                         ? location 
                         : new URL(location, url).href;
@@ -146,7 +146,6 @@ function resolveFinalUrl(startUrl) {
             }
             return url;
         }).catch(function (error) {
-            console.log(`[DahmerMovies] Error resolving URL ${url}: ${error.message}`);
             return url;
         });
     }
@@ -298,7 +297,7 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
 
         // Process results sequentially to avoid 429 rate limiting
         const results = [];
-        const maxLinks = 15; // Increased limit to ensure more sources are found
+        const maxLinks = 10; // Increased to 10 links
         const pathsToProcess = filteredPaths.slice(0, maxLinks);
         
         async function processPaths() {
@@ -307,7 +306,7 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
                 const qualityWithCodecs = getQualityWithCodecs(path.text);
                 const tags = getIndexQualityTags(path.text);
 
-                // Construct proper URL - handle relative paths correctly
+                // Construct proper URL
                 let fullUrl;
                 if (path.href.startsWith('http')) {
                     try {
@@ -336,17 +335,17 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
                         size: formatFileSize(path.size),
                         type: "direct",
                         headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                            'User-Agent': 'Mozilla/5.0 (Android) ExoPlayer',
                             'Referer': DAHMER_MOVIES_API + '/'
                         },
                         provider: "dahmermovies",
                         filename: path.text
                     });
                     
-                    // Small delay to prevent 429
-                    await sleep(500);
+                    // 1 second delay to balance speed and safety
+                    await sleep(1000);
                 } catch (e) {
-                    console.log(`[DahmerMovies] Failed to resolve ${fullUrl}: ${e.message}`);
+                    console.log(`[DahmerMovies] Failed to resolve ${fullUrl}`);
                 }
             }
             
