@@ -86,10 +86,10 @@ function bypass() {
   }
   return attemptBypass(0);
 }
-function getVideoToken(id, cookie) {
+function getVideoToken(id, cookie, ott) {
   const cookies = {
     "t_hash_t": cookie,
-    "ott": "nf",
+    "ott": ott || "nf",
     "hd": "on"
   };
   const cookieString = Object.entries(cookies).map(([key, value]) => `${key}=${value}`).join("; ");
@@ -320,7 +320,7 @@ function getStreamingLinks(contentId, title, platform) {
   let globalCookieValue = "";
   return bypass().then(function(cookie) {
     globalCookieValue = cookie;
-    return getVideoToken(contentId, cookie);
+    return getVideoToken(contentId, cookie, ott);
   }).then(function(token) {
     const cookies = {
       "t_hash_t": globalCookieValue,
@@ -328,7 +328,12 @@ function getStreamingLinks(contentId, title, platform) {
       "hd": "on"
     };
     const cookieString = Object.entries(cookies).map(([key, value]) => `${key}=${value}`).join("; ");
-    const playlistUrl = `${NETMIRROR_PLAY}/playlist.php`;
+    const playlistEndpoints = {
+      "netflix": `${NETMIRROR_PLAY}/playlist.php`,
+      "primevideo": `${NETMIRROR_PLAY}/pv/playlist.php`,
+      "disney": `${NETMIRROR_PLAY}/mobile/hs/playlist.php`
+    };
+    const playlistUrl = playlistEndpoints[platform.toLowerCase()] || playlistEndpoints["netflix"];
     return makeRequest(
       `${playlistUrl}?id=${contentId}&t=${encodeURIComponent(title)}&tm=${getUnixTime()}&h=${token}`,
       {
@@ -353,7 +358,7 @@ function getStreamingLinks(contentId, title, platform) {
           let fullUrl = source.file.replace("/tv/", "/");
           if (!fullUrl.startsWith("/"))
             fullUrl = "/" + fullUrl;
-          fullUrl = NETMIRROR_PLAY + fullUrl;
+          fullUrl = NETMIRROR_PLAY + "/" + fullUrl;
           sources.push({
             url: fullUrl,
             quality: source.label,
