@@ -714,46 +714,74 @@ function getStreams(tmdbId, mediaType = "movie", seasonNum = null, episodeNum = 
     var _a, _b;
     console.log(`[MoviesMod] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}${seasonNum ? `, S${seasonNum}E${episodeNum}` : ""}`);
     try {
-      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`;
       const tmdbResponse = yield makeRequest(tmdbUrl);
       const tmdbData = yield tmdbResponse.json();
       const title = mediaType === "tv" ? tmdbData.name : tmdbData.title;
       const year = mediaType === "tv" ? (_a = tmdbData.first_air_date) == null ? void 0 : _a.substring(0, 4) : (_b = tmdbData.release_date) == null ? void 0 : _b.substring(0, 4);
+      const imdbId = tmdbData.external_ids ? tmdbData.external_ids.imdb_id : null;
+      
       if (!title) {
         throw new Error("Could not extract title from TMDB response");
       }
-      console.log(`[MoviesMod] TMDB Info: "${title}" (${year})`);
-      const searchResults = yield searchMoviesMod(title);
-      if (searchResults.length === 0) {
-        console.log(`[MoviesMod] No search results found`);
-        return [];
-      }
-      const titles = searchResults.map((r) => r.title);
-      const bestMatch = findBestMatch(title, titles);
-      console.log(`[MoviesMod] Best match for "${title}" is "${bestMatch.bestMatch.target}" with a rating of ${bestMatch.bestMatch.rating.toFixed(2)}`);
+      console.log(`[MoviesMod] TMDB Info: "${title}" (${year}) [IMDB: ${imdbId || 'N/A'}]`);
+      
+      let searchResults = [];
       let selectedResult = null;
-      if (bestMatch.bestMatch.rating > 0.3) {
-        selectedResult = searchResults[bestMatch.bestMatchIndex];
-        if (mediaType === "movie" && year) {
-          if (!selectedResult.title.includes(year)) {
-            console.warn(`[MoviesMod] Title match found, but year mismatch. Matched: "${selectedResult.title}", Expected year: ${year}. Discarding match.`);
-            selectedResult = null;
+      
+      if (imdbId) {
+        const imdbQuery = mediaType === "tv" && seasonNum ? `${imdbId} Season ${seasonNum}` : imdbId;
+        console.log(`[MoviesMod] Trying IMDB ID search first: ${imdbQuery}`);
+        searchResults = yield searchMoviesMod(imdbQuery);
+        if (searchResults.length > 0) {
+            console.log(`[MoviesMod] Found match using IMDB ID: ${searchResults[0].title}`);
+            selectedResult = searchResults[0];
+        }
+      }
+
+      if (!selectedResult) {
+        console.log(`[MoviesMod] Falling back to title search for: ${title}`);
+        const titleQuery = mediaType === "tv" && seasonNum ? `${title} Season ${seasonNum}` : title;
+        searchResults = yield searchMoviesMod(titleQuery);
+        if (searchResults.length === 0) {
+          // If title+season fails, try just title
+          searchResults = yield searchMoviesMod(title);
+        }
+        
+        if (searchResults.length === 0) {
+          console.log(`[MoviesMod] No search results found`);
+          return [];
+        }
+        
+        const titles = searchResults.map((r) => r.title);
+        const bestMatch = findBestMatch(title, titles);
+        console.log(`[MoviesMod] Best match for "${title}" is "${bestMatch.bestMatch.target}" with a rating of ${bestMatch.bestMatch.rating.toFixed(2)}`);
+        
+        if (bestMatch.bestMatch.rating > 0.3) {
+          selectedResult = searchResults[bestMatch.bestMatchIndex];
+          if (mediaType === "movie" && year) {
+            if (!selectedResult.title.includes(year)) {
+              console.warn(`[MoviesMod] Title match found, but year mismatch. Matched: "${selectedResult.title}", Expected year: ${year}. Discarding match.`);
+              selectedResult = null;
+            }
+          }
+        }
+        
+        if (!selectedResult) {
+          console.log("[MoviesMod] Similarity match failed. Trying stricter search...");
+          const titleRegex = new RegExp(`\\b${escapeRegExp(title.toLowerCase())}\\b`);
+          if (mediaType === "movie") {
+            selectedResult = searchResults.find(
+              (r) => titleRegex.test(r.title.toLowerCase()) && (!year || r.title.includes(year))
+            );
+          } else {
+            selectedResult = searchResults.find(
+              (r) => titleRegex.test(r.title.toLowerCase()) && r.title.toLowerCase().includes("season")
+            );
           }
         }
       }
-      if (!selectedResult) {
-        console.log("[MoviesMod] Similarity match failed. Trying stricter search...");
-        const titleRegex = new RegExp(`\\b${escapeRegExp(title.toLowerCase())}\\b`);
-        if (mediaType === "movie") {
-          selectedResult = searchResults.find(
-            (r) => titleRegex.test(r.title.toLowerCase()) && (!year || r.title.includes(year))
-          );
-        } else {
-          selectedResult = searchResults.find(
-            (r) => titleRegex.test(r.title.toLowerCase()) && r.title.toLowerCase().includes("season")
-          );
-        }
-      }
+
       if (!selectedResult) {
         console.log(`[MoviesMod] No suitable search result found for "${title} (${year})"`);
         return [];
@@ -833,35 +861,31 @@ function getStreams(tmdbId, mediaType = "movie", seasonNum = null, episodeNum = 
                   }
                 }
                 if (finalDownloadUrl) {
-                  const finalUrl = yield resolveResumeCloudLink(resumeCloud.url);
-                  console.log(`[MoviesMod] Resume Cloud final URL: ${finalUrl ? "resolved" : "null"}`);
-                  if (finalUrl && (yield validateVideoUrl(finalUrl))) {
-                    console.log(`[MoviesMod] URL validation: SUCCESS`);
-                    if (isEpisodeLink && episodeNum !== null) {
-                      const episodeFromServer = targetLink.server.match(/Episode\s+(\d+)/i);
-                      console.log(`[MoviesMod] Episode filtering: server="${targetLink.server}", requested episode=${episodeNum}, found episode=${episodeFromServer ? episodeFromServer[1] : "none"}`);
-                      if (episodeFromServer && parseInt(episodeFromServer[1]) !== episodeNum) {
-                        console.log(`[MoviesMod] Skipping episode ${episodeFromServer[1]} (not episode ${episodeNum})`);
-                        continue;
-                      } else if (episodeFromServer && parseInt(episodeFromServer[1]) === episodeNum) {
-                        console.log(`[MoviesMod] Processing episode ${episodeNum} - continuing...`);
-                      }
+                  console.log(`[MoviesMod] URL validation: SUCCESS`);
+                  if (isEpisodeLink && episodeNum !== null) {
+                    const episodeFromServer = targetLink.server.match(/Episode\s+(\d+)/i);
+                    console.log(`[MoviesMod] Episode filtering: server="${targetLink.server}", requested episode=${episodeNum}, found episode=${episodeFromServer ? episodeFromServer[1] : "none"}`);
+                    if (episodeFromServer && parseInt(episodeFromServer[1]) !== episodeNum) {
+                      console.log(`[MoviesMod] Skipping episode ${episodeFromServer[1]} (not episode ${episodeNum})`);
+                      continue;
+                    } else if (episodeFromServer && parseInt(episodeFromServer[1]) === episodeNum) {
+                      console.log(`[MoviesMod] Processing episode ${episodeNum} - continuing...`);
                     }
-                    const mediaTitle = mediaType === "tv" && seasonNum && episodeNum ? `${selectedResult.title} S${seasonNum.toString().padStart(2, "0")}E${episodeNum.toString().padStart(2, "0")}` : selectedResult.title;
-                    processedStreams.push({
-                      name: `MoviesMod ${targetLink.server || ""} - ${link.quality}`.trim(),
-                      title: mediaTitle,
-                      url: finalUrl,
-                      quality: link.quality,
-                      size: driveseedInfo.size || "Unknown",
-                      headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Referer": "https://driveseed.org/"
-                      },
-                      provider: "moviesmod"
-                    });
-                    break;
                   }
+                  const mediaTitle = mediaType === "tv" && seasonNum && episodeNum ? `${selectedResult.title} S${seasonNum.toString().padStart(2, "0")}E${episodeNum.toString().padStart(2, "0")}` : selectedResult.title;
+                  processedStreams.push({
+                    name: `MoviesMod ${targetLink.server || ""} - ${link.quality}`.trim(),
+                    title: mediaTitle,
+                    url: finalDownloadUrl,
+                    quality: link.quality,
+                    size: driveseedInfo.size || "Unknown",
+                    headers: {
+                      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                      "Referer": "https://driveseed.org/"
+                    },
+                    provider: "moviesmod"
+                  });
+                  break;
                 }
               }
             }

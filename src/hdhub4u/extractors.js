@@ -70,6 +70,25 @@ export async function vidStackExtractor(url) {
                 const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
                 if (decryptedText && decryptedText.includes("source")) {
                     const m3u8 = decryptedText.match(/"source":"(.*?)"/)?.[1]?.replace(/\\/g, '');
+                    
+                    // Extract subtitles
+                    const subtitles = [];
+                    const subtitleSection = decryptedText.match(/"subtitle":\{(.*?)\}/)?.[1];
+                    if (subtitleSection) {
+                        const subtitlePattern = /"([^"]+)":\s*"([^"]+)"/g;
+                        let subMatch;
+                        while ((subMatch = subtitlePattern.exec(subtitleSection)) !== null) {
+                            const lang = subMatch[1];
+                            const subPath = subMatch[2].split("#")[0].replace(/\\/g, '');
+                            if (subPath) {
+                                subtitles.push({
+                                    language: lang,
+                                    url: subPath.startsWith("http") ? subPath : `${baseUrl}${subPath}`
+                                });
+                            }
+                        }
+                    }
+
                     if (m3u8) {
                         return [{ 
                             source: "Vidstack Hubstream", 
@@ -78,7 +97,8 @@ export async function vidStackExtractor(url) {
                             headers: {
                                 "Referer": url,
                                 "Origin": url.split('/').pop()
-                            }
+                            },
+                            subtitles: subtitles
                         }];
                     }
                 }
@@ -193,9 +213,15 @@ export async function hubCloudExtractor(url, referer) {
         links.push({ source: `${label} ${labelExtras}`, quality, url: link, size: sizeInBytes, fileName });
       } else if (text.includes("buzzserver")) {
         try {
-          const buzzResp = await fetch(`${link}/download`, { method: "GET", headers: { ...HEADERS, Referer: link } });
-          if (buzzResp.url && buzzResp.url !== `${link}/download`) {
-            links.push({ source: `HubCloud - BuzzServer ${labelExtras}`, quality, url: buzzResp.url, size: sizeInBytes, fileName });
+          const buzzResp = await fetch(`${link}/download`, { method: "GET", headers: { ...HEADERS, Referer: link }, redirect: "manual" });
+          let dlink = buzzResp.headers.get("hx-redirect") || buzzResp.headers.get("HX-Redirect");
+          
+          if (!dlink && buzzResp.url && buzzResp.url !== `${link}/download`) {
+            dlink = buzzResp.url;
+          }
+          
+          if (dlink) {
+            links.push({ source: `HubCloud - BuzzServer ${labelExtras}`, quality, url: dlink, size: sizeInBytes, fileName });
           }
         } catch (e) {}
       } else if (text.includes("10gbps")) {
