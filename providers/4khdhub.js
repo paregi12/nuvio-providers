@@ -44,9 +44,28 @@ var __async = (__this, __arguments, generator) => {
 };
 
 // src/4khdhub/constants.js
-var BASE_URL = "https://4khdhub.fans";
+var BASE_URL = "https://4khdhub.dad";
 var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
+var DOMAINS_URL = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json";
+
+// src/4khdhub/utils.js
+var domainCache = { url: BASE_URL, ts: 0 };
+function fetchLatestDomain() {
+  return __async(this, null, function* () {
+    const now = Date.now();
+    if (now - domainCache.ts < 36e5) return domainCache.url;
+    try {
+      const response = yield fetch(DOMAINS_URL);
+      const data = yield response.json();
+      if (data && data["4khdhub"]) {
+        domainCache.url = data["4khdhub"];
+        domainCache.ts = now;
+      }
+    } catch (e) {}
+    return domainCache.url;
+  });
+}
 
 // src/4khdhub/http.js
 function fetchText(_0) {
@@ -172,7 +191,8 @@ function formatBytes(val) {
 var cheerio = require("cheerio-without-node-native");
 function fetchPageUrl(name, year, isSeries) {
   return __async(this, null, function* () {
-    const searchUrl = `${BASE_URL}/?s=${encodeURIComponent(name + " " + year)}`;
+    const domain = yield fetchLatestDomain();
+    const searchUrl = `${domain}/?s=${encodeURIComponent(name + " " + year)}`;
     console.log(`[4KHDHub] Search Request URL: ${searchUrl}`);
     const html = yield fetchText(searchUrl);
     if (!html) {
@@ -204,7 +224,7 @@ function fetchPageUrl(name, year, isSeries) {
     }).map((_, el) => {
       let href = $(el).attr("href");
       if (href && !href.startsWith("http")) {
-        href = BASE_URL + (href.startsWith("/") ? "" : "/") + href;
+        href = domain + (href.startsWith("/") ? "" : "/") + href;
       }
       return href;
     }).get();

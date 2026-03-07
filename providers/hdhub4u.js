@@ -1,6 +1,6 @@
 /**
  * hdhub4u - Built from src/hdhub4u/
- * Generated: 2026-02-19T09:22:26.023Z
+ * Generated: 2026-03-07T05:22:15.721Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -336,7 +336,7 @@ function getRedirectLinks(url) {
 }
 function vidStackExtractor(url) {
   return __async(this, null, function* () {
-    var _a, _b;
+    var _a, _b, _c;
     try {
       const hash = url.split("#").pop().split("/").pop();
       const baseUrl = new URL(url).origin;
@@ -356,6 +356,22 @@ function vidStackExtractor(url) {
           const decryptedText = decrypted.toString(import_crypto_js.default.enc.Utf8);
           if (decryptedText && decryptedText.includes("source")) {
             const m3u8 = (_b = (_a = decryptedText.match(/"source":"(.*?)"/)) == null ? void 0 : _a[1]) == null ? void 0 : _b.replace(/\\/g, "");
+            const subtitles = [];
+            const subtitleSection = (_c = decryptedText.match(/"subtitle":\{(.*?)\}/)) == null ? void 0 : _c[1];
+            if (subtitleSection) {
+              const subtitlePattern = /"([^"]+)":\s*"([^"]+)"/g;
+              let subMatch;
+              while ((subMatch = subtitlePattern.exec(subtitleSection)) !== null) {
+                const lang = subMatch[1];
+                const subPath = subMatch[2].split("#")[0].replace(/\\/g, "");
+                if (subPath) {
+                  subtitles.push({
+                    language: lang,
+                    url: subPath.startsWith("http") ? subPath : `${baseUrl}${subPath}`
+                  });
+                }
+              }
+            }
             if (m3u8) {
               return [{
                 source: "Vidstack Hubstream",
@@ -364,7 +380,8 @@ function vidStackExtractor(url) {
                 headers: {
                   "Referer": url,
                   "Origin": url.split("/").pop()
-                }
+                },
+                subtitles
               }];
             }
           }
@@ -489,9 +506,13 @@ function hubCloudExtractor(url, referer) {
           links.push({ source: `${label} ${labelExtras}`, quality, url: link, size: sizeInBytes, fileName });
         } else if (text.includes("buzzserver")) {
           try {
-            const buzzResp = yield fetch(`${link}/download`, { method: "GET", headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: link }) });
-            if (buzzResp.url && buzzResp.url !== `${link}/download`) {
-              links.push({ source: `HubCloud - BuzzServer ${labelExtras}`, quality, url: buzzResp.url, size: sizeInBytes, fileName });
+            const buzzResp = yield fetch(`${link}/download`, { method: "GET", headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: link }), redirect: "manual" });
+            let dlink = buzzResp.headers.get("hx-redirect") || buzzResp.headers.get("HX-Redirect");
+            if (!dlink && buzzResp.url && buzzResp.url !== `${link}/download`) {
+              dlink = buzzResp.url;
+            }
+            if (dlink) {
+              links.push({ source: `HubCloud - BuzzServer ${labelExtras}`, quality, url: dlink, size: sizeInBytes, fileName });
             }
           } catch (e) {
           }
