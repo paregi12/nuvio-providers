@@ -861,35 +861,31 @@ function getStreams(tmdbId, mediaType = "movie", seasonNum = null, episodeNum = 
                   }
                 }
                 if (finalDownloadUrl) {
-                  const finalUrl = yield resolveResumeCloudLink(resumeCloud.url);
-                  console.log(`[MoviesMod] Resume Cloud final URL: ${finalUrl ? "resolved" : "null"}`);
-                  if (finalUrl && (yield validateVideoUrl(finalUrl))) {
-                    console.log(`[MoviesMod] URL validation: SUCCESS`);
-                    if (isEpisodeLink && episodeNum !== null) {
-                      const episodeFromServer = targetLink.server.match(/Episode\s+(\d+)/i);
-                      console.log(`[MoviesMod] Episode filtering: server="${targetLink.server}", requested episode=${episodeNum}, found episode=${episodeFromServer ? episodeFromServer[1] : "none"}`);
-                      if (episodeFromServer && parseInt(episodeFromServer[1]) !== episodeNum) {
-                        console.log(`[MoviesMod] Skipping episode ${episodeFromServer[1]} (not episode ${episodeNum})`);
-                        continue;
-                      } else if (episodeFromServer && parseInt(episodeFromServer[1]) === episodeNum) {
-                        console.log(`[MoviesMod] Processing episode ${episodeNum} - continuing...`);
-                      }
+                  console.log(`[MoviesMod] URL validation: SUCCESS`);
+                  if (isEpisodeLink && episodeNum !== null) {
+                    const episodeFromServer = targetLink.server.match(/Episode\s+(\d+)/i);
+                    console.log(`[MoviesMod] Episode filtering: server="${targetLink.server}", requested episode=${episodeNum}, found episode=${episodeFromServer ? episodeFromServer[1] : "none"}`);
+                    if (episodeFromServer && parseInt(episodeFromServer[1]) !== episodeNum) {
+                      console.log(`[MoviesMod] Skipping episode ${episodeFromServer[1]} (not episode ${episodeNum})`);
+                      continue;
+                    } else if (episodeFromServer && parseInt(episodeFromServer[1]) === episodeNum) {
+                      console.log(`[MoviesMod] Processing episode ${episodeNum} - continuing...`);
                     }
-                    const mediaTitle = mediaType === "tv" && seasonNum && episodeNum ? `${selectedResult.title} S${seasonNum.toString().padStart(2, "0")}E${episodeNum.toString().padStart(2, "0")}` : selectedResult.title;
-                    processedStreams.push({
-                      name: `MoviesMod ${targetLink.server || ""} - ${link.quality}`.trim(),
-                      title: mediaTitle,
-                      url: finalUrl,
-                      quality: link.quality,
-                      size: driveseedInfo.size || "Unknown",
-                      headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                        "Referer": "https://driveseed.org/"
-                      },
-                      provider: "moviesmod"
-                    });
-                    break;
                   }
+                  const mediaTitle = mediaType === "tv" && seasonNum && episodeNum ? `${selectedResult.title} S${seasonNum.toString().padStart(2, "0")}E${episodeNum.toString().padStart(2, "0")}` : selectedResult.title;
+                  processedStreams.push({
+                    name: `MoviesMod ${targetLink.server || ""} - ${link.quality}`.trim(),
+                    title: mediaTitle,
+                    url: finalDownloadUrl,
+                    quality: link.quality,
+                    size: driveseedInfo.size || "Unknown",
+                    headers: {
+                      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                      "Referer": "https://driveseed.org/"
+                    },
+                    provider: "moviesmod"
+                  });
+                  break;
                 }
               }
             }
