@@ -478,6 +478,27 @@
         "en",
         "ja"
       ]
+    },
+    {
+      "id": "animeav1",
+      "name": "Animeav1",
+      "description": "Spanish anime provider (es-mx) with high quality streams",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/animeav1.js",
+      "enabled": true,
+      "formats": [
+        "m3u8",
+        "mp4"
+      ],
+      "logo": "https://animeav1.com/favicon.ico",
+      "contentLanguage": [
+        "es"
+      ]
     }
   ]
 }
