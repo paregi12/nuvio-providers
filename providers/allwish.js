@@ -1,6 +1,6 @@
 /**
  * allwish - Built from src/allwish/
- * Generated: 2026-03-13T04:36:51.752Z
+ * Generated: 2026-03-13T04:51:52.446Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -319,9 +319,9 @@ function extractMegaPlay(url) {
                 url: streamUrl,
                 quality,
                 headers: {
-                  "User-Agent": commonHeaders["User-Agent"],
-                  "Origin": masterDomain,
-                  "Referer": `${masterDomain}/`
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+                  "Origin": "https://megaplay.buzz",
+                  "Referer": "https://megaplay.buzz/"
                 }
               });
             }
@@ -334,9 +334,9 @@ function extractMegaPlay(url) {
             url: masterUrl,
             quality: "Auto",
             headers: {
-              "User-Agent": commonHeaders["User-Agent"],
-              "Origin": masterDomain,
-              "Referer": `${masterDomain}/`
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+              "Origin": "https://megaplay.buzz",
+              "Referer": "https://megaplay.buzz/"
             }
           });
         }

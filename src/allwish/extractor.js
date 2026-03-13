@@ -85,10 +85,10 @@ export async function extractMegaPlay(url) {
                             url: streamUrl,
                             quality: quality,
                             headers: {
-                                "User-Agent": commonHeaders["User-Agent"],
-                                "Origin": masterDomain,
-                                "Referer": `${masterDomain}/`
-                            }
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+                            "Origin": "https://megaplay.buzz",
+                            "Referer": "https://megaplay.buzz/"
+                        }
                         });
                     }
                 }
@@ -101,9 +101,9 @@ export async function extractMegaPlay(url) {
                     url: masterUrl,
                     quality: "Auto",
                     headers: {
-                        "User-Agent": commonHeaders["User-Agent"],
-                        "Origin": masterDomain,
-                        "Referer": `${masterDomain}/`
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+                        "Origin": "https://megaplay.buzz",
+                        "Referer": "https://megaplay.buzz/"
                     }
                 });
             }
