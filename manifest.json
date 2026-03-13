@@ -434,6 +434,50 @@
         "en",
         "hin"
       ]
+    },
+    {
+      "id": "allmovieland",
+      "name": "AllMovieLand",
+      "description": "AllMovieLand streaming provider with multi-language support",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/allmovieland.js",
+      "enabled": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://allmovieland.you/logo.png",
+      "contentLanguage": [
+        "en",
+        "hi",
+        "ta",
+        "te"
+      ]
+    },
+    {
+      "id": "allwish",
+      "name": "AllWish",
+      "description": "Anime streaming provider (Sub & Dub) from AllWish.me",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/allwish.js",
+      "enabled": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://all-wish.me/images/logo.png",
+      "contentLanguage": [
+        "en",
+        "ja"
+      ]
     }
   ]
 }
