@@ -3,7 +3,7 @@ import { MAIN_URL, HEADERS, XML_HEADERS } from './constants.js';
 import { getTMDBDetails, generateEpisodeVrf, findBestTitleMatch } from './utils.js';
 import { extractMegaPlay } from './extractor.js';
 
-async function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
+export async function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
     if (mediaType !== "tv" && mediaType !== "movie") return [];
     
     console.log(`[AllWish] Fetching streams for TMDB ID: ${tmdbId}, Type: ${mediaType}`);
@@ -134,4 +134,4 @@ async function getStreams(tmdbId, mediaType = "tv", season = null, episode = nul
     }
 }
 
-module.exports = { getStreams };
+

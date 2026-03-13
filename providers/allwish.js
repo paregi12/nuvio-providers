@@ -1,6 +1,6 @@
 /**
  * allwish - Built from src/allwish/
- * Generated: 2026-03-13T04:15:20.744Z
+ * Generated: 2026-03-13T04:36:51.752Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -25,6 +25,10 @@ var __spreadValues = (a, b) => {
   return a;
 };
 var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -41,6 +45,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var __async = (__this, __arguments, generator) => {
   return new Promise((resolve, reject) => {
     var fulfilled = (value) => {
@@ -63,6 +68,11 @@ var __async = (__this, __arguments, generator) => {
 };
 
 // src/allwish/index.js
+var allwish_exports = {};
+__export(allwish_exports, {
+  getStreams: () => getStreams
+});
+module.exports = __toCommonJS(allwish_exports);
 var import_cheerio_without_node_native2 = __toESM(require("cheerio-without-node-native"));
 
 // src/allwish/constants.js
@@ -240,34 +250,97 @@ var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-n
 function extractMegaPlay(url) {
   return __async(this, null, function* () {
     const mainUrl = "https://megaplay.buzz";
-    const headers = {
+    const commonHeaders = {
       "Accept": "*/*",
       "X-Requested-With": "XMLHttpRequest",
       "Referer": mainUrl,
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0"
     };
     try {
-      const res = yield fetch(url, { headers });
+      const res = yield fetch(url, { headers: commonHeaders });
       const html = yield res.text();
       const $ = import_cheerio_without_node_native.default.load(html);
       const id = $("#megaplay-player").attr("data-id");
       if (!id)
         return [];
       const apiUrl = `${mainUrl}/stream/getSources?id=${id}&id=${id}`;
-      const streamRes = yield fetch(apiUrl, { headers });
+      const streamRes = yield fetch(apiUrl, { headers: commonHeaders });
       const data = yield streamRes.json();
       if (data && data.sources && data.sources.file) {
-        return [{
-          name: "AllWish MegaPlay",
-          title: "AllWish - MegaPlay",
-          url: data.sources.file,
-          quality: "Auto",
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
-            "Origin": mainUrl,
-            "Referer": `${mainUrl}/`
+        const masterUrl = data.sources.file;
+        const baseUrl = masterUrl.substring(0, masterUrl.lastIndexOf("/") + 1);
+        const masterDomain = new URL(masterUrl).origin;
+        const masterRes = yield fetch(masterUrl, {
+          headers: __spreadProps(__spreadValues({}, commonHeaders), {
+            "Referer": `${mainUrl}/`,
+            "Origin": mainUrl
+          })
+        });
+        const masterText = yield masterRes.text();
+        if (masterText.includes("Cloudflare") || !masterText.includes("#EXTM3U")) {
+          return [{
+            name: "AllWish MegaPlay",
+            title: "AllWish - MegaPlay Auto",
+            url: masterUrl,
+            quality: "Auto",
+            headers: {
+              "User-Agent": commonHeaders["User-Agent"],
+              "Origin": mainUrl,
+              "Referer": `${mainUrl}/`
+            }
+          }];
+        }
+        const streams = [];
+        const lines = masterText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].startsWith("#EXT-X-STREAM-INF")) {
+            const resolutionMatch = lines[i].match(/RESOLUTION=(\d+x\d+)/);
+            const nameMatch = lines[i].match(/NAME="([^"]+)"/);
+            let quality = "Auto";
+            if (nameMatch) {
+              quality = nameMatch[1];
+            } else if (resolutionMatch) {
+              quality = resolutionMatch[1].split("x")[1] + "p";
+            }
+            let streamUrl = "";
+            for (let j = i + 1; j < lines.length; j++) {
+              if (!lines[j].startsWith("#")) {
+                streamUrl = lines[j];
+                break;
+              }
+            }
+            if (streamUrl) {
+              if (!streamUrl.startsWith("http")) {
+                streamUrl = baseUrl + streamUrl;
+              }
+              streams.push({
+                name: "AllWish MegaPlay",
+                title: `AllWish - MegaPlay ${quality}`,
+                url: streamUrl,
+                quality,
+                headers: {
+                  "User-Agent": commonHeaders["User-Agent"],
+                  "Origin": masterDomain,
+                  "Referer": `${masterDomain}/`
+                }
+              });
+            }
           }
-        }];
+        }
+        if (streams.length === 0) {
+          streams.push({
+            name: "AllWish MegaPlay",
+            title: "AllWish - MegaPlay Auto",
+            url: masterUrl,
+            quality: "Auto",
+            headers: {
+              "User-Agent": commonHeaders["User-Agent"],
+              "Origin": masterDomain,
+              "Referer": `${masterDomain}/`
+            }
+          });
+        }
+        return streams;
       }
     } catch (e) {
       console.log(`[AllWish Extractor] MegaPlay failed: ${e.message}`);
@@ -384,4 +457,3 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
     }
   });
 }
-module.exports = { getStreams };

@@ -478,29 +478,6 @@
         "en",
         "ja"
       ]
-    },
-    {
-      "id": "anichi",
-      "name": "Anichi",
-      "description": "Anime streaming provider (AllAnime API) with multi-quality support",
-      "version": "1.0.0",
-      "author": "Nuvio Team",
-      "supportedTypes": [
-        "movie",
-        "tv"
-      ],
-      "filename": "providers/anichi.js",
-      "enabled": true,
-      "formats": [
-        "m3u8",
-        "mp4"
-      ],
-      "logo": "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/Allanime.png",
-      "contentLanguage": [
-        "en",
-        "ja",
-        "zh"
-      ]
     }
   ]
 }
