@@ -1,6 +1,6 @@
 /**
  * allmovieland - Built from src/allmovieland/
- * Generated: 2026-03-13T04:08:15.650Z
+ * Generated: 2026-03-21T08:41:32.620Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -160,8 +160,8 @@ function getStreams(tmdbId, mediaType = "movie", season = null, episode = null) 
       $("article.short-mid").each((i, el) => {
         const title = $(el).find("a > h3").text().trim();
         const href = $(el).find("a").attr("href");
-        const yearMatch = title.match(new RegExp("(?<=\\()[\\d(\\]]+(?=\\))"));
-        const year = yearMatch ? parseInt(yearMatch[0]) : null;
+        const yearMatch = title.match(/\((\d{4})\)/);
+        const year = yearMatch ? parseInt(yearMatch[1]) : null;
         searchResults.push({ title, href, year });
       });
       if (searchResults.length === 0) {
@@ -169,7 +169,11 @@ function getStreams(tmdbId, mediaType = "movie", season = null, episode = null) 
         return [];
       }
       const bestMatch = findBestTitleMatch(mediaInfo, searchResults);
-      const selectedMedia = bestMatch || searchResults[0];
+      if (!bestMatch) {
+        console.log("[AllMovieLand] No confident match found.");
+        return [];
+      }
+      const selectedMedia = bestMatch;
       console.log(`[AllMovieLand] Selected: "${selectedMedia.title}" (${selectedMedia.href})`);
       const docRes = yield fetch(selectedMedia.href, { headers: HEADERS });
       const docHtml = yield docRes.text();
@@ -207,9 +211,19 @@ function getStreams(tmdbId, mediaType = "movie", season = null, episode = null) 
       if (mediaType === "movie") {
         targetFiles = parsedData.filter((s) => s && s.file);
       } else if (mediaType === "tv") {
-        const seasonData = parsedData.find((s) => s.id == season);
+        const seasonData = parsedData.find((s) => {
+          const sTitle = s.title || "";
+          const sNumMatch = sTitle.match(/Season\s*(\d+)/i) || sTitle.match(/(\d+)\s*Season/i);
+          const sNum = sNumMatch ? parseInt(sNumMatch[1]) : null;
+          return sNum === season || s.id == season;
+        });
         if (seasonData && seasonData.folder) {
-          const episodeData = seasonData.folder.find((e) => e.episode == episode);
+          const episodeData = seasonData.folder.find((e) => {
+            const eTitle = e.title || "";
+            const eNumMatch = eTitle.match(/Episode\s*(\d+)/i) || eTitle.match(/(\d+)\s*Episode/i);
+            const eNum = eNumMatch ? parseInt(eNumMatch[1]) : null;
+            return eNum === episode || e.episode == episode;
+          });
           if (episodeData && episodeData.folder) {
             targetFiles = episodeData.folder.filter((s) => s && s.file);
           }
