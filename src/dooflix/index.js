@@ -8,6 +8,10 @@ export async function getStreams(tmdbId, mediaType = "movie", season = null, epi
         if (mediaType === "movie") {
             requestUrl = `${BASE_API}/api/3/movie/${tmdbId}/links?api_key=${API_KEY}`;
         } else {
+            if (!season || !episode) {
+                console.error("[DooFlix] Missing season or episode for TV show");
+                return [];
+            }
             requestUrl = `${BASE_API}/api/3/tv/${tmdbId}/season/${season}/episode/${episode}/links?api_key=${API_KEY}`;
         }
 
@@ -34,8 +38,8 @@ export async function getStreams(tmdbId, mediaType = "movie", season = null, epi
                     redirect: 'manual'
                 });
 
-                const streamUrl = res.headers.get('location');
-                if (streamUrl) {
+                let streamUrl = res.headers.get('location') || res.url;
+                if (streamUrl && streamUrl !== linkObj.url) {
                     streams.push({
                         name: "DooFlix",
                         title: `DooFlix - ${linkObj.host || "Server"}`,

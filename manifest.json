@@ -478,6 +478,27 @@
         "en",
         "hi"
       ]
+    },
+    {
+      "id": "mycima",
+      "name": "MyCima",
+      "description": "Arabic streaming provider with movies, series and anime",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/mycima.js",
+      "enabled": true,
+      "formats": [
+        "mp4",
+        "m3u8"
+      ],
+      "logo": "https://mycima.pics/favicon.ico",
+      "contentLanguage": [
+        "ar"
+      ]
     }
   ]
 }
