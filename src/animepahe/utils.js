@@ -42,6 +42,17 @@ export async function resolveMapping(imdbId, season, episode) {
     }
 }
 
+export async function getMalTitle(malId) {
+    try {
+        const res = await fetch(`https://api.jikan.moe/v4/anime/${malId}`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.data.title;
+    } catch (e) {
+        return null;
+    }
+}
+
 export async function searchAnime(query) {
     const url = `/api?m=search&l=8&q=${encodeURIComponent(query)}`;
     return await fetchJson(url);

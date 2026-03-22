@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-03-22T17:28:00.045Z
+ * Generated: 2026-03-22T18:36:15.722Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -131,6 +131,19 @@ function resolveMapping(imdbId, season, episode) {
     }
   });
 }
+function getMalTitle(malId) {
+  return __async(this, null, function* () {
+    try {
+      const res = yield fetch(`https://api.jikan.moe/v4/anime/${malId}`);
+      if (!res.ok)
+        return null;
+      const data = yield res.json();
+      return data.data.title;
+    } catch (e) {
+      return null;
+    }
+  });
+}
 function searchAnime(query) {
   return __async(this, null, function* () {
     const url = `/api?m=search&l=8&q=${encodeURIComponent(query)}`;
@@ -219,58 +232,54 @@ function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
     try {
       let animeSession = null;
-      let animeTitle = "Anime";
-      let targetEpNum = episode;
-      if (mediaType === "tv") {
-        const imdbId = yield getImdbId(tmdbId, mediaType);
-        if (imdbId) {
-          const mapping = yield resolveMapping(imdbId, season, episode);
-          if (mapping && mapping.mal_id) {
-            const malId = mapping.mal_id;
-            targetEpNum = mapping.mal_episode || episode;
-            animeTitle = mapping.anime_title || "Anime";
-            const malUrl = `https://animepahe.si/a/${malId}`;
-            const malPageHtml = yield fetchText(malUrl);
-            const sessionMatch = malPageHtml.match(/\/anime\/([a-z0-9-]+)/);
-            if (sessionMatch) {
-              animeSession = sessionMatch[1];
-            }
-          }
+      let animeTitle = "";
+      let mappedEp = episode;
+      const imdbId = yield getImdbId(tmdbId, mediaType);
+      if (imdbId) {
+        const mapping = yield resolveMapping(imdbId, season, episode);
+        if (mapping && mapping.mal_id) {
+          mappedEp = mapping.mal_episode || episode;
+          animeTitle = yield getMalTitle(mapping.mal_id);
         }
       }
-      if (!animeSession) {
+      if (!animeTitle) {
         const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
         const tmdbRes = yield fetch(tmdbUrl);
         const tmdbData = yield tmdbRes.json();
         animeTitle = tmdbData.name || tmdbData.title;
-        targetEpNum = mediaType === "movie" ? 1 : episode;
-        if (!animeTitle)
-          return [];
-        const searchResults = yield searchAnime(animeTitle);
-        if (!searchResults.data || searchResults.data.length === 0) {
-          return [];
-        }
-        const bestMatch = searchResults.data.find(
-          (a) => a.title.toLowerCase().includes(animeTitle.toLowerCase()) || animeTitle.toLowerCase().includes(a.title.toLowerCase())
-        ) || searchResults.data[0];
-        animeSession = bestMatch.session;
+        mappedEp = mediaType === "movie" ? 1 : episode;
       }
-      if (!animeSession)
+      if (!animeTitle)
         return [];
+      const searchResults = yield searchAnime(animeTitle);
+      if (!searchResults.data || searchResults.data.length === 0)
+        return [];
+      const bestMatch = searchResults.data.find(
+        (a) => a.title.toLowerCase().includes(animeTitle.toLowerCase()) || animeTitle.toLowerCase().includes(a.title.toLowerCase())
+      ) || searchResults.data[0];
+      animeSession = bestMatch.session;
+      const firstPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=1`;
+      const firstPageData = yield fetchJson(firstPageUrl);
+      if (!firstPageData.data || firstPageData.data.length === 0)
+        return [];
+      const paheEpStart = Math.floor(firstPageData.data[0].episode);
+      const perPage = firstPageData.per_page || 30;
+      const targetPaheEp = paheEpStart - 1 + mappedEp;
+      const targetPage = Math.ceil(mappedEp / perPage) || 1;
+      const targetPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=${targetPage}`;
+      const targetPageData = yield fetchJson(targetPageUrl);
       let episodeSession = null;
-      let page = 1;
-      let lastPage = 1;
-      do {
-        const epListUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=${page}`;
-        const epListData = yield fetchJson(epListUrl);
-        lastPage = epListData.last_page;
-        const foundEp = epListData.data.find((e) => e.episode == targetEpNum);
+      if (targetPageData && targetPageData.data) {
+        const foundEp = targetPageData.data.find((e) => Math.floor(e.episode) == targetPaheEp);
         if (foundEp) {
           episodeSession = foundEp.session;
-          break;
         }
-        page++;
-      } while (page <= lastPage);
+      }
+      if (!episodeSession && targetPage !== 1) {
+        const fallbackEp = firstPageData.data.find((e) => Math.floor(e.episode) == targetPaheEp);
+        if (fallbackEp)
+          episodeSession = fallbackEp.session;
+      }
       if (!episodeSession)
         return [];
       const playUrl = `/play/${animeSession}/${episodeSession}`;
@@ -278,8 +287,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const $ = import_cheerio_without_node_native.default.load(playHtml);
       const streams = [];
       const promises = [];
-      const buttons = $("#resolutionMenu button");
-      buttons.each((i, el) => {
+      $("#resolutionMenu button").each((i, el) => {
         const $btn = $(el);
         const kwikUrl = $btn.attr("data-src");
         const btnText = $btn.text();
@@ -291,7 +299,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
               if (res) {
                 streams.push({
                   name: `AnimePahe (${quality} ${type})`,
-                  title: `${animeTitle} - Episode ${targetEpNum}`,
+                  title: `${animeTitle} - Episode ${mappedEp}`,
                   url: res.url,
                   quality,
                   headers: res.headers
