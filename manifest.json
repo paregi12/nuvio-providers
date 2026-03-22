@@ -367,6 +367,26 @@
       ]
     },
     {
+      "id": "cinemacity",
+      "name": "CinemaCity",
+      "description": "CinemaCity direct links",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/cinemacity.js",
+      "enabled": true,
+      "formats": [
+        "mp4"
+      ],
+      "logo": "https://cinemacity.cc/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
       "id": "castle",
       "name": "Castle",
       "description": "Multi Lang provider",
