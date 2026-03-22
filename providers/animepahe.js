@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-03-22T18:36:15.722Z
+ * Generated: 2026-03-22T18:44:02.119Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -254,9 +254,29 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const searchResults = yield searchAnime(animeTitle);
       if (!searchResults.data || searchResults.data.length === 0)
         return [];
-      const bestMatch = searchResults.data.find(
-        (a) => a.title.toLowerCase().includes(animeTitle.toLowerCase()) || animeTitle.toLowerCase().includes(a.title.toLowerCase())
-      ) || searchResults.data[0];
+      let bestMatch = null;
+      let targetMalId = null;
+      if (imdbId) {
+        const mapping = yield resolveMapping(imdbId, season, episode);
+        targetMalId = mapping == null ? void 0 : mapping.mal_id;
+      }
+      if (targetMalId) {
+        for (const item of searchResults.data) {
+          try {
+            const animePageHtml = yield fetchText(`/anime/${item.session}`);
+            if (animePageHtml.includes(`myanimelist.net/anime/${targetMalId}`)) {
+              bestMatch = item;
+              break;
+            }
+          } catch (e) {
+          }
+        }
+      }
+      if (!bestMatch) {
+        bestMatch = searchResults.data.find(
+          (a) => a.title.toLowerCase().includes(animeTitle.toLowerCase()) || animeTitle.toLowerCase().includes(a.title.toLowerCase())
+        ) || searchResults.data[0];
+      }
       animeSession = bestMatch.session;
       const firstPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=1`;
       const firstPageData = yield fetchJson(firstPageUrl);

@@ -34,10 +34,39 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         // 3. Search AnimePahe
         const searchResults = await searchAnime(animeTitle);
         if (!searchResults.data || searchResults.data.length === 0) return [];
-        const bestMatch = searchResults.data.find(a => 
-            a.title.toLowerCase().includes(animeTitle.toLowerCase()) || 
-            animeTitle.toLowerCase().includes(a.title.toLowerCase())
-        ) || searchResults.data[0];
+        
+        let bestMatch = null;
+        let targetMalId = null;
+
+        // Re-fetch mapping to get the target MAL ID for verification
+        if (imdbId) {
+            const mapping = await resolveMapping(imdbId, season, episode);
+            targetMalId = mapping?.mal_id;
+        }
+
+        if (targetMalId) {
+            // Verify each search result by checking its MAL ID on its detail page
+            for (const item of searchResults.data) {
+                try {
+                    const animePageHtml = await fetchText(`/anime/${item.session}`);
+                    if (animePageHtml.includes(`myanimelist.net/anime/${targetMalId}`)) {
+                        bestMatch = item;
+                        break;
+                    }
+                } catch (e) {
+                    // Ignore errors for individual pages
+                }
+            }
+        }
+
+        // Fallback to title matching if MAL ID verification fails
+        if (!bestMatch) {
+            bestMatch = searchResults.data.find(a => 
+                a.title.toLowerCase().includes(animeTitle.toLowerCase()) || 
+                animeTitle.toLowerCase().includes(a.title.toLowerCase())
+            ) || searchResults.data[0];
+        }
+        
         animeSession = bestMatch.session;
 
         // 4. Smart Episode Resolution (Math-based Offset)
