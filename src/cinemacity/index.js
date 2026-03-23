@@ -1,6 +1,6 @@
-import cheerio from 'cheerio-without-node-native';
-import { MAIN_URL, HEADERS, TMDB_API_KEY } from './constants.js';
-import { search, fetchText, getImdbIdFromPage, getMediaDetails, extractQuality, atob } from './utils.js';
+const cheerio = require('cheerio-without-node-native');
+const { MAIN_URL, HEADERS, TMDB_API_KEY } = require('./constants.js');
+const { search, fetchText, getMediaDetails, extractQuality, atob } = require('./utils.js');
 
 async function getStreams(tmdbId, mediaType, season, episode) {
     try {
@@ -56,12 +56,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
             if (fileData) return;
             const scriptContent = $page(el).html();
             if (scriptContent && scriptContent.includes('atob(')) {
-                // Handle atob('...') or atob("...")
                 const b64Match = scriptContent.match(/atob\((['"])(.*?)\1\)/);
                 if (b64Match && b64Match[2]) {
                     try {
                         const decoded = atob(b64Match[2]);
-                        // Extract "file" property
                         const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || decoded.match(/file\s*:\s*(\[.*?\])/s);
                         if (fileMatch) {
                             let rawFile = fileMatch[2] || fileMatch[1];

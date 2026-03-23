@@ -1,15 +1,13 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-03-23T01:34:55.719Z
+ * Generated: 2026-03-23T01:52:39.288Z
  */
-var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getOwnPropSymbols = Object.getOwnPropertySymbols;
-var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __propIsEnum = Object.prototype.propertyIsEnumerable;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
@@ -25,6 +23,13 @@ var __spreadValues = (a, b) => {
   return a;
 };
 var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 var __copyProps = (to, from, except, desc) => {
   if (from && typeof from === "object" || typeof from === "function") {
     for (let key of __getOwnPropNames(from))
@@ -33,14 +38,7 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
+var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 var __async = (__this, __arguments, generator) => {
   return new Promise((resolve, reject) => {
     var fulfilled = (value) => {
@@ -62,40 +60,39 @@ var __async = (__this, __arguments, generator) => {
   });
 };
 
-// src/cinemacity/index.js
-var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
-
 // src/cinemacity/constants.js
-var MAIN_URL = "https://cinemacity.cc";
-var HEADERS = {
-  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-  "Cookie": "dle_user_id=32729; dle_password=894171c6a8dab18ee594d5c652009a35;",
-  "Referer": "https://cinemacity.cc/"
-};
-var TMDB_API_KEY = "1865f43a0549ca50d341dd9ab8b29f49";
+var constants_exports = {};
+__export(constants_exports, {
+  CINEMETA_URL: () => CINEMETA_URL,
+  HEADERS: () => HEADERS,
+  MAIN_URL: () => MAIN_URL,
+  TMDB_API_KEY: () => TMDB_API_KEY
+});
+var MAIN_URL, HEADERS, TMDB_API_KEY, CINEMETA_URL;
+var init_constants = __esm({
+  "src/cinemacity/constants.js"() {
+    MAIN_URL = "https://cinemacity.cc";
+    HEADERS = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
+      "Cookie": "dle_user_id=32729; dle_password=894171c6a8dab18ee594d5c652009a35;",
+      "Referer": "https://cinemacity.cc/"
+    };
+    TMDB_API_KEY = "1865f43a0549ca50d341dd9ab8b29f49";
+    CINEMETA_URL = "https://v3-cinemeta.strem.io/meta";
+  }
+});
 
 // src/cinemacity/utils.js
-var atob = (str) => {
-  try {
-    if (typeof global !== "undefined" && typeof global.atob === "function")
-      return global.atob(str);
-    if (typeof window !== "undefined" && typeof window.atob === "function")
-      return window.atob(str);
-    if (typeof self !== "undefined" && typeof self.atob === "function")
-      return self.atob(str);
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-    let output = "";
-    str = String(str).replace(/[=]+$/, "");
-    if (str.length % 4 === 1)
-      return "";
-    for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
-      buffer = chars.indexOf(buffer);
-    }
-    return output;
-  } catch (e) {
-    return "";
-  }
-};
+var utils_exports = {};
+__export(utils_exports, {
+  atob: () => atob,
+  cleanTitle: () => cleanTitle,
+  extractQuality: () => extractQuality,
+  fetchText: () => fetchText,
+  getImdbIdFromPage: () => getImdbIdFromPage,
+  getMediaDetails: () => getMediaDetails,
+  search: () => search
+});
 function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
     try {
@@ -119,6 +116,25 @@ function search(query) {
     return yield fetchText(searchUrl);
   });
 }
+function getImdbIdFromPage(html) {
+  return __async(this, null, function* () {
+    const imdbMatch = html.match(/tt\d+/);
+    return imdbMatch ? imdbMatch[0] : null;
+  });
+}
+function getMediaDetails(tmdbId, mediaType) {
+  return __async(this, null, function* () {
+    const type = mediaType === "tv" ? "tv" : "movie";
+    const url = `https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+    const response = yield fetch(url);
+    if (!response.ok)
+      return null;
+    return yield response.json();
+  });
+}
+function cleanTitle(title) {
+  return title.replace(/\(\d{4}\)/, "").trim();
+}
 function extractQuality(url) {
   const low = url.toLowerCase();
   if (low.includes("2160p") || low.includes("4k"))
@@ -133,19 +149,49 @@ function extractQuality(url) {
     return "360p";
   return "HD";
 }
+var atob;
+var init_utils = __esm({
+  "src/cinemacity/utils.js"() {
+    init_constants();
+    atob = (str) => {
+      try {
+        if (typeof global !== "undefined" && typeof global.atob === "function")
+          return global.atob(str);
+        if (typeof window !== "undefined" && typeof window.atob === "function")
+          return window.atob(str);
+        if (typeof self !== "undefined" && typeof self.atob === "function")
+          return self.atob(str);
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+        let output = "";
+        str = String(str).replace(/[=]+$/, "");
+        if (str.length % 4 === 1)
+          return "";
+        for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+          buffer = chars.indexOf(buffer);
+        }
+        return output;
+      } catch (e) {
+        return "";
+      }
+    };
+  }
+});
 
 // src/cinemacity/index.js
+var cheerio = require("cheerio-without-node-native");
+var { MAIN_URL: MAIN_URL2, HEADERS: HEADERS2, TMDB_API_KEY: TMDB_API_KEY2 } = (init_constants(), __toCommonJS(constants_exports));
+var { search: search2, fetchText: fetchText2, getMediaDetails: getMediaDetails2, extractQuality: extractQuality2, atob: atob2 } = (init_utils(), __toCommonJS(utils_exports));
 function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
     try {
-      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=${TMDB_API_KEY2}`;
       const tmdbRes = yield fetch(tmdbUrl, { skipSizeCheck: true });
       if (!tmdbRes.ok)
         return [];
       const mediaInfo = yield tmdbRes.json();
       const animeTitle = mediaInfo.title || mediaInfo.name;
-      let searchHtml = yield search(animeTitle);
-      let $search = import_cheerio_without_node_native.default.load(searchHtml);
+      let searchHtml = yield search2(animeTitle);
+      let $search = cheerio.load(searchHtml);
       let mediaUrl = null;
       const findMatch = ($) => {
         let matchedUrl = null;
@@ -169,13 +215,13 @@ function getStreams(tmdbId, mediaType, season, episode) {
       };
       mediaUrl = findMatch($search);
       if (!mediaUrl) {
-        const homeHtml = yield fetchText(MAIN_URL);
-        mediaUrl = findMatch(import_cheerio_without_node_native.default.load(homeHtml));
+        const homeHtml = yield fetchText2(MAIN_URL2);
+        mediaUrl = findMatch(cheerio.load(homeHtml));
       }
       if (!mediaUrl)
         return [];
-      const pageHtml = yield fetchText(mediaUrl);
-      const $page = import_cheerio_without_node_native.default.load(pageHtml);
+      const pageHtml = yield fetchText2(mediaUrl);
+      const $page = cheerio.load(pageHtml);
       let fileData = null;
       $page("script").each((i, el) => {
         if (fileData)
@@ -185,7 +231,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
           const b64Match = scriptContent.match(/atob\((['"])(.*?)\1\)/);
           if (b64Match && b64Match[2]) {
             try {
-              const decoded = atob(b64Match[2]);
+              const decoded = atob2(b64Match[2]);
               const fileMatch = decoded.match(new RegExp(`file\\s*:\\s*(['"])(.*?)\\1`, "s")) || decoded.match(new RegExp("file\\s*:\\s*(\\[.*?\\])", "s"));
               if (fileMatch) {
                 let rawFile = fileMatch[2] || fileMatch[1];
@@ -222,7 +268,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
               title: baseTitle,
               url: fileString,
               quality: "Auto",
-              headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
+              headers: __spreadProps(__spreadValues({}, HEADERS2), { Referer: mediaUrl })
             });
           }
           const parts = fileString.split(",");
@@ -230,7 +276,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
           if (baseUrl && baseUrl.startsWith("http")) {
             parts.slice(1).forEach((part) => {
               if (part.includes(".mp4")) {
-                const quality = extractQuality(part);
+                const quality = extractQuality2(part);
                 const finalUrl = baseUrl + part;
                 if (finalUrl.length > baseUrl.length + 5) {
                   streams.push({
@@ -238,7 +284,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     title: baseTitle,
                     url: finalUrl,
                     quality,
-                    headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
+                    headers: __spreadProps(__spreadValues({}, HEADERS2), { Referer: mediaUrl })
                   });
                 }
               }
@@ -251,7 +297,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
           if (!urlStr || urlStr.length < 10)
             return;
           let finalUrl = urlStr;
-          let quality = extractQuality(urlStr);
+          let quality = extractQuality2(urlStr);
           const qualityMatch = urlStr.match(/\[(.*?)\](.*)/);
           if (qualityMatch) {
             quality = qualityMatch[1];
@@ -263,7 +309,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
               title: baseTitle,
               url: finalUrl,
               quality,
-              headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
+              headers: __spreadProps(__spreadValues({}, HEADERS2), { Referer: mediaUrl })
             });
           }
         });
