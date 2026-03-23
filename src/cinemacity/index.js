@@ -1,163 +1,139 @@
-const cheerio = require('cheerio-without-node-native');
-const { MAIN_URL, HEADERS, TMDB_API_KEY } = require('./constants.js');
-const { search, fetchText, getMediaDetails, extractQuality, atob } = require('./utils.js');
+// src/cinemacity/index.js
+import { atobPolyfill, fetchText, extractQuality } from './utils.js';
+import { MAIN_URL, HEADERS, TMDB_API_KEY } from './constants.js';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
     try {
-        // 1. Get media info from TMDB to get the title
+        // 1. Get Title from TMDB
         const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
         const tmdbRes = await fetch(tmdbUrl, { skipSizeCheck: true });
-        if (!tmdbRes.ok) return [];
         const mediaInfo = await tmdbRes.json();
         const animeTitle = mediaInfo.title || mediaInfo.name;
 
-        // 2. Search on CinemaCity
-        let searchHtml = await search(animeTitle);
-        let $search = cheerio.load(searchHtml);
-        
-        let mediaUrl = null;
-        const findMatch = ($) => {
-            let matchedUrl = null;
-            $('div.dar-short_item').each((i, el) => {
-                const $el = $(el);
-                const anchor = $el.find('a').filter((i, a) => {
-                    const href = $(a).attr('href');
-                    return href && href.includes('.html');
-                }).first();
-                const fullText = anchor.text();
-                const foundTitle = fullText.split('(')[0].trim();
-                const href = anchor.attr('href');
-                if (!foundTitle || !href) return;
-                if (foundTitle.toLowerCase() === animeTitle.toLowerCase() || 
-                    foundTitle.toLowerCase().includes(animeTitle.toLowerCase()) || 
-                    animeTitle.toLowerCase().includes(foundTitle.toLowerCase())) {
-                    matchedUrl = href;
-                    return false;
-                }
-            });
-            return matchedUrl;
-        };
+        if (!animeTitle) return [];
 
-        mediaUrl = findMatch($search);
+        // 2. Search on CinemaCity
+        const searchUrl = `${MAIN_URL}/index.php?do=search&subaction=search&story=${encodeURIComponent(animeTitle)}`;
+        const searchHtml = await fetchText(searchUrl);
+        
+        // Use global cheerio provided by Nuvio
+        const $search = cheerio.load(searchHtml);
+        let mediaUrl = null;
+
+        $search('div.dar-short_item').each((i, el) => {
+            if (mediaUrl) return;
+            const anchor = $search(el).find('a').filter((idx, a) => ($search(a).attr('href') || "").includes('.html')).first();
+            if (!anchor.length) return;
+
+            const foundTitle = anchor.text().split('(')[0].trim();
+            const href = anchor.attr('href');
+            
+            if (foundTitle.toLowerCase() === animeTitle.toLowerCase() || 
+                foundTitle.toLowerCase().includes(animeTitle.toLowerCase()) || 
+                animeTitle.toLowerCase().includes(foundTitle.toLowerCase())) {
+                mediaUrl = href;
+            }
+        });
+
         if (!mediaUrl) {
             const homeHtml = await fetchText(MAIN_URL);
-            mediaUrl = findMatch(cheerio.load(homeHtml));
+            const $home = cheerio.load(homeHtml);
+            $home('div.dar-short_item').each((i, el) => {
+                if (mediaUrl) return;
+                const anchor = $home(el).find('a').filter((idx, a) => ($home(a).attr('href') || "").includes('.html')).first();
+                if (!anchor.length) return;
+                const foundTitle = anchor.text().split('(')[0].trim();
+                const href = anchor.attr('href');
+                if (foundTitle.toLowerCase() === animeTitle.toLowerCase()) mediaUrl = href;
+            });
         }
 
         if (!mediaUrl) return [];
 
-        // 3. Load the media page
+        // 3. Load Media Page
         const pageHtml = await fetchText(mediaUrl);
         const $page = cheerio.load(pageHtml);
-
-        // 4. Extract PlayerJS configuration
+        
+        // 4. Extract PlayerJS Data
         let fileData = null;
         $page('script').each((i, el) => {
             if (fileData) return;
-            const scriptContent = $page(el).html();
-            if (scriptContent && scriptContent.includes('atob(')) {
-                const b64Match = scriptContent.match(/atob\((['"])(.*?)\1\)/);
-                if (b64Match && b64Match[2]) {
-                    try {
-                        const decoded = atob(b64Match[2]);
-                        const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || decoded.match(/file\s*:\s*(\[.*?\])/s);
-                        if (fileMatch) {
-                            let rawFile = fileMatch[2] || fileMatch[1];
-                            if (rawFile.startsWith('[') || rawFile.startsWith('{')) {
-                                try {
-                                    const unescaped = rawFile.replace(/\\(.)/g, '$1');
-                                    fileData = JSON.parse(unescaped);
-                                } catch (e) {
-                                    try { fileData = JSON.parse(rawFile); } catch (e2) { fileData = rawFile; }
-                                }
-                            } else {
-                                fileData = rawFile;
+            const html = $page(el).html();
+            if (html && html.includes('atob')) {
+                const b64Match = html.match(/atob\s*\(\s*(['"])(.*?)\1\s*\)/);
+                if (b64Match) {
+                    const decoded = atobPolyfill(b64Match[2]);
+                    const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || decoded.match(/file\s*:\s*(\[.*?\])/s);
+                    if (fileMatch) {
+                        let rawFile = fileMatch[2] || fileMatch[1];
+                        if (rawFile.startsWith('[') || rawFile.startsWith('{')) {
+                            try {
+                                const unescaped = rawFile.replace(/\\(.)/g, '$1');
+                                fileData = JSON.parse(unescaped);
+                            } catch (e) {
+                                try { fileData = JSON.parse(rawFile); } catch (e2) { fileData = rawFile; }
                             }
+                        } else {
+                            fileData = rawFile;
                         }
-                    } catch (e) {}
+                    }
                 }
             }
         });
 
         if (!fileData) return [];
-        const streams = [];
 
-        const processStreamString = (fileString, baseTitle) => {
-            if (!fileString || typeof fileString !== 'string' || fileString.length < 10) return;
-            
-            if (fileString.includes('.urlset/master.m3u8')) {
-                if (fileString.startsWith('http')) {
-                    streams.push({
-                        name: "CinemaCity", title: baseTitle, url: fileString, quality: "Auto",
-                        headers: { ...HEADERS, Referer: mediaUrl }
-                    });
-                }
-                const parts = fileString.split(',');
-                const baseUrl = parts[0]; 
-                if (baseUrl && baseUrl.startsWith('http')) {
-                    parts.slice(1).forEach(part => {
-                        if (part.includes('.mp4')) {
-                            const quality = extractQuality(part);
-                            const finalUrl = baseUrl + part;
-                            if (finalUrl.length > baseUrl.length + 5) {
-                                streams.push({
-                                    name: "CinemaCity", title: baseTitle, url: finalUrl, quality: quality,
-                                    headers: { ...HEADERS, Referer: mediaUrl }
-                                });
-                            }
-                        }
-                    });
-                }
-                return;
-            }
-            
-            const urls = fileString.includes('[') ? fileString.split(',') : [fileString];
-            urls.forEach(urlStr => {
-                if (!urlStr || urlStr.length < 10) return;
-                let finalUrl = urlStr;
-                let quality = extractQuality(urlStr);
-                const qualityMatch = urlStr.match(/\[(.*?)\](.*)/);
-                if (qualityMatch) {
-                    quality = qualityMatch[1];
-                    finalUrl = qualityMatch[2];
-                }
-                if (finalUrl && finalUrl.startsWith('http')) {
-                    streams.push({
-                        name: "CinemaCity", title: baseTitle, url: finalUrl, quality: quality,
-                        headers: { ...HEADERS, Referer: mediaUrl }
-                    });
-                }
+        const streams = [];
+        const addStream = (url, title, quality) => {
+            if (!url || !url.startsWith('http') || url.length < 15) return;
+            streams.push({
+                name: "CinemaCity",
+                title: title,
+                url: url,
+                quality: quality || extractQuality(url),
+                headers: { ...HEADERS, Referer: mediaUrl }
             });
+        };
+
+        const processStr = (str, title) => {
+            if (str.includes('.urlset/master.m3u8')) {
+                addStream(str, title, "Auto");
+                const parts = str.split(',');
+                const base = parts[0];
+                parts.slice(1).forEach(p => {
+                    if (p.includes('.mp4')) addStream(base + p, title, extractQuality(p));
+                });
+            } else {
+                const urls = str.includes('[') ? str.split(',') : [str];
+                urls.forEach(u => {
+                    const m = u.match(/\[(.*?)\](.*)/);
+                    if (m) addStream(m[2], title, m[1]);
+                    else addStream(u, title, extractQuality(u));
+                });
+            }
         };
 
         if (mediaType === 'movie') {
             if (Array.isArray(fileData)) {
-                const movieObj = fileData.find(f => !f.folder && f.file);
-                if (movieObj) processStreamString(movieObj.file, animeTitle);
-                else if (fileData[0] && fileData[0].file) processStreamString(fileData[0].file, animeTitle);
+                const obj = fileData.find(f => !f.folder && f.file) || fileData[0];
+                if (obj && obj.file) processStr(obj.file, animeTitle);
             } else if (typeof fileData === 'string') {
-                processStreamString(fileData, animeTitle);
+                processStr(fileData, animeTitle);
             }
         } else {
             if (Array.isArray(fileData)) {
-                const targetSeasonLabel = `Season ${season}`;
-                const seasonObj = fileData.find(s => (s.title && s.title.includes(targetSeasonLabel)) || (s.title && s.title.includes(`S${season}`)));
-                if (seasonObj && seasonObj.folder) {
-                    const targetEpisodeLabel = `Episode ${episode}`;
-                    const episodeObj = seasonObj.folder.find(e => (e.title && e.title.includes(targetEpisodeLabel)) || (e.title && e.title.includes(`E${episode}`)));
-                    if (episodeObj && episodeObj.file) {
-                        processStreamString(episodeObj.file, `${animeTitle} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`);
-                    } else if (episodeObj && episodeObj.folder) {
-                        episodeObj.folder.forEach(source => {
-                            if (source.file) processStreamString(source.file, `${animeTitle} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`);
-                        });
-                    }
+                const sLabel = `Season ${season}`;
+                const sObj = fileData.find(s => (s.title || "").includes(sLabel) || (s.title || "").includes(`S${season}`));
+                if (sObj && sObj.folder) {
+                    const eLabel = `Episode ${episode}`;
+                    const eObj = sObj.folder.find(e => (e.title || "").includes(eLabel) || (e.title || "").includes(`E${episode}`));
+                    if (eObj && eObj.file) processStr(eObj.file, `${animeTitle} S${season}E${episode}`);
                 }
             }
         }
+
         return streams;
     } catch (error) {
-        console.error(`[CinemaCity] Error: ${error.message}`);
         return [];
     }
 }
