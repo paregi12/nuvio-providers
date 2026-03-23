@@ -54,27 +54,31 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         const pageHtml = await fetchText(mediaUrl);
         const $page = cheerio.load(pageHtml);
         
-        // 4. Extract PlayerJS Data
+        // 4. Extract PlayerJS Data (Checking ALL atob scripts)
         let fileData = null;
         $page('script').each((i, el) => {
             if (fileData) return;
             const html = $page(el).html();
             if (html && html.includes('atob')) {
-                const b64Match = html.match(/atob\s*\(\s*(['"])(.*?)\1\s*\)/);
-                if (b64Match) {
-                    const decoded = atobPolyfill(b64Match[2]);
+                const regex = /atob\s*\(\s*(['"])(.*?)\1\s*\)/g;
+                let match;
+                while ((match = regex.exec(html)) !== null) {
+                    const decoded = atobPolyfill(match[2]);
                     const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || decoded.match(/file\s*:\s*(\[.*?\])/s);
                     if (fileMatch) {
                         let rawFile = fileMatch[2] || fileMatch[1];
-                        if (rawFile.startsWith('[') || rawFile.startsWith('{')) {
-                            try {
-                                const unescaped = rawFile.replace(/\\(.)/g, '$1');
-                                fileData = JSON.parse(unescaped);
-                            } catch (e) {
-                                try { fileData = JSON.parse(rawFile); } catch (e2) { fileData = rawFile; }
+                        if (rawFile && rawFile.length > 5) {
+                            if (rawFile.startsWith('[') || rawFile.startsWith('{')) {
+                                try {
+                                    const unescaped = rawFile.replace(/\\(.)/g, '$1');
+                                    fileData = JSON.parse(unescaped);
+                                } catch (e) {
+                                    try { fileData = JSON.parse(rawFile); } catch (e2) { fileData = rawFile; }
+                                }
+                            } else {
+                                fileData = rawFile;
                             }
-                        } else {
-                            fileData = rawFile;
+                            if (fileData) break;
                         }
                     }
                 }
@@ -91,7 +95,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                 title: title,
                 url: url,
                 quality: quality || extractQuality(url),
-                headers: { ...HEADERS, Referer: mediaUrl }
+                headers: { 
+                    ...HEADERS, // Re-include cookies as they may be required for the CDN
+                    Referer: "https://cinemacity.cc/" 
+                }
             });
         };
 

@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-03-23T02:31:29.085Z
+ * Generated: 2026-03-23T02:46:55.032Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -142,25 +142,30 @@ function getStreams(tmdbId, mediaType, season, episode) {
           return;
         const html = $page(el).html();
         if (html && html.includes("atob")) {
-          const b64Match = html.match(/atob\s*\(\s*(['"])(.*?)\1\s*\)/);
-          if (b64Match) {
-            const decoded = atobPolyfill(b64Match[2]);
+          const regex = /atob\s*\(\s*(['"])(.*?)\1\s*\)/g;
+          let match;
+          while ((match = regex.exec(html)) !== null) {
+            const decoded = atobPolyfill(match[2]);
             const fileMatch = decoded.match(new RegExp(`file\\s*:\\s*(['"])(.*?)\\1`, "s")) || decoded.match(new RegExp("file\\s*:\\s*(\\[.*?\\])", "s"));
             if (fileMatch) {
               let rawFile = fileMatch[2] || fileMatch[1];
-              if (rawFile.startsWith("[") || rawFile.startsWith("{")) {
-                try {
-                  const unescaped = rawFile.replace(/\\(.)/g, "$1");
-                  fileData = JSON.parse(unescaped);
-                } catch (e) {
+              if (rawFile && rawFile.length > 5) {
+                if (rawFile.startsWith("[") || rawFile.startsWith("{")) {
                   try {
-                    fileData = JSON.parse(rawFile);
-                  } catch (e2) {
-                    fileData = rawFile;
+                    const unescaped = rawFile.replace(/\\(.)/g, "$1");
+                    fileData = JSON.parse(unescaped);
+                  } catch (e) {
+                    try {
+                      fileData = JSON.parse(rawFile);
+                    } catch (e2) {
+                      fileData = rawFile;
+                    }
                   }
+                } else {
+                  fileData = rawFile;
                 }
-              } else {
-                fileData = rawFile;
+                if (fileData)
+                  break;
               }
             }
           }
@@ -177,7 +182,10 @@ function getStreams(tmdbId, mediaType, season, episode) {
           title,
           url,
           quality: quality || extractQuality(url),
-          headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
+          headers: __spreadProps(__spreadValues({}, HEADERS), {
+            // Re-include cookies as they may be required for the CDN
+            Referer: "https://cinemacity.cc/"
+          })
         });
       };
       const processStr = (str, title) => {
