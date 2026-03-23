@@ -11,16 +11,19 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         // 1. Resolve Anime Identity via High-Fidelity Mapping
         const imdbId = await getImdbId(tmdbId, mediaType);
+        let targetMalId = null;
+
         if (imdbId) {
             const mapping = await resolveMapping(imdbId, season, episode);
             if (mapping && mapping.mal_id) {
+                targetMalId = mapping.mal_id;
                 mappedEp = mapping.mal_episode || episode;
                 // Fetch the official MAL title for exact search matching
-                animeTitle = await getMalTitle(mapping.mal_id);
+                animeTitle = await getMalTitle(targetMalId);
             }
         }
 
-        // 2. Fallback to TMDB
+        // 2. Fallback to TMDB for identity if no mapping or Jikan failed
         if (!animeTitle) {
             const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
             const tmdbRes = await fetch(tmdbUrl);
@@ -31,42 +34,12 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         if (!animeTitle) return [];
 
-        // 3. Search AnimePahe
+        // 3. Search AnimePahe using the resolved title
         const searchResults = await searchAnime(animeTitle);
         if (!searchResults.data || searchResults.data.length === 0) return [];
         
-        let bestMatch = null;
-        let targetMalId = null;
-
-        // Re-fetch mapping to get the target MAL ID for verification
-        if (imdbId) {
-            const mapping = await resolveMapping(imdbId, season, episode);
-            targetMalId = mapping?.mal_id;
-        }
-
-        if (targetMalId) {
-            // Verify each search result by checking its MAL ID on its detail page
-            for (const item of searchResults.data) {
-                try {
-                    const animePageHtml = await fetchText(`/anime/${item.session}`);
-                    if (animePageHtml.includes(`myanimelist.net/anime/${targetMalId}`)) {
-                        bestMatch = item;
-                        break;
-                    }
-                } catch (e) {
-                    // Ignore errors for individual pages
-                }
-            }
-        }
-
-        // Fallback to title matching if MAL ID verification fails
-        if (!bestMatch) {
-            bestMatch = searchResults.data.find(a => 
-                a.title.toLowerCase().includes(animeTitle.toLowerCase()) || 
-                animeTitle.toLowerCase().includes(a.title.toLowerCase())
-            ) || searchResults.data[0];
-        }
-        
+        // Pick the first result - matches the user's manual success on the site
+        const bestMatch = searchResults.data[0];
         animeSession = bestMatch.session;
 
         // 4. Smart Episode Resolution (Math-based Offset)
