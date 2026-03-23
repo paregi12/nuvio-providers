@@ -18,7 +18,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
             let matchedUrl = null;
             $('div.dar-short_item').each((i, el) => {
                 const $el = $(el);
-                const anchor = $el.find('a').filter((i, a) => $(a).attr('href').includes('.html')).first();
+                const anchor = $el.find('a').filter((i, a) => {
+                    const href = $(a).attr('href');
+                    return href && href.includes('.html');
+                }).first();
                 const fullText = anchor.text();
                 const foundTitle = fullText.split('(')[0].trim();
                 const href = anchor.attr('href');
@@ -50,11 +53,13 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         $page('script').each((i, el) => {
             if (fileData) return;
             const scriptContent = $page(el).html();
-            if (scriptContent.includes('atob(')) {
+            if (scriptContent && scriptContent.includes('atob(')) {
+                // Handle atob('...') or atob("...")
                 const b64Match = scriptContent.match(/atob\((['"])(.*?)\1\)/);
                 if (b64Match && b64Match[2]) {
                     try {
                         const decoded = atob(b64Match[2]);
+                        // Extract "file" property
                         const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || decoded.match(/file\s*:\s*(\[.*?\])/s);
                         if (fileMatch) {
                             let rawFile = fileMatch[2] || fileMatch[1];
@@ -65,7 +70,9 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                                 } catch (e) {
                                     try { fileData = JSON.parse(rawFile); } catch (e2) { fileData = rawFile; }
                                 }
-                            } else { fileData = rawFile; }
+                            } else {
+                                fileData = rawFile;
+                            }
                         }
                     } catch (e) {}
                 }
@@ -77,8 +84,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         const processStreamString = (fileString, baseTitle) => {
             if (!fileString || typeof fileString !== 'string' || fileString.length < 10) return;
-
-            // Handle Nginx VoD (Adaptive HLS)
+            
             if (fileString.includes('.urlset/master.m3u8')) {
                 if (fileString.startsWith('http')) {
                     streams.push({
@@ -86,11 +92,9 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                         headers: { ...HEADERS, Referer: mediaUrl }
                     });
                 }
-
-                // Extract individual qualities from the VoD string
                 const parts = fileString.split(',');
                 const baseUrl = parts[0]; 
-                if (baseUrl.startsWith('http')) {
+                if (baseUrl && baseUrl.startsWith('http')) {
                     parts.slice(1).forEach(part => {
                         if (part.includes('.mp4')) {
                             const quality = extractQuality(part);
@@ -106,22 +110,18 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                 }
                 return;
             }
-
-            // Handle standard PlayerJS quality list [720p]url1,[1080p]url2
+            
             const urls = fileString.includes('[') ? fileString.split(',') : [fileString];
             urls.forEach(urlStr => {
                 if (!urlStr || urlStr.length < 10) return;
-                
                 let finalUrl = urlStr;
                 let quality = extractQuality(urlStr);
-                
                 const qualityMatch = urlStr.match(/\[(.*?)\](.*)/);
                 if (qualityMatch) {
                     quality = qualityMatch[1];
                     finalUrl = qualityMatch[2];
                 }
-                
-                if (finalUrl.startsWith('http')) {
+                if (finalUrl && finalUrl.startsWith('http')) {
                     streams.push({
                         name: "CinemaCity", title: baseTitle, url: finalUrl, quality: quality,
                         headers: { ...HEADERS, Referer: mediaUrl }
@@ -141,10 +141,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         } else {
             if (Array.isArray(fileData)) {
                 const targetSeasonLabel = `Season ${season}`;
-                const seasonObj = fileData.find(s => s.title && s.title.includes(targetSeasonLabel));
+                const seasonObj = fileData.find(s => (s.title && s.title.includes(targetSeasonLabel)) || (s.title && s.title.includes(`S${season}`)));
                 if (seasonObj && seasonObj.folder) {
                     const targetEpisodeLabel = `Episode ${episode}`;
-                    const episodeObj = seasonObj.folder.find(e => e.title && e.title.includes(targetEpisodeLabel));
+                    const episodeObj = seasonObj.folder.find(e => (e.title && e.title.includes(targetEpisodeLabel)) || (e.title && e.title.includes(`E${episode}`)));
                     if (episodeObj && episodeObj.file) {
                         processStreamString(episodeObj.file, `${animeTitle} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`);
                     } else if (episodeObj && episodeObj.folder) {

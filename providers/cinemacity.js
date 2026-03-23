@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-03-23T00:52:05.395Z
+ * Generated: 2026-03-23T00:59:05.929Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -81,6 +81,8 @@ var atob = (str) => {
       return global.atob(str);
     if (typeof window !== "undefined" && typeof window.atob === "function")
       return window.atob(str);
+    if (typeof self !== "undefined" && typeof self.atob === "function")
+      return self.atob(str);
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     let output = "";
     str = String(str).replace(/[=]+$/, "");
@@ -127,15 +129,16 @@ function getMediaDetails(tmdbId, mediaType) {
   });
 }
 function extractQuality(url) {
-  if (url.includes("2160p") || url.includes("4K"))
+  const low = url.toLowerCase();
+  if (low.includes("2160p") || low.includes("4k"))
     return "4K";
-  if (url.includes("1080p"))
+  if (low.includes("1080p"))
     return "1080p";
-  if (url.includes("720p"))
+  if (low.includes("720p"))
     return "720p";
-  if (url.includes("480p"))
+  if (low.includes("480p"))
     return "480p";
-  if (url.includes("360p"))
+  if (low.includes("360p"))
     return "360p";
   return "HD";
 }
@@ -155,7 +158,10 @@ function getStreams(tmdbId, mediaType, season, episode) {
         let matchedUrl = null;
         $("div.dar-short_item").each((i, el) => {
           const $el = $(el);
-          const anchor = $el.find("a").filter((i2, a) => $(a).attr("href").includes(".html")).first();
+          const anchor = $el.find("a").filter((i2, a) => {
+            const href2 = $(a).attr("href");
+            return href2 && href2.includes(".html");
+          }).first();
           const fullText = anchor.text();
           const foundTitle = fullText.split("(")[0].trim();
           const href = anchor.attr("href");
@@ -182,7 +188,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         if (fileData)
           return;
         const scriptContent = $page(el).html();
-        if (scriptContent.includes("atob(")) {
+        if (scriptContent && scriptContent.includes("atob(")) {
           const b64Match = scriptContent.match(/atob\((['"])(.*?)\1\)/);
           if (b64Match && b64Match[2]) {
             try {
@@ -228,7 +234,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
           }
           const parts = fileString.split(",");
           const baseUrl = parts[0];
-          if (baseUrl.startsWith("http")) {
+          if (baseUrl && baseUrl.startsWith("http")) {
             parts.slice(1).forEach((part) => {
               if (part.includes(".mp4")) {
                 const quality = extractQuality(part);
@@ -258,7 +264,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
             quality = qualityMatch[1];
             finalUrl = qualityMatch[2];
           }
-          if (finalUrl.startsWith("http")) {
+          if (finalUrl && finalUrl.startsWith("http")) {
             streams.push({
               name: "CinemaCity",
               title: baseTitle,
@@ -282,10 +288,10 @@ function getStreams(tmdbId, mediaType, season, episode) {
       } else {
         if (Array.isArray(fileData)) {
           const targetSeasonLabel = `Season ${season}`;
-          const seasonObj = fileData.find((s) => s.title && s.title.includes(targetSeasonLabel));
+          const seasonObj = fileData.find((s) => s.title && s.title.includes(targetSeasonLabel) || s.title && s.title.includes(`S${season}`));
           if (seasonObj && seasonObj.folder) {
             const targetEpisodeLabel = `Episode ${episode}`;
-            const episodeObj = seasonObj.folder.find((e) => e.title && e.title.includes(targetEpisodeLabel));
+            const episodeObj = seasonObj.folder.find((e) => e.title && e.title.includes(targetEpisodeLabel) || e.title && e.title.includes(`E${episode}`));
             if (episodeObj && episodeObj.file) {
               processStreamString(episodeObj.file, `${animeTitle} S${String(season).padStart(2, "0")}E${String(episode).padStart(2, "0")}`);
             } else if (episodeObj && episodeObj.folder) {

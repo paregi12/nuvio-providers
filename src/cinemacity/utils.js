@@ -1,9 +1,11 @@
 import { MAIN_URL, HEADERS, TMDB_API_KEY } from './constants.js';
 
+// Safe atob polyfill for restricted environments
 export const atob = (str) => {
     try {
         if (typeof global !== 'undefined' && typeof global.atob === 'function') return global.atob(str);
         if (typeof window !== 'undefined' && typeof window.atob === 'function') return window.atob(str);
+        if (typeof self !== 'undefined' && typeof self.atob === 'function') return self.atob(str);
         
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
         let output = '';
@@ -21,6 +23,7 @@ export const atob = (str) => {
 
 export async function fetchText(url, options = {}) {
     try {
+        // Use global fetch (polyfilled by Nuvio)
         const response = await fetch(url, {
             headers: HEADERS,
             ...options
@@ -40,7 +43,6 @@ export async function search(query) {
 }
 
 export async function getImdbIdFromPage(html) {
-    // Ported from: Regex("tt\\d+").find(it)?.value in Cinemacity.kt
     const imdbMatch = html.match(/tt\d+/);
     return imdbMatch ? imdbMatch[0] : null;
 }
@@ -58,10 +60,11 @@ export function cleanTitle(title) {
 }
 
 export function extractQuality(url) {
-    if (url.includes("2160p") || url.includes("4K")) return "4K";
-    if (url.includes("1080p")) return "1080p";
-    if (url.includes("720p")) return "720p";
-    if (url.includes("480p")) return "480p";
-    if (url.includes("360p")) return "360p";
+    const low = url.toLowerCase();
+    if (low.includes("2160p") || low.includes("4k")) return "4K";
+    if (low.includes("1080p")) return "1080p";
+    if (low.includes("720p")) return "720p";
+    if (low.includes("480p")) return "480p";
+    if (low.includes("360p")) return "360p";
     return "HD";
 }
