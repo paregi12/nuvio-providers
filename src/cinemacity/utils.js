@@ -1,5 +1,23 @@
 import { MAIN_URL, HEADERS, TMDB_API_KEY } from './constants.js';
 
+export const atob = (str) => {
+    try {
+        if (typeof global !== 'undefined' && typeof global.atob === 'function') return global.atob(str);
+        if (typeof window !== 'undefined' && typeof window.atob === 'function') return window.atob(str);
+        
+        // Manual polyfill
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+        let output = '';
+        str = String(str).replace(/[=]+$/, '');
+        for (let bc = 0, bs, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+            buffer = chars.indexOf(buffer);
+        }
+        return output;
+    } catch (e) {
+        return '';
+    }
+};
+
 export async function fetchText(url, options = {}) {
     try {
         const response = await fetch(url, {
