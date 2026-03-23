@@ -104,13 +104,10 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         const processStr = (str, title) => {
             if (str.includes('.urlset/master.m3u8')) {
+                // Only provide the Auto (HLS) link as individual MP4s are restricted
                 addStream(str, title, "Auto");
-                const parts = str.split(',');
-                const base = parts[0];
-                parts.slice(1).forEach(p => {
-                    if (p.includes('.mp4')) addStream(base + p, title, extractQuality(p));
-                });
             } else {
+                // Fallback for cases where it's a single direct link without a urlset
                 const urls = str.includes('[') ? str.split(',') : [str];
                 urls.forEach(u => {
                     const m = u.match(/\[(.*?)\](.*)/);

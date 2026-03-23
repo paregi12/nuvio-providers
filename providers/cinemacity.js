@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-03-23T02:46:55.032Z
+ * Generated: 2026-03-23T02:50:26.034Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -191,12 +191,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const processStr = (str, title) => {
         if (str.includes(".urlset/master.m3u8")) {
           addStream(str, title, "Auto");
-          const parts = str.split(",");
-          const base = parts[0];
-          parts.slice(1).forEach((p) => {
-            if (p.includes(".mp4"))
-              addStream(base + p, title, extractQuality(p));
-          });
         } else {
           const urls = str.includes("[") ? str.split(",") : [str];
           urls.forEach((u) => {
