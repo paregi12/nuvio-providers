@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-03-23T00:38:08.435Z
+ * Generated: 2026-03-23T00:52:05.395Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -84,7 +84,9 @@ var atob = (str) => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
     let output = "";
     str = String(str).replace(/[=]+$/, "");
-    for (let bc = 0, bs, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+    if (str.length % 4 === 1)
+      return "";
+    for (let bc = 0, bs = 0, buffer, i = 0; buffer = str.charAt(i++); ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
       buffer = chars.indexOf(buffer);
     }
     return output;
@@ -180,11 +182,11 @@ function getStreams(tmdbId, mediaType, season, episode) {
         if (fileData)
           return;
         const scriptContent = $page(el).html();
-        if (scriptContent.includes('atob("')) {
-          const b64Match = scriptContent.match(/atob\("([^"]+)"\)/);
-          if (b64Match && b64Match[1]) {
+        if (scriptContent.includes("atob(")) {
+          const b64Match = scriptContent.match(/atob\((['"])(.*?)\1\)/);
+          if (b64Match && b64Match[2]) {
             try {
-              const decoded = atob(b64Match[1]);
+              const decoded = atob(b64Match[2]);
               const fileMatch = decoded.match(new RegExp(`file\\s*:\\s*(['"])(.*?)\\1`, "s")) || decoded.match(new RegExp("file\\s*:\\s*(\\[.*?\\])", "s"));
               if (fileMatch) {
                 let rawFile = fileMatch[2] || fileMatch[1];
@@ -212,33 +214,37 @@ function getStreams(tmdbId, mediaType, season, episode) {
         return [];
       const streams = [];
       const processStreamString = (fileString, baseTitle) => {
-        if (!fileString || typeof fileString !== "string")
+        if (!fileString || typeof fileString !== "string" || fileString.length < 10)
           return;
         if (fileString.includes(".urlset/master.m3u8")) {
-          streams.push({
-            name: "CinemaCity",
-            title: baseTitle,
-            url: fileString,
-            quality: "Auto",
-            headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
-          });
+          if (fileString.startsWith("http")) {
+            streams.push({
+              name: "CinemaCity",
+              title: baseTitle,
+              url: fileString,
+              quality: "Auto",
+              headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
+            });
+          }
           const parts = fileString.split(",");
           const baseUrl = parts[0];
-          parts.slice(1).forEach((part) => {
-            if (part.includes(".mp4")) {
-              const quality = extractQuality(part);
-              const finalUrl = baseUrl + part;
-              if (finalUrl.length > 10) {
-                streams.push({
-                  name: "CinemaCity",
-                  title: baseTitle,
-                  url: finalUrl,
-                  quality,
-                  headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
-                });
+          if (baseUrl.startsWith("http")) {
+            parts.slice(1).forEach((part) => {
+              if (part.includes(".mp4")) {
+                const quality = extractQuality(part);
+                const finalUrl = baseUrl + part;
+                if (finalUrl.length > baseUrl.length + 5) {
+                  streams.push({
+                    name: "CinemaCity",
+                    title: baseTitle,
+                    url: finalUrl,
+                    quality,
+                    headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: mediaUrl })
+                  });
+                }
               }
-            }
-          });
+            });
+          }
           return;
         }
         const urls = fileString.includes("[") ? fileString.split(",") : [fileString];

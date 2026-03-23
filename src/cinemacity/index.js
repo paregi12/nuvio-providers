@@ -50,11 +50,11 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         $page('script').each((i, el) => {
             if (fileData) return;
             const scriptContent = $page(el).html();
-            if (scriptContent.includes('atob("')) {
-                const b64Match = scriptContent.match(/atob\("([^"]+)"\)/);
-                if (b64Match && b64Match[1]) {
+            if (scriptContent.includes('atob(')) {
+                const b64Match = scriptContent.match(/atob\((['"])(.*?)\1\)/);
+                if (b64Match && b64Match[2]) {
                     try {
-                        const decoded = atob(b64Match[1]);
+                        const decoded = atob(b64Match[2]);
                         const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || decoded.match(/file\s*:\s*(\[.*?\])/s);
                         if (fileMatch) {
                             let rawFile = fileMatch[2] || fileMatch[1];
@@ -76,38 +76,51 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         const streams = [];
 
         const processStreamString = (fileString, baseTitle) => {
-            if (!fileString || typeof fileString !== 'string') return;
+            if (!fileString || typeof fileString !== 'string' || fileString.length < 10) return;
+
+            // Handle Nginx VoD (Adaptive HLS)
             if (fileString.includes('.urlset/master.m3u8')) {
-                streams.push({
-                    name: "CinemaCity", title: baseTitle, url: fileString, quality: "Auto",
-                    headers: { ...HEADERS, Referer: mediaUrl }
-                });
+                if (fileString.startsWith('http')) {
+                    streams.push({
+                        name: "CinemaCity", title: baseTitle, url: fileString, quality: "Auto",
+                        headers: { ...HEADERS, Referer: mediaUrl }
+                    });
+                }
+
+                // Extract individual qualities from the VoD string
                 const parts = fileString.split(',');
                 const baseUrl = parts[0]; 
-                parts.slice(1).forEach(part => {
-                    if (part.includes('.mp4')) {
-                        const quality = extractQuality(part);
-                        const finalUrl = baseUrl + part;
-                        if (finalUrl.length > 10) {
-                            streams.push({
-                                name: "CinemaCity", title: baseTitle, url: finalUrl, quality: quality,
-                                headers: { ...HEADERS, Referer: mediaUrl }
-                            });
+                if (baseUrl.startsWith('http')) {
+                    parts.slice(1).forEach(part => {
+                        if (part.includes('.mp4')) {
+                            const quality = extractQuality(part);
+                            const finalUrl = baseUrl + part;
+                            if (finalUrl.length > baseUrl.length + 5) {
+                                streams.push({
+                                    name: "CinemaCity", title: baseTitle, url: finalUrl, quality: quality,
+                                    headers: { ...HEADERS, Referer: mediaUrl }
+                                });
+                            }
                         }
-                    }
-                });
+                    });
+                }
                 return;
             }
+
+            // Handle standard PlayerJS quality list [720p]url1,[1080p]url2
             const urls = fileString.includes('[') ? fileString.split(',') : [fileString];
             urls.forEach(urlStr => {
                 if (!urlStr || urlStr.length < 10) return;
+                
                 let finalUrl = urlStr;
                 let quality = extractQuality(urlStr);
+                
                 const qualityMatch = urlStr.match(/\[(.*?)\](.*)/);
                 if (qualityMatch) {
                     quality = qualityMatch[1];
                     finalUrl = qualityMatch[2];
                 }
+                
                 if (finalUrl.startsWith('http')) {
                     streams.push({
                         name: "CinemaCity", title: baseTitle, url: finalUrl, quality: quality,
