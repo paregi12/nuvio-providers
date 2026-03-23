@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-03-23T00:22:13.932Z
+ * Generated: 2026-03-23T00:49:20.363Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -256,8 +256,15 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const searchResults = yield searchAnime(animeTitle);
       if (!searchResults.data || searchResults.data.length === 0)
         return [];
-      const bestMatch = searchResults.data[0];
-      animeSession = bestMatch.session;
+      const firstResult = searchResults.data[0];
+      const resultTitle = firstResult.title.toLowerCase();
+      const searchTitle = animeTitle.toLowerCase();
+      const isMatch = resultTitle.includes(searchTitle) || searchTitle.includes(resultTitle) || // Handle cases where Jikan title might be slightly different
+      targetMalId && resultTitle.length > 3;
+      if (!isMatch) {
+        return [];
+      }
+      animeSession = firstResult.session;
       const firstPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=1`;
       const firstPageData = yield fetchJson(firstPageUrl);
       if (!firstPageData.data || firstPageData.data.length === 0)

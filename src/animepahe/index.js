@@ -38,9 +38,22 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         const searchResults = await searchAnime(animeTitle);
         if (!searchResults.data || searchResults.data.length === 0) return [];
         
-        // Pick the first result - matches the user's manual success on the site
-        const bestMatch = searchResults.data[0];
-        animeSession = bestMatch.session;
+        // Verification: Ensure the first result actually matches our title
+        // This prevents non-anime media (like Hollywood movies) from showing random anime results
+        const firstResult = searchResults.data[0];
+        const resultTitle = firstResult.title.toLowerCase();
+        const searchTitle = animeTitle.toLowerCase();
+
+        const isMatch = resultTitle.includes(searchTitle) || 
+                        searchTitle.includes(resultTitle) ||
+                        // Handle cases where Jikan title might be slightly different
+                        (targetMalId && resultTitle.length > 3); 
+
+        if (!isMatch) {
+            return []; // Title is too different, likely not an anime
+        }
+
+        animeSession = firstResult.session;
 
         // 4. Smart Episode Resolution (Math-based Offset)
         // Fetch first page to determine starting numbering
