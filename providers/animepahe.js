@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-03-23T00:49:20.363Z
+ * Generated: 2026-03-23T01:16:01.613Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -234,37 +234,48 @@ function getStreams(tmdbId, mediaType, season, episode) {
       let animeSession = null;
       let animeTitle = "";
       let mappedEp = episode;
-      const imdbId = yield getImdbId(tmdbId, mediaType);
       let targetMalId = null;
-      if (imdbId) {
+      if (mediaType === "tv") {
+        const imdbId = yield getImdbId(tmdbId, mediaType);
+        if (!imdbId)
+          return [];
         const mapping = yield resolveMapping(imdbId, season, episode);
-        if (mapping && mapping.mal_id) {
-          targetMalId = mapping.mal_id;
-          mappedEp = mapping.mal_episode || episode;
-          animeTitle = yield getMalTitle(targetMalId);
+        if (!mapping || !mapping.mal_id)
+          return [];
+        targetMalId = mapping.mal_id;
+        mappedEp = mapping.mal_episode || episode;
+        animeTitle = yield getMalTitle(targetMalId);
+        if (!animeTitle)
+          return [];
+        const searchResults = yield searchAnime(animeTitle);
+        if (searchResults.data && searchResults.data.length > 0) {
+          for (let i = 0; i < Math.min(searchResults.data.length, 3); i++) {
+            const item = searchResults.data[i];
+            const pageHtml = yield fetchText(`/anime/${item.session}`);
+            if (pageHtml.includes(`myanimelist.net/anime/${targetMalId}`)) {
+              animeSession = item.session;
+              break;
+            }
+          }
         }
-      }
-      if (!animeTitle) {
-        const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
+      } else {
+        const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
         const tmdbRes = yield fetch(tmdbUrl);
         const tmdbData = yield tmdbRes.json();
-        animeTitle = tmdbData.name || tmdbData.title;
-        mappedEp = mediaType === "movie" ? 1 : episode;
+        animeTitle = tmdbData.title || tmdbData.original_title;
+        mappedEp = 1;
+        if (!animeTitle)
+          return [];
+        const searchResults = yield searchAnime(animeTitle);
+        if (searchResults.data && searchResults.data.length > 0) {
+          const firstResult = searchResults.data[0];
+          if (firstResult.title.toLowerCase() === animeTitle.toLowerCase()) {
+            animeSession = firstResult.session;
+          }
+        }
       }
-      if (!animeTitle)
+      if (!animeSession)
         return [];
-      const searchResults = yield searchAnime(animeTitle);
-      if (!searchResults.data || searchResults.data.length === 0)
-        return [];
-      const firstResult = searchResults.data[0];
-      const resultTitle = firstResult.title.toLowerCase();
-      const searchTitle = animeTitle.toLowerCase();
-      const isMatch = resultTitle.includes(searchTitle) || searchTitle.includes(resultTitle) || // Handle cases where Jikan title might be slightly different
-      targetMalId && resultTitle.length > 3;
-      if (!isMatch) {
-        return [];
-      }
-      animeSession = firstResult.session;
       const firstPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=1`;
       const firstPageData = yield fetchJson(firstPageUrl);
       if (!firstPageData.data || firstPageData.data.length === 0)
@@ -278,9 +289,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
       let episodeSession = null;
       if (targetPageData && targetPageData.data) {
         const foundEp = targetPageData.data.find((e) => Math.floor(e.episode) == targetPaheEp);
-        if (foundEp) {
+        if (foundEp)
           episodeSession = foundEp.session;
-        }
       }
       if (!episodeSession && targetPage !== 1) {
         const fallbackEp = firstPageData.data.find((e) => Math.floor(e.episode) == targetPaheEp);
@@ -320,7 +330,6 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const qualityOrder = { "1080p": 3, "720p": 2, "360p": 1 };
       return streams.sort((a, b) => (qualityOrder[b.quality] || 0) - (qualityOrder[a.quality] || 0));
     } catch (error) {
-      console.error(`[AnimePahe] Error: ${error.message}`);
       return [];
     }
   });

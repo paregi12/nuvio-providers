@@ -8,67 +8,65 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         let animeSession = null;
         let animeTitle = "";
         let mappedEp = episode;
-
-        // 1. Resolve Anime Identity via High-Fidelity Mapping
-        const imdbId = await getImdbId(tmdbId, mediaType);
         let targetMalId = null;
 
-        if (imdbId) {
+        if (mediaType === 'tv') {
+            // --- SERIES STRATEGY: ID-BASED WITH VERIFICATION ---
+            const imdbId = await getImdbId(tmdbId, mediaType);
+            if (!imdbId) return [];
+
             const mapping = await resolveMapping(imdbId, season, episode);
-            if (mapping && mapping.mal_id) {
-                targetMalId = mapping.mal_id;
-                mappedEp = mapping.mal_episode || episode;
-                // Fetch the official MAL title for exact search matching
-                animeTitle = await getMalTitle(targetMalId);
+            if (!mapping || !mapping.mal_id) return [];
+
+            targetMalId = mapping.mal_id;
+            mappedEp = mapping.mal_episode || episode;
+            animeTitle = await getMalTitle(targetMalId); // Official MAL Title
+
+            if (!animeTitle) return [];
+
+            const searchResults = await searchAnime(animeTitle);
+            if (searchResults.data && searchResults.data.length > 0) {
+                // VERIFY each candidate by checking for the MAL ID on its page
+                // We check first 3 candidates for efficiency (usually first is correct)
+                for (let i = 0; i < Math.min(searchResults.data.length, 3); i++) {
+                    const item = searchResults.data[i];
+                    const pageHtml = await fetchText(`/anime/${item.session}`);
+                    if (pageHtml.includes(`myanimelist.net/anime/${targetMalId}`)) {
+                        animeSession = item.session;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // --- MOVIE STRATEGY: PERFECT TITLE MATCH ---
+            const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
+            const tmdbRes = await fetch(tmdbUrl);
+            const tmdbData = await tmdbRes.json();
+            animeTitle = tmdbData.title || tmdbData.original_title;
+            mappedEp = 1;
+
+            if (!animeTitle) return [];
+
+            const searchResults = await searchAnime(animeTitle);
+            if (searchResults.data && searchResults.data.length > 0) {
+                const firstResult = searchResults.data[0];
+                if (firstResult.title.toLowerCase() === animeTitle.toLowerCase()) {
+                    animeSession = firstResult.session;
+                }
             }
         }
 
-        // 2. Fallback to TMDB for identity if no mapping or Jikan failed
-        if (!animeTitle) {
-            const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
-            const tmdbRes = await fetch(tmdbUrl);
-            const tmdbData = await tmdbRes.json();
-            animeTitle = tmdbData.name || tmdbData.title;
-            mappedEp = mediaType === 'movie' ? 1 : episode;
-        }
+        if (!animeSession) return [];
 
-        if (!animeTitle) return [];
-
-        // 3. Search AnimePahe using the resolved title
-        const searchResults = await searchAnime(animeTitle);
-        if (!searchResults.data || searchResults.data.length === 0) return [];
-        
-        // Verification: Ensure the first result actually matches our title
-        // This prevents non-anime media (like Hollywood movies) from showing random anime results
-        const firstResult = searchResults.data[0];
-        const resultTitle = firstResult.title.toLowerCase();
-        const searchTitle = animeTitle.toLowerCase();
-
-        const isMatch = resultTitle.includes(searchTitle) || 
-                        searchTitle.includes(resultTitle) ||
-                        // Handle cases where Jikan title might be slightly different
-                        (targetMalId && resultTitle.length > 3); 
-
-        if (!isMatch) {
-            return []; // Title is too different, likely not an anime
-        }
-
-        animeSession = firstResult.session;
-
-        // 4. Smart Episode Resolution (Math-based Offset)
-        // Fetch first page to determine starting numbering
+        // --- COMMON LOGIC: Smart Episode Resolution ---
         const firstPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=1`;
         const firstPageData = await fetchJson(firstPageUrl);
         if (!firstPageData.data || firstPageData.data.length === 0) return [];
 
         const paheEpStart = Math.floor(firstPageData.data[0].episode);
         const perPage = firstPageData.per_page || 30;
-
-        // Formula: Adjust target based on AnimePahe's starting episode
-        // e.g. If Pahe starts at 88 and we want Ep 1, target is 88.
         const targetPaheEp = (paheEpStart - 1) + mappedEp;
 
-        // Calculate Target Page based on relative index (mappedEp)
         const targetPage = Math.ceil(mappedEp / perPage) || 1;
         const targetPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=${targetPage}`;
         const targetPageData = await fetchJson(targetPageUrl);
@@ -76,12 +74,9 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         let episodeSession = null;
         if (targetPageData && targetPageData.data) {
             const foundEp = targetPageData.data.find(e => Math.floor(e.episode) == targetPaheEp);
-            if (foundEp) {
-                episodeSession = foundEp.session;
-            }
+            if (foundEp) episodeSession = foundEp.session;
         }
 
-        // Fallback: If not found on calculated page, check first page (handles most absolute cases)
         if (!episodeSession && targetPage !== 1) {
             const fallbackEp = firstPageData.data.find(e => Math.floor(e.episode) == targetPaheEp);
             if (fallbackEp) episodeSession = fallbackEp.session;
@@ -89,7 +84,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         if (!episodeSession) return [];
 
-        // 5. Extraction
+        // --- EXTRACTION ---
         const playUrl = `/play/${animeSession}/${episodeSession}`;
         const playHtml = await fetchText(playUrl);
         const $ = cheerio.load(playHtml);
@@ -125,7 +120,6 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         return streams.sort((a, b) => (qualityOrder[b.quality] || 0) - (qualityOrder[a.quality] || 0));
 
     } catch (error) {
-        console.error(`[AnimePahe] Error: ${error.message}`);
         return [];
     }
 }
