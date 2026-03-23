@@ -389,7 +389,7 @@
     {
       "id": "cinemacity",
       "name": "CinemaCity",
-      "description": "CinemaCity direct links",
+      "description": "CinemaCity (Multi-Language)",
       "version": "1.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
@@ -403,7 +403,13 @@
       ],
       "logo": "https://cinemacity.cc/favicon.ico",
       "contentLanguage": [
-        "en"
+        "en",
+        "hi",
+        "ta",
+        "te",
+        "id",
+        "pl",
+        "ar"
       ]
     },
     {
