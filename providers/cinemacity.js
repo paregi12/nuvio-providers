@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-03-23T00:59:05.929Z
+ * Generated: 2026-03-23T01:34:55.719Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -100,7 +100,8 @@ function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
     try {
       const response = yield fetch(url, __spreadValues({
-        headers: HEADERS
+        headers: HEADERS,
+        skipSizeCheck: true
       }, options));
       if (!response.ok)
         throw new Error(`HTTP ${response.status} on ${url}`);
@@ -116,16 +117,6 @@ function search(query) {
     const encodedQuery = encodeURIComponent(query);
     const searchUrl = `${MAIN_URL}/index.php?do=search&subaction=search&search_start=0&full_search=0&story=${encodedQuery}`;
     return yield fetchText(searchUrl);
-  });
-}
-function getMediaDetails(tmdbId, mediaType) {
-  return __async(this, null, function* () {
-    const type = mediaType === "tv" ? "tv" : "movie";
-    const url = `https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${TMDB_API_KEY}`;
-    const response = yield fetch(url);
-    if (!response.ok)
-      return null;
-    return yield response.json();
   });
 }
 function extractQuality(url) {
@@ -147,9 +138,11 @@ function extractQuality(url) {
 function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
     try {
-      const mediaInfo = yield getMediaDetails(tmdbId, mediaType);
-      if (!mediaInfo)
+      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+      const tmdbRes = yield fetch(tmdbUrl, { skipSizeCheck: true });
+      if (!tmdbRes.ok)
         return [];
+      const mediaInfo = yield tmdbRes.json();
       const animeTitle = mediaInfo.title || mediaInfo.name;
       let searchHtml = yield search(animeTitle);
       let $search = import_cheerio_without_node_native.default.load(searchHtml);

@@ -26,6 +26,7 @@ export async function fetchText(url, options = {}) {
         // Use global fetch (polyfilled by Nuvio)
         const response = await fetch(url, {
             headers: HEADERS,
+            skipSizeCheck: true, // Tell Nuvio not to block this request
             ...options
         });
         if (!response.ok) throw new Error(`HTTP ${response.status} on ${url}`);

@@ -1,12 +1,14 @@
 import cheerio from 'cheerio-without-node-native';
-import { MAIN_URL, HEADERS } from './constants.js';
+import { MAIN_URL, HEADERS, TMDB_API_KEY } from './constants.js';
 import { search, fetchText, getImdbIdFromPage, getMediaDetails, extractQuality, atob } from './utils.js';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
     try {
         // 1. Get media info from TMDB to get the title
-        const mediaInfo = await getMediaDetails(tmdbId, mediaType);
-        if (!mediaInfo) return [];
+        const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+        const tmdbRes = await fetch(tmdbUrl, { skipSizeCheck: true });
+        if (!tmdbRes.ok) return [];
+        const mediaInfo = await tmdbRes.json();
         const animeTitle = mediaInfo.title || mediaInfo.name;
 
         // 2. Search on CinemaCity
