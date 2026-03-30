@@ -3,7 +3,7 @@
 // Extracts streaming links using TMDB ID for all VideoEasy servers
 
 const HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   'Connection': 'keep-alive'
 };
 
@@ -501,24 +501,25 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
 
       // Determine stream type and create appropriate headers
       let streamType = 'unknown';
-      let headers = HEADERS;
+      let headers = Object.assign({}, HEADERS, {
+        'Referer': 'https://api.videasy.net/',
+        'Origin': 'https://player.videasy.net'
+      });
 
       if (source.url.includes('.m3u8')) {
         streamType = 'hls';
-        headers = Object.assign({}, HEADERS, {
-          'Accept': 'application/vnd.apple.mpegurl,application/x-mpegURL,*/*',
-          'Referer': 'https://api.videasy.net/',
-          'Origin': 'https://player.videasy.net'
+        headers = Object.assign(headers, {
+          'Accept': 'application/vnd.apple.mpegurl,application/x-mpegURL,*/*'
         });
       } else if (source.url.includes('.mp4')) {
         streamType = 'mp4';
-        headers = Object.assign({}, HEADERS, {
+        headers = Object.assign(headers, {
           'Accept': 'video/mp4,*/*',
           'Range': 'bytes=0-'
         });
       } else if (source.url.includes('.mkv')) {
         streamType = 'mkv';
-        headers = Object.assign({}, HEADERS, {
+        headers = Object.assign(headers, {
           'Accept': 'video/x-matroska,*/*',
           'Range': 'bytes=0-'
         });
