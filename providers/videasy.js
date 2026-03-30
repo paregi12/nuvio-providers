@@ -32,7 +32,7 @@ const SERVERS = {
     moviesOnly: true
   },
   'Reyna': {
-    url: 'https://api2.videasy.net/primewire/sources-with-title',
+    url: 'https://api.videasy.net/primewire/sources-with-title',
     language: 'Original'
   },
   'Omen': {
@@ -45,6 +45,10 @@ const SERVERS = {
   },
   'Vyse': {
     url: 'https://api.videasy.net/hdmovie/sources-with-title',
+    language: 'Original'
+  },
+  'Ghost': {
+    url: 'https://api.videasy.net/primesrcme/sources-with-title',
     language: 'Original'
   },
   'Killjoy': {
@@ -68,11 +72,11 @@ const SERVERS = {
     language: 'Hindi'
   },
   'Gekko': {
-    url: 'https://api2.videasy.net/cuevana-latino/sources-with-title',
+    url: 'https://api.videasy.net/cuevana-latino/sources-with-title',
     language: 'Latin'
   },
   'Kayo': {
-    url: 'https://api2.videasy.net/cuevana-spanish/sources-with-title',
+    url: 'https://api.videasy.net/cuevana-spanish/sources-with-title',
     language: 'Spanish'
   },
   'Raze': {
@@ -80,7 +84,7 @@ const SERVERS = {
     language: 'Portuguese'
   },
   'Phoenix': {
-    url: 'https://api2.videasy.net/overflix/sources-with-title',
+    url: 'https://api.videasy.net/overflix/sources-with-title',
     language: 'Portuguese'
   },
   'Astra': {
@@ -503,7 +507,8 @@ function formatStreamsForNuvio(mediaData, serverName, serverConfig, mediaDetails
         streamType = 'hls';
         headers = Object.assign({}, HEADERS, {
           'Accept': 'application/vnd.apple.mpegurl,application/x-mpegURL,*/*',
-          'Referer': 'https://videasy.net/'
+          'Referer': 'https://api.videasy.net/',
+          'Origin': 'https://player.videasy.net'
         });
       } else if (source.url.includes('.mp4')) {
         streamType = 'mp4';
@@ -590,11 +595,13 @@ function getStreams(tmdbId, mediaType, seasonNum, episodeNum) {
 
         const serverPromises = Object.keys(SERVERS).map(serverName => {
           const serverConfig = SERVERS[serverName];
+          // Double-encode title as per Phisher's implementation
+          const doubleEncodedTitle = encodeURIComponent(encodeURIComponent(mediaDetails.title).replace(/\+/g, "%20"));
           return fetchFromServer(
             serverName,
             serverConfig,
             mediaDetails.mediaType,
-            mediaDetails.title,
+            doubleEncodedTitle,
             mediaDetails.year,
             tmdbId,
             mediaDetails.imdbId,
