@@ -1,6 +1,6 @@
 /**
  * netmirror - Built from src/netmirror/
- * Generated: 2026-05-06T07:44:32.864Z
+ * Generated: 2026-05-06T09:03:07.585Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -65,6 +65,15 @@ var PLATFORM_MAP = {
     epImg: "pvepimg"
   },
   hotstar: {
+    ott: "hs",
+    search: "/mobile/hs/search.php",
+    post: "/mobile/hs/post.php",
+    episodes: "/mobile/hs/episodes.php",
+    playlist: "/mobile/hs/playlist.php",
+    img: "hs/v",
+    epImg: "hsepimg"
+  },
+  disney: {
     ott: "hs",
     search: "/mobile/hs/search.php",
     post: "/mobile/hs/post.php",
@@ -145,7 +154,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const title = mediaType === "tv" ? tmdbData.name : tmdbData.title;
       if (!title)
         throw new Error("Could not fetch title from TMDB");
-      const platforms = ["netflix", "primevideo", "hotstar"];
+      const platforms = ["netflix", "primevideo", "hotstar", "disney"];
       for (const platformKey of platforms) {
         const platform = PLATFORM_MAP[platformKey];
         const streams = yield fetchFromPlatform(platformKey, title, mediaType, season, episode, cookies);

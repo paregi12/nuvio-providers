@@ -28,6 +28,15 @@ export const PLATFORM_MAP = {
         playlist: '/mobile/hs/playlist.php', 
         img: 'hs/v',
         epImg: 'hsepimg'
+    },
+    disney: { 
+        ott: 'hs', 
+        search: '/mobile/hs/search.php', 
+        post: '/mobile/hs/post.php', 
+        episodes: '/mobile/hs/episodes.php', 
+        playlist: '/mobile/hs/playlist.php', 
+        img: 'hs/v',
+        epImg: 'hsepimg'
     }
 };
 

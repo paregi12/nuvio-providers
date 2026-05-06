@@ -14,7 +14,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         if (!title) throw new Error("Could not fetch title from TMDB");
 
-        const platforms = ['netflix', 'primevideo', 'hotstar'];
+        const platforms = ['netflix', 'primevideo', 'hotstar', 'disney'];
         for (const platformKey of platforms) {
             const platform = PLATFORM_MAP[platformKey];
             const streams = await fetchFromPlatform(platformKey, title, mediaType, season, episode, cookies);
