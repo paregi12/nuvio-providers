@@ -61,6 +61,27 @@
       ]
     },
     {
+      "id": "reanime",
+      "name": "Reanime",
+      "description": "Reanime anime streams via FlixCloud",
+      "version": "0.1.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/reanime.js",
+      "enabled": true,
+      "limited": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=reanime.to&sz=128",
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
       "id": "uhdmovies",
       "name": "UHDMovies",
       "description": "UHD Movies streaming with multiple resolution",
