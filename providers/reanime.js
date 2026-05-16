@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T04:18:35.062Z
+ * Generated: 2026-05-16T04:24:17.994Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -431,6 +431,12 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
 
 // src/reanime/flixcloud.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+function getUrlOrigin(url) {
+  if (!url)
+    return "";
+  const match = url.match(/^(https?:\/\/[^\/]+)/);
+  return match ? match[1] : "";
+}
 function safeAtob(str) {
   if (typeof atob === "function")
     return atob(str);
@@ -465,8 +471,7 @@ function parseBytes(val) {
 function extractFlixCloud(embedUrl, referer) {
   return __async(this, null, function* () {
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
-    const origin = "https://flixcloud.cc";
-    const cleanReferer = pageUrl.split("?")[0];
+    const origin = getUrlOrigin(pageUrl);
     const response = yield fetch(pageUrl, {
       headers: {
         "User-Agent": USER_AGENT,
@@ -494,7 +499,8 @@ function extractFlixCloud(embedUrl, referer) {
       headers: {
         "User-Agent": USER_AGENT,
         "Accept": "application/json",
-        "Referer": pageUrl
+        "Referer": pageUrl,
+        "Origin": origin
       }
     });
     if (!tokenResponse.ok)
@@ -522,8 +528,7 @@ function extractFlixCloud(embedUrl, referer) {
       title: data.video_title,
       subtitles: data.subtitles || [],
       headers: {
-        "Referer": pageUrl,
-        "Origin": origin,
+        "Referer": "https://flixcloud.cc/",
         "User-Agent": USER_AGENT
       }
     };

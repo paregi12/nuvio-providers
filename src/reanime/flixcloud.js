@@ -47,8 +47,7 @@ function parseBytes(val) {
 
 export async function extractFlixCloud(embedUrl, referer) {
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
-    const origin = "https://flixcloud.cc";
-    const cleanReferer = pageUrl.split('?')[0];
+    const origin = getUrlOrigin(pageUrl);
     
     const response = await fetch(pageUrl, {
         headers: {
@@ -83,7 +82,8 @@ export async function extractFlixCloud(embedUrl, referer) {
         headers: {
             "User-Agent": USER_AGENT,
             "Accept": "application/json",
-            "Referer": pageUrl
+            "Referer": pageUrl,
+            "Origin": origin
         }
     });
 
@@ -119,8 +119,7 @@ export async function extractFlixCloud(embedUrl, referer) {
         title: data.video_title,
         subtitles: data.subtitles || [],
         headers: {
-            "Referer": pageUrl,
-            "Origin": origin,
+            "Referer": "https://flixcloud.cc/",
             "User-Agent": USER_AGENT
         }
     };
