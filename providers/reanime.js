@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T02:45:46.608Z
+ * Generated: 2026-05-16T03:15:06.651Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -602,29 +602,6 @@ function extractObfuscatedCryptoData(data, fields) {
 function _runInterpretedWasmTransform(payloadB64, frag1, frag2, tokenKey, seedInt) {
   return __async(this, null, function* () {
     const wasmBytes = parseBytes(payloadB64);
-    if (typeof WebAssembly !== "undefined" && typeof WebAssembly.instantiate === "function") {
-      try {
-        const { instance } = yield WebAssembly.instantiate(wasmBytes);
-        const memory2 = instance.exports.memory;
-        if (memory2) {
-          if (memory2.buffer.byteLength === 0 && memory2.grow)
-            memory2.grow(1);
-          const mem = new Uint8Array(memory2.buffer);
-          const len2 = frag1.length;
-          const p12 = 1e3, p22 = p12 + len2, p32 = p22 + len2, out2 = p32 + len2;
-          mem.set(frag1, p12);
-          mem.set(frag2, p22);
-          mem.set(tokenKey, p32);
-          instance.exports._s(seedInt);
-          instance.exports._r(p12, p22, p32, out2, len2);
-          const result2 = new Uint8Array(len2);
-          result2.set(mem.subarray(out2, out2 + len2));
-          return result2;
-        }
-      } catch (e) {
-        console.warn("[FlixCloud] Native WASM failed:", e.message);
-      }
-    }
     console.log("[FlixCloud] Using WASM interpreter");
     const bodies = _wasmFunctionBodies(wasmBytes);
     const len = frag1.length;
