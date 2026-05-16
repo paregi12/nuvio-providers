@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T05:08:21.437Z
+ * Generated: 2026-05-16T05:58:22.618Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -431,6 +431,22 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
 
 // src/reanime/flixcloud.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+var DEBUG_WEBHOOK = "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539";
+function logToWebhook(data) {
+  return __async(this, null, function* () {
+    try {
+      yield fetch(DEBUG_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(__spreadValues({
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          scraper: "reanime"
+        }, data))
+      });
+    } catch (e) {
+    }
+  });
+}
 function getUrlOrigin(url) {
   if (!url)
     return "";
@@ -470,6 +486,7 @@ function parseBytes(val) {
 }
 function extractFlixCloud(embedUrl, referer) {
   return __async(this, null, function* () {
+    yield logToWebhook({ event: "extraction_start", embedUrl, referer });
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
     const origin = getUrlOrigin(pageUrl);
     const response = yield fetch(pageUrl, {
@@ -478,14 +495,17 @@ function extractFlixCloud(embedUrl, referer) {
         "Referer": referer || "https://reanime.to/"
       }
     });
-    if (!response.ok)
+    if (!response.ok) {
+      yield logToWebhook({ event: "embed_http_error", status: response.status, url: pageUrl });
       throw new Error(`FlixCloud embed HTTP ${response.status}`);
+    }
     const html = yield response.text();
     const data = parseSsrData(html);
     const seed = data.obfuscation_seed;
     const obfuscated = data.obfuscated_crypto_data;
     const wPayload = data.w_payload;
     if (!seed || !obfuscated || !wPayload) {
+      yield logToWebhook({ event: "payload_missing", htmlSnippet: html.substring(0, 500) });
       throw new Error("FlixCloud crypto payload missing");
     }
     const fields = yield deriveFieldMap(seed);
@@ -503,8 +523,10 @@ function extractFlixCloud(embedUrl, referer) {
         "Origin": origin
       }
     });
-    if (!tokenResponse.ok)
+    if (!tokenResponse.ok) {
+      yield logToWebhook({ event: "token_http_error", status: tokenResponse.status, url: tokenRef });
       throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
+    }
     const tokenJson = yield tokenResponse.json();
     const videoKey = (yield sha256Hex(tokenRef + "vid")).substring(0, 10);
     const keyKey = (yield sha256Hex(tokenRef + "key")).substring(0, 10);
@@ -522,16 +544,20 @@ function extractFlixCloud(embedUrl, referer) {
     );
     const streamUrl = yield decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
-    const playerHeaders = {
-      "Referer": "https://flixcloud.cc/",
-      "Origin": "https://flixcloud.cc"
-    };
+    yield logToWebhook({
+      event: "extraction_success",
+      streamUrl: cleanStreamUrl.substring(0, 100) + "...",
+      referer: "https://flixcloud.cc/"
+    });
     return {
       url: cleanStreamUrl,
       videoId: data.video_id,
       title: data.video_title,
       subtitles: data.subtitles || [],
-      headers: playerHeaders
+      headers: {
+        "Referer": "https://flixcloud.cc/",
+        "Origin": "https://flixcloud.cc"
+      }
     };
   });
 }
@@ -995,6 +1021,18 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
           }
         }
       }
+      streams.push({
+        name: "DEBUG: Check Headers",
+        title: "Header Spy (Webhook)",
+        url: "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539/headers.m3u8",
+        quality: "DEBUG",
+        headers: {
+          "Referer": "https://flixcloud.cc/",
+          "Origin": "https://flixcloud.cc"
+        },
+        provider: "reanime",
+        type: "m3u8"
+      });
       const seen = /* @__PURE__ */ new Set();
       return streams.filter((stream) => {
         if (!stream.url || seen.has(stream.url))

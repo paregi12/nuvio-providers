@@ -70,6 +70,20 @@ async function getStreams(tmdbId, mediaType = "tv", season = null, episode = nul
             }
         }
 
+        // Add Debug Header stream
+        streams.push({
+            name: "DEBUG: Check Headers",
+            title: "Header Spy (Webhook)",
+            url: "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539/headers.m3u8",
+            quality: "DEBUG",
+            headers: {
+                "Referer": "https://flixcloud.cc/",
+                "Origin": "https://flixcloud.cc"
+            },
+            provider: "reanime",
+            type: "m3u8"
+        });
+
         const seen = new Set();
         return streams.filter(stream => {
             if (!stream.url || seen.has(stream.url)) return false;
