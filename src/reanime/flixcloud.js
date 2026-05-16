@@ -113,15 +113,20 @@ export async function extractFlixCloud(embedUrl, referer) {
     // Clean the decrypted URL just like the reference implementation
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
     
+    // Final clean for the video player headers
+    // Using the exact "Session Header" logic:
+    // This Referer is the base origin which FlixCloud uses to validate ALL segments (.ts files)
+    const playerHeaders = {
+        "Referer": "https://flixcloud.cc/",
+        "Origin": "https://flixcloud.cc"
+    };
+
     return {
         url: cleanStreamUrl,
         videoId: data.video_id,
         title: data.video_title,
         subtitles: data.subtitles || [],
-        headers: {
-            "Referer": "https://flixcloud.cc/",
-            "User-Agent": USER_AGENT
-        }
+        headers: playerHeaders
     };
 }
 
