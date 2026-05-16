@@ -23,24 +23,6 @@
       ]
     },
     {
-      "id": "animekai",
-      "name": "AnimeKai",
-      "description": "AnimeKai TV episodes via AnimeKai servers",
-      "version": "1.1.0",
-      "author": "Nuvio Team",
-      "supportedTypes": [
-        "movie",
-        "tv"
-      ],
-      "filename": "providers/animekai.js",
-      "enabled": true,
-      "limited": true,
-      "logo": "https://animekai.to/assets/uploads/37585a39fe8c8d8fafaa2c7bfbf5374ecac859ea6a0288a6da2c61f5.png",
-      "contentLanguage": [
-        "en"
-      ]
-    },
-    {
       "id": "animepahe",
       "name": "AnimePahe",
       "description": "AnimePahe (Sub/Dub)",

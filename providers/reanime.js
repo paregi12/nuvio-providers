@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-13T06:47:21.862Z
+ * Generated: 2026-05-16T02:45:46.608Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -62,10 +62,15 @@ var __async = (__this, __arguments, generator) => {
   });
 };
 
+// src/reanime/reanime.js
+var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
+
 // src/reanime/constants.js
 var REANIME_BASE = "https://reanime.to";
-var FLIXCLOUD_BASE = "https://flixcloud.cc";
 var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
+var ANILIST_URL = "https://graphql.anilist.co";
+var ARM_BASE = "https://arm.haglund.dev/api/v2";
+var CINEMETA_URL = "https://v3-cinemeta.strem.io/meta";
 var HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7",
@@ -75,321 +80,7 @@ var FLIX_HEADERS = __spreadProps(__spreadValues({}, HEADERS), {
   "Referer": REANIME_BASE + "/"
 });
 
-// src/reanime/bytes.js
-function utf8Encode(input) {
-  const text = String(input || "");
-  const out = [];
-  for (let i = 0; i < text.length; i++) {
-    let code = text.charCodeAt(i);
-    if (code >= 55296 && code <= 56319 && i + 1 < text.length) {
-      const next = text.charCodeAt(i + 1);
-      if (next >= 56320 && next <= 57343) {
-        code = 65536 + (code - 55296 << 10) + (next - 56320);
-        i++;
-      }
-    }
-    if (code < 128)
-      out.push(code);
-    else if (code < 2048)
-      out.push(192 | code >> 6, 128 | code & 63);
-    else if (code < 65536)
-      out.push(224 | code >> 12, 128 | code >> 6 & 63, 128 | code & 63);
-    else
-      out.push(240 | code >> 18, 128 | code >> 12 & 63, 128 | code >> 6 & 63, 128 | code & 63);
-  }
-  return new Uint8Array(out);
-}
-function utf8Decode(bytes) {
-  if (typeof TextDecoder !== "undefined") {
-    return new TextDecoder().decode(bytes);
-  }
-  let out = "";
-  for (let i = 0; i < bytes.length; ) {
-    const b0 = bytes[i++];
-    if (b0 < 128) {
-      out += String.fromCharCode(b0);
-    } else if (b0 >= 192 && b0 < 224) {
-      const b1 = bytes[i++] & 63;
-      out += String.fromCharCode((b0 & 31) << 6 | b1);
-    } else if (b0 >= 224 && b0 < 240) {
-      const b1 = bytes[i++] & 63;
-      const b2 = bytes[i++] & 63;
-      out += String.fromCharCode((b0 & 15) << 12 | b1 << 6 | b2);
-    } else {
-      const b1 = bytes[i++] & 63;
-      const b2 = bytes[i++] & 63;
-      const b3 = bytes[i++] & 63;
-      let code = (b0 & 7) << 18 | b1 << 12 | b2 << 6 | b3;
-      code -= 65536;
-      out += String.fromCharCode(55296 + (code >> 10), 56320 + (code & 1023));
-    }
-  }
-  return out;
-}
-function base64ToBytes(value) {
-  const binary = atob(String(value || "").replace(/\s+/g, ""));
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    out[i] = binary.charCodeAt(i) & 255;
-  }
-  return out;
-}
-function bytesToHex(bytes) {
-  let out = "";
-  for (let i = 0; i < bytes.length; i++) {
-    out += bytes[i].toString(16).padStart(2, "0");
-  }
-  return out;
-}
-
-// src/reanime/crypto.js
-function requireWebCrypto() {
-  if (typeof crypto === "undefined" || !crypto.subtle) {
-    throw new Error("Web Crypto is required for FlixCloud extraction");
-  }
-}
-function sha256Hex(text) {
-  return __async(this, null, function* () {
-    requireWebCrypto();
-    const digest = yield crypto.subtle.digest("SHA-256", utf8Encode(text));
-    return bytesToHex(new Uint8Array(digest));
-  });
-}
-function deriveFieldMap(seed) {
-  return __async(this, null, function* () {
-    let first = seed;
-    for (let i = 0; i < 3; i++) {
-      first = yield sha256Hex(first + String(i));
-    }
-    let second = first;
-    for (let i = 0; i < 3; i++) {
-      second = yield sha256Hex(second + String(i));
-    }
-    return {
-      videoField: `vf_${first.substring(0, 8)}`,
-      keyField: `kf_${first.substring(8, 16)}`,
-      ivField: `ivf_${first.substring(16, 24)}`,
-      containerName: `cd_${first.substring(24, 32)}`,
-      arrayName: `ad_${first.substring(32, 40)}`,
-      objectName: `od_${first.substring(40, 48)}`,
-      tokenField: `${first.substring(48, 64)}_${first.substring(56, 64)}`,
-      keyFrag2Field: `${second.substring(0, 16)}_${second.substring(16, 24)}`
-    };
-  });
-}
-function extractObfuscatedCryptoData(data, fieldMap) {
-  const container = data && data[fieldMap.containerName];
-  const arr = container && container[fieldMap.arrayName];
-  const obj = arr && arr[0] && arr[0][fieldMap.objectName];
-  if (!obj || !obj[fieldMap.keyField] || !obj[fieldMap.ivField]) {
-    throw new Error("Invalid FlixCloud crypto data");
-  }
-  return {
-    frag1B64: obj[fieldMap.keyField],
-    ivB64: obj[fieldMap.ivField]
-  };
-}
-function runWasmTransform(payloadB64, frag1, frag2, tokenKey, seedInt) {
-  return __async(this, null, function* () {
-    if (typeof WebAssembly === "undefined" || typeof WebAssembly.instantiate !== "function") {
-      throw new Error("WebAssembly.instantiate is required for FlixCloud extraction");
-    }
-    const wasmBytes = base64ToBytes(payloadB64);
-    const instance = (yield WebAssembly.instantiate(wasmBytes, {})).instance;
-    const exports2 = instance.exports;
-    const memory = exports2.memory;
-    if (!memory)
-      throw new Error("FlixCloud WASM memory missing");
-    if (memory.buffer.byteLength === 0 && memory.grow)
-      memory.grow(1);
-    const inputLength = frag1.length;
-    const p1 = 1e3;
-    const p2 = p1 + inputLength;
-    const p3 = p2 + inputLength;
-    const out = p3 + inputLength;
-    const mem = new Uint8Array(memory.buffer);
-    mem.set(frag1, p1);
-    mem.set(frag2, p2);
-    mem.set(tokenKey, p3);
-    exports2._s(seedInt);
-    exports2._r(p1, p2, p3, out, inputLength);
-    const result = new Uint8Array(inputLength);
-    result.set(mem.subarray(out, out + inputLength));
-    return result;
-  });
-}
-function decryptAesCbcUrl(rawKey, ivB64, cipherB64, seed) {
-  return __async(this, null, function* () {
-    requireWebCrypto();
-    const pbkdf2Key = yield crypto.subtle.importKey(
-      "raw",
-      rawKey,
-      { name: "PBKDF2" },
-      false,
-      ["deriveBits"]
-    );
-    const derivedBits = yield crypto.subtle.deriveBits(
-      {
-        name: "PBKDF2",
-        salt: utf8Encode(seed),
-        iterations: 1e3,
-        hash: "SHA-256"
-      },
-      pbkdf2Key,
-      256
-    );
-    const keyBytes = new Uint8Array(derivedBits);
-    for (let i = 0; i < 32; i++) {
-      keyBytes[i] ^= seed.charCodeAt(i % seed.length);
-    }
-    const digest = yield crypto.subtle.digest("SHA-256", keyBytes);
-    const aesKey = yield crypto.subtle.importKey(
-      "raw",
-      new Uint8Array(digest),
-      { name: "AES-CBC" },
-      false,
-      ["decrypt"]
-    );
-    const plain = yield crypto.subtle.decrypt(
-      { name: "AES-CBC", iv: base64ToBytes(ivB64) },
-      aesKey,
-      base64ToBytes(cipherB64)
-    );
-    return utf8Decode(new Uint8Array(plain)).trim();
-  });
-}
-
-// src/reanime/flixcloud.js
-function extractBalancedObject(source, key) {
-  const keyIndex = source.indexOf(key);
-  if (keyIndex < 0)
-    return null;
-  const start = source.indexOf("{", keyIndex);
-  if (start < 0)
-    return null;
-  let depth = 0;
-  let quote = null;
-  let escape = false;
-  for (let i = start; i < source.length; i++) {
-    const ch = source[i];
-    if (quote) {
-      if (escape)
-        escape = false;
-      else if (ch === "\\")
-        escape = true;
-      else if (ch === quote)
-        quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      quote = ch;
-    } else if (ch === "{") {
-      depth++;
-    } else if (ch === "}") {
-      depth--;
-      if (depth === 0)
-        return source.substring(start, i + 1);
-    }
-  }
-  return null;
-}
-function extractDataObjectContaining(source, marker) {
-  const markerIndex = source.indexOf(marker);
-  if (markerIndex < 0)
-    return null;
-  let dataIndex = source.lastIndexOf("data:", markerIndex);
-  while (dataIndex >= 0) {
-    const start = source.indexOf("{", dataIndex);
-    if (start >= 0 && start < markerIndex) {
-      const objectText = extractBalancedObject(source.substring(dataIndex), "data:");
-      if (objectText && objectText.includes(marker))
-        return objectText;
-    }
-    dataIndex = source.lastIndexOf("data:", dataIndex - 1);
-  }
-  return null;
-}
-function quoteObjectKeys(text) {
-  return text.replace(/([{,])\s*([A-Za-z_$][A-Za-z0-9_$]*|[0-9a-f]{4,}(?:_[0-9a-f]{4,})?)\s*:/g, '$1"$2":').replace(/,\s*([}\]])/g, "$1");
-}
-function parseSsrData(html) {
-  const dataObject = extractDataObjectContaining(html, "obfuscation_seed") || extractBalancedObject(html, "data:{subtitles:");
-  if (!dataObject)
-    throw new Error("FlixCloud SSR data not found");
-  return JSON.parse(quoteObjectKeys(dataObject));
-}
-function normalizeFlixEmbedUrl(url, referer) {
-  const finalUrl = url.startsWith("http") ? url : `${FLIXCLOUD_BASE}${url.startsWith("/") ? "" : "/"}${url}`;
-  const separator = finalUrl.includes("?") ? "&" : "?";
-  return `${finalUrl}${separator}v=1&autoPlay=true&skI=false&skO=false&kuudere_ts=${Date.now()}`;
-}
-function extractFlixCloud(embedUrl, referer) {
-  return __async(this, null, function* () {
-    const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
-    const response = yield fetch(pageUrl, {
-      headers: __spreadProps(__spreadValues({}, FLIX_HEADERS), {
-        "Referer": referer || FLIX_HEADERS.Referer
-      })
-    });
-    if (!response.ok)
-      throw new Error(`FlixCloud embed HTTP ${response.status}`);
-    const html = yield response.text();
-    const data = parseSsrData(html);
-    const seed = data.obfuscation_seed;
-    const obfuscated = data.obfuscated_crypto_data;
-    if (!seed || !obfuscated || !data.w_payload) {
-      throw new Error("FlixCloud crypto payload missing");
-    }
-    const fieldMap = yield deriveFieldMap(seed);
-    const cryptoParts = extractObfuscatedCryptoData(obfuscated, fieldMap);
-    const frag2B64 = data[fieldMap.keyFrag2Field];
-    const tokenRef = data[fieldMap.tokenField];
-    if (!frag2B64 || !tokenRef) {
-      throw new Error("FlixCloud token fields missing");
-    }
-    const tokenResponse = yield fetch(`${FLIXCLOUD_BASE}/api/m3u8/${tokenRef}`, {
-      headers: __spreadProps(__spreadValues({}, FLIX_HEADERS), {
-        "Accept": "application/json",
-        "Referer": pageUrl
-      })
-    });
-    if (!tokenResponse.ok)
-      throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
-    const tokenJson = yield tokenResponse.json();
-    const videoKey = (yield sha256Hex(tokenRef + "vid")).substring(0, 10);
-    const keyKey = (yield sha256Hex(tokenRef + "key")).substring(0, 10);
-    const encryptedUrlB64 = tokenJson && tokenJson[videoKey];
-    const tokenKeyB64 = tokenJson && tokenJson[keyKey];
-    if (!encryptedUrlB64 || !tokenKeyB64) {
-      throw new Error("FlixCloud token response incomplete");
-    }
-    const wasmKey = yield runWasmTransform(
-      data.w_payload,
-      base64ToBytes(cryptoParts.frag1B64),
-      base64ToBytes(frag2B64),
-      base64ToBytes(tokenKeyB64),
-      parseInt(seed.substring(0, 8), 16)
-    );
-    const streamUrl = yield decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
-    if (!streamUrl || !streamUrl.includes(".m3u8")) {
-      throw new Error("FlixCloud decrypted URL invalid");
-    }
-    return {
-      url: streamUrl,
-      videoId: data.video_id,
-      title: data.video_title,
-      subtitles: data.subtitles || [],
-      headers: {
-        "Referer": pageUrl,
-        "Origin": FLIXCLOUD_BASE,
-        "User-Agent": FLIX_HEADERS["User-Agent"]
-      }
-    };
-  });
-}
-
 // src/reanime/reanime.js
-var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
 function absolutize(path) {
   if (!path)
     return "";
@@ -400,11 +91,13 @@ function absolutize(path) {
 function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
     const finalUrl = absolutize(url);
+    console.log(`[Reanime] Fetching: ${finalUrl}`);
     const response = yield fetch(finalUrl, __spreadProps(__spreadValues({}, options), {
       headers: __spreadValues(__spreadValues({}, HEADERS), options.headers || {})
     }));
-    if (!response.ok)
+    if (!response.ok) {
       throw new Error(`Reanime HTTP ${response.status}: ${finalUrl}`);
+    }
     return yield response.text();
   });
 }
@@ -422,21 +115,152 @@ function getTmdbInfo(tmdbId, mediaType) {
   return __async(this, null, function* () {
     const endpoint = mediaType === "tv" ? "tv" : "movie";
     const url = `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`;
-    const res = yield fetch(url, { headers: HEADERS });
-    if (!res.ok)
-      throw new Error(`TMDB HTTP ${res.status}`);
-    const data = yield res.json();
+    try {
+      const data = yield fetchJson(url);
+      return {
+        title: data.name || data.title || data.original_name || data.original_title || "",
+        year: ((data.first_air_date || data.release_date || "").match(/\d{4}/) || [null])[0],
+        imdbId: data.external_ids && data.external_ids.imdb_id
+      };
+    } catch (e) {
+      return { title: "", year: null, imdbId: null };
+    }
+  });
+}
+function getSyncInfo(id, mediaType, season, episode) {
+  return __async(this, null, function* () {
+    const isImdb = typeof id === "string" && id.indexOf("tt") === 0;
+    const getCinemetaInfo = (imdbId2) => __async(this, null, function* () {
+      const type = mediaType === "movie" ? "movie" : "series";
+      const url = `${CINEMETA_URL}/${type}/${imdbId2}.json`;
+      try {
+        const data = yield fetchJson(url);
+        const meta = data.meta;
+        if (!meta)
+          throw new Error("No Cinemata metadata");
+        if (mediaType === "movie")
+          return { date: meta.released ? meta.released.split("T")[0] : null, title: meta.name, dayIndex: 1 };
+        const videos = meta.videos || [];
+        const target = videos.find((v) => v.season == season && v.episode == episode);
+        if (!target || !target.released)
+          return { date: null, title: null, dayIndex: 1 };
+        const targetDate = target.released.split("T")[0];
+        const dayIndex = videos.filter((v) => v.season == season && v.released && v.released.split("T")[0] === targetDate && parseInt(v.episode) < parseInt(episode)).length + 1;
+        return { date: targetDate, title: target.name || null, dayIndex };
+      } catch (e) {
+        return { date: null, title: null, dayIndex: 1 };
+      }
+    });
+    if (isImdb) {
+      const info = yield getCinemetaInfo(id);
+      if (info.date)
+        return { imdbId: id, releaseDate: info.date, episodeTitle: info.title, dayIndex: info.dayIndex, episode };
+      throw new Error("Could not find release date on Cinemata");
+    }
+    const tmdbBase = `https://api.themoviedb.org/3/${mediaType === "movie" ? "movie" : "tv"}/${id}`;
+    const [details, base] = yield Promise.all([
+      fetchJson(tmdbBase + (mediaType === "movie" ? "" : "/external_ids") + `?api_key=${TMDB_API_KEY}`),
+      fetchJson(tmdbBase + `?api_key=${TMDB_API_KEY}`)
+    ]);
+    let imdbId = details.imdb_id || null;
+    const title = base.name || base.title || null;
+    if (!imdbId) {
+      try {
+        const armData = yield fetchJson(`${ARM_BASE}/themoviedb?id=${id}`);
+        imdbId = Array.isArray(armData) && armData.length > 0 ? armData[0].imdb : null;
+      } catch (e) {
+      }
+    }
+    if (!imdbId)
+      throw new Error(`No IMDb ID found for TMDB ${id}`);
+    const cMeta = yield getCinemetaInfo(imdbId);
+    let finalDate = cMeta.date;
+    if (mediaType === "movie" && base.release_date)
+      finalDate = base.release_date;
+    if (!finalDate)
+      throw new Error(`Could not find release date for ID ${imdbId}`);
     return {
-      title: data.name || data.title || data.original_name || data.original_title || "",
-      year: ((data.first_air_date || data.release_date || "").match(/\d{4}/) || [null])[0],
-      imdbId: data.external_ids && data.external_ids.imdb_id
+      imdbId,
+      tmdbId: id,
+      releaseDate: finalDate,
+      title,
+      episodeTitle: cMeta.title,
+      dayIndex: cMeta.dayIndex,
+      episode
     };
+  });
+}
+function resolveByDate(releaseDateStr, showTitle, originalEpisode, episodeTitle, dayIndex) {
+  return __async(this, null, function* () {
+    var _a, _b;
+    if (!releaseDateStr || !/^\d{4}-\d{2}-\d{2}/.test(releaseDateStr))
+      return null;
+    const query = "query($search:String){Page(perPage:20){media(search:$search,type:ANIME){id type format title{romaji english}startDate{year month day}endDate{year month day}episodes streamingEpisodes{title}}}}";
+    try {
+      const json = yield fetchJson(ANILIST_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { search: showTitle } })
+      });
+      const candidates = ((_b = (_a = json.data) == null ? void 0 : _a.Page) == null ? void 0 : _b.media) || [];
+      if (candidates.length === 0)
+        return null;
+      const targetDate = new Date(releaseDateStr);
+      for (const anime of candidates) {
+        const s = anime.startDate;
+        const startStr = s.year && s.month && s.day ? `${s.year}-${String(s.month).padStart(2, "0")}-${String(s.day).padStart(2, "0")}` : null;
+        if (!startStr)
+          continue;
+        const startDate = new Date(startStr);
+        const diffDays = Math.ceil(Math.abs(targetDate.getTime() - startDate.getTime()) / (1e3 * 60 * 60 * 24));
+        let isMatch = false;
+        if (anime.format === "MOVIE" || anime.format === "SPECIAL" || anime.episodes === 1) {
+          if (diffDays <= 2)
+            isMatch = true;
+        } else {
+          const startLimit = new Date(startDate);
+          startLimit.setDate(startLimit.getDate() - 2);
+          if (targetDate >= startLimit) {
+            if (anime.endDate && anime.endDate.year) {
+              const endDate = new Date(anime.endDate.year, (anime.endDate.month || 12) - 1, anime.endDate.day || 31);
+              endDate.setDate(endDate.getDate() + 2);
+              if (targetDate <= endDate)
+                isMatch = true;
+            } else {
+              isMatch = true;
+            }
+          }
+        }
+        if (isMatch) {
+          const isTV = anime.format !== "MOVIE" && anime.format !== "SPECIAL" && anime.episodes !== 1;
+          let episodeNum = isTV && originalEpisode ? originalEpisode : dayIndex || 1;
+          const episodes = anime.streamingEpisodes || [];
+          if (episodes.length > 1 && episodeTitle) {
+            const cleanTarget = episodeTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
+            for (let j = 0; j < episodes.length; j++) {
+              const cleanAl = (episodes[j].title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+              if (cleanAl && (cleanAl.indexOf(cleanTarget) !== -1 || cleanTarget.indexOf(cleanAl) !== -1)) {
+                episodeNum = j + 1;
+                break;
+              }
+            }
+          }
+          return { alId: anime.id, episode: episodeNum, title: anime.title.english || anime.title.romaji };
+        }
+      }
+    } catch (e) {
+      console.error(`[AniList] Search error: ${e.message}`);
+    }
+    return null;
   });
 }
 function normalizeTitle(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
-function scoreCandidate(title, query, year) {
+function scoreCandidate(title, query, year, targetAnilistId, candidateAnilistId) {
+  if (targetAnilistId && candidateAnilistId && String(targetAnilistId) === String(candidateAnilistId)) {
+    return 1e3;
+  }
   const a = normalizeTitle(title);
   const b = normalizeTitle(query);
   if (!a || !b)
@@ -487,14 +311,14 @@ function collectSlugsFromHtml(html) {
   });
   return results;
 }
-function searchReanimeAnime(query, year) {
+function searchReanimeAnime(query, year, targetAnilistId = null) {
   return __async(this, null, function* () {
     const endpoints = [
-      `/search?keyword=${encodeURIComponent(query)}`,
-      `/search?q=${encodeURIComponent(query)}`,
       `/api/search?q=${encodeURIComponent(query)}`,
       `/api/anime/search?q=${encodeURIComponent(query)}`,
-      `/api/search/anime?q=${encodeURIComponent(query)}`
+      `/api/search/anime?q=${encodeURIComponent(query)}`,
+      `/search?keyword=${encodeURIComponent(query)}`,
+      `/search?q=${encodeURIComponent(query)}`
     ];
     const candidates = [];
     for (const endpoint of endpoints) {
@@ -505,24 +329,32 @@ function searchReanimeAnime(query, year) {
           const list = json.data || json.results || json.anime || json;
           if (Array.isArray(list)) {
             list.forEach((item) => {
-              var _a, _b, _c;
+              var _a, _b, _c, _d;
               const slug = item.anime_id || item.slug || item.id || item.url;
-              const cleanSlug = ((_a = String(slug || "").match(/\/(?:anime|watch)\/([^?#]+)/)) == null ? void 0 : _a[1]) || slug;
+              const cleanSlug = String(slug).replace(/-[a-z0-9]{6}$/, "");
               if (cleanSlug) {
+                const alId = extractAnilistId(item);
                 candidates.push({
                   slug: cleanSlug,
-                  title: ((_b = item.title) == null ? void 0 : _b.english) || ((_c = item.title) == null ? void 0 : _c.romaji) || item.title || item.name || cleanSlug,
-                  anilistId: extractAnilistId(item)
+                  title: ((_a = item.title) == null ? void 0 : _a.english) || ((_b = item.title) == null ? void 0 : _b.romaji) || item.title || item.name || cleanSlug,
+                  anilistId: alId,
+                  score: scoreCandidate(((_c = item.title) == null ? void 0 : _c.english) || ((_d = item.title) == null ? void 0 : _d.romaji) || item.title || item.name || cleanSlug, query, year, targetAnilistId, alId)
                 });
               }
             });
           }
         } else {
-          candidates.push(...collectSlugsFromHtml(text));
+          const htmlResults = collectSlugsFromHtml(text);
+          htmlResults.forEach((c) => {
+            c.score = scoreCandidate(c.title, query, year, targetAnilistId, null);
+            candidates.push(c);
+          });
         }
       } catch (_) {
       }
-      if (candidates.length > 0)
+      if (candidates.some((c) => c.score >= 1e3))
+        break;
+      if (candidates.length > 0 && !targetAnilistId)
         break;
     }
     const unique = [];
@@ -531,12 +363,11 @@ function searchReanimeAnime(query, year) {
       if (!candidate.slug || seen.has(candidate.slug))
         continue;
       seen.add(candidate.slug);
-      candidate.score = scoreCandidate(candidate.title || candidate.slug, query, year);
       unique.push(candidate);
     }
     unique.sort((a, b) => b.score - a.score);
     if (unique.length > 0) {
-      console.log(`[Reanime] Search for "${query}" found ${unique.length} candidates. Top: "${unique[0].title}" (Score: ${unique[0].score})`);
+      console.log(`[Reanime] Search for "${query}" found ${unique.length} candidates. Top: "${unique[0].title}" (Score: ${unique[0].score}, AL: ${unique[0].anilistId})`);
     }
     return unique.length > 0 ? unique[0] : null;
   });
@@ -597,25 +428,465 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
   });
 }
 
+// src/reanime/flixcloud.js
+var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+function parseBytes(val) {
+  if (!val)
+    return new Uint8Array(0);
+  if (/^[0-9a-f]+$/i.test(val) && val.length % 2 === 0) {
+    const out = new Uint8Array(val.length / 2);
+    for (let i = 0; i < val.length; i += 2) {
+      out[i / 2] = parseInt(val.substring(i, i + 2), 16);
+    }
+    return out;
+  }
+  try {
+    const bin = atob(val);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++)
+      out[i] = bin.charCodeAt(i);
+    return out;
+  } catch (e) {
+    return new Uint8Array(0);
+  }
+}
+function extractFlixCloud(embedUrl, referer) {
+  return __async(this, null, function* () {
+    const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
+    const origin = new URL(pageUrl).origin;
+    const response = yield fetch(pageUrl, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Referer": referer || "https://reanime.to/"
+      }
+    });
+    if (!response.ok)
+      throw new Error(`FlixCloud embed HTTP ${response.status}`);
+    const html = yield response.text();
+    const data = parseSsrData(html);
+    const seed = data.obfuscation_seed;
+    const obfuscated = data.obfuscated_crypto_data;
+    const wPayload = data.w_payload;
+    if (!seed || !obfuscated || !wPayload) {
+      throw new Error("FlixCloud crypto payload missing");
+    }
+    const fields = yield deriveFieldMap(seed);
+    const cryptoParts = extractObfuscatedCryptoData(obfuscated, fields);
+    const frag2Val = data[fields.keyFrag2Field];
+    const tokenRef = data[fields.tokenField];
+    if (!frag2Val || !tokenRef) {
+      throw new Error("FlixCloud token fields missing");
+    }
+    const tokenResponse = yield fetch(`${origin}/api/m3u8/${tokenRef}`, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+        "Referer": pageUrl
+      }
+    });
+    if (!tokenResponse.ok)
+      throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
+    const tokenJson = yield tokenResponse.json();
+    const videoKey = (yield sha256Hex(tokenRef + "vid")).substring(0, 10);
+    const keyKey = (yield sha256Hex(tokenRef + "key")).substring(0, 10);
+    const encryptedUrlB64 = tokenJson[videoKey];
+    const tokenKeyVal = tokenJson[keyKey];
+    if (!encryptedUrlB64 || !tokenKeyVal) {
+      throw new Error("FlixCloud token response incomplete");
+    }
+    const wasmKey = yield _runInterpretedWasmTransform(
+      wPayload,
+      parseBytes(cryptoParts.frag1B64),
+      parseBytes(frag2Val),
+      parseBytes(tokenKeyVal),
+      parseInt(seed.substring(0, 8), 16)
+    );
+    const streamUrl = yield decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
+    return {
+      url: streamUrl,
+      videoId: data.video_id,
+      title: data.video_title,
+      subtitles: data.subtitles || [],
+      headers: {
+        "Referer": pageUrl,
+        "Origin": origin,
+        "User-Agent": USER_AGENT
+      }
+    };
+  });
+}
+function normalizeFlixEmbedUrl(url, referer) {
+  const finalUrl = url.startsWith("http") ? url : `https://flixcloud.cc${url.startsWith("/") ? "" : "/"}${url}`;
+  const separator = finalUrl.includes("?") ? "&" : "?";
+  return `${finalUrl}${separator}v=1&autoPlay=true&skI=false&skO=false&kuudere_ts=${Date.now()}`;
+}
+function extractBalancedObject(source, startIdx) {
+  const start = source.indexOf("{", startIdx);
+  if (start < 0)
+    return null;
+  let depth = 0;
+  let quote = null;
+  let escape = false;
+  for (let i = start; i < source.length; i++) {
+    const ch = source[i];
+    if (quote) {
+      if (escape)
+        escape = false;
+      else if (ch === "\\")
+        escape = true;
+      else if (ch === quote)
+        quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0)
+        return source.substring(start, i + 1);
+    }
+  }
+  return null;
+}
+function parseSsrData(html) {
+  const marker = "obfuscation_seed";
+  const markerIdx = html.indexOf(marker);
+  if (markerIdx < 0)
+    throw new Error("FlixCloud SSR data marker not found");
+  let dataIdx = html.lastIndexOf("{", markerIdx);
+  while (dataIdx >= 0) {
+    const obj = extractBalancedObject(html, dataIdx);
+    if (obj && obj.includes(marker)) {
+      try {
+        const jsonText = obj.replace(/([{,])\s*([A-Za-z_$][A-Za-z0-9_$]*|[0-9a-f]{4,}(?:_[0-9a-f]{4,})?)\s*:/g, '$1"$2":').replace(/,\s*([}\]])/g, "$1");
+        const parsed = JSON.parse(jsonText);
+        return parsed.data || parsed;
+      } catch (e) {
+      }
+    }
+    dataIdx = html.lastIndexOf("{", dataIdx - 1);
+  }
+  throw new Error("Failed to extract valid SSR data object");
+}
+function deriveFieldMap(seed) {
+  return __async(this, null, function* () {
+    let first = seed;
+    for (let i = 0; i < 3; i++)
+      first = yield sha256Hex(first + String(i));
+    let second = first;
+    for (let i = 0; i < 3; i++)
+      second = yield sha256Hex(second + String(i));
+    const fields = {
+      keyField: `kf_${first.substring(8, 16)}`,
+      ivField: `ivf_${first.substring(16, 24)}`,
+      containerName: `cd_${first.substring(24, 32)}`,
+      arrayName: `ad_${first.substring(32, 40)}`,
+      objectName: `od_${first.substring(40, 48)}`,
+      tokenField: `${first.substring(48, 64)}_${first.substring(56, 64)}`,
+      keyFrag2Field: `${second.substring(0, 16)}_${second.substring(16, 24)}`
+    };
+    return fields;
+  });
+}
+function extractObfuscatedCryptoData(data, fields) {
+  var _a;
+  const container = data[fields.containerName];
+  const arr = container == null ? void 0 : container[fields.arrayName];
+  const obj = (_a = arr == null ? void 0 : arr[0]) == null ? void 0 : _a[fields.objectName];
+  if (!obj)
+    throw new Error("Invalid FlixCloud crypto data structure");
+  return { frag1B64: obj[fields.keyField], ivB64: obj[fields.ivField] };
+}
+function _runInterpretedWasmTransform(payloadB64, frag1, frag2, tokenKey, seedInt) {
+  return __async(this, null, function* () {
+    const wasmBytes = parseBytes(payloadB64);
+    if (typeof WebAssembly !== "undefined" && typeof WebAssembly.instantiate === "function") {
+      try {
+        const { instance } = yield WebAssembly.instantiate(wasmBytes);
+        const memory2 = instance.exports.memory;
+        if (memory2) {
+          if (memory2.buffer.byteLength === 0 && memory2.grow)
+            memory2.grow(1);
+          const mem = new Uint8Array(memory2.buffer);
+          const len2 = frag1.length;
+          const p12 = 1e3, p22 = p12 + len2, p32 = p22 + len2, out2 = p32 + len2;
+          mem.set(frag1, p12);
+          mem.set(frag2, p22);
+          mem.set(tokenKey, p32);
+          instance.exports._s(seedInt);
+          instance.exports._r(p12, p22, p32, out2, len2);
+          const result2 = new Uint8Array(len2);
+          result2.set(mem.subarray(out2, out2 + len2));
+          return result2;
+        }
+      } catch (e) {
+        console.warn("[FlixCloud] Native WASM failed:", e.message);
+      }
+    }
+    console.log("[FlixCloud] Using WASM interpreter");
+    const bodies = _wasmFunctionBodies(wasmBytes);
+    const len = frag1.length;
+    const memory = new Uint8Array(4096 + len * 4);
+    const p1 = 1e3, p2 = p1 + len, p3 = p2 + len, out = p3 + len;
+    memory.set(frag1, p1);
+    memory.set(frag2, p2);
+    memory.set(tokenKey, p3);
+    const ok = _executeWasmBody(bodies[1], [p1, p2, p3, out, len], [seedInt], memory);
+    if (!ok)
+      throw new Error("WASM execution failed");
+    const result = new Uint8Array(len);
+    result.set(memory.subarray(out, out + len));
+    return result;
+  });
+}
+function _wasmFunctionBodies(bytes) {
+  const bodies = [];
+  let cursor = 8;
+  const readUleb = () => {
+    let res = 0, shift = 0;
+    while (cursor < bytes.length) {
+      const b = bytes[cursor++];
+      res |= (b & 127) << shift;
+      if ((b & 128) === 0)
+        break;
+      shift += 7;
+    }
+    return res;
+  };
+  while (cursor < bytes.length) {
+    const id = bytes[cursor++];
+    const size = readUleb();
+    const end = cursor + size;
+    if (id === 10) {
+      const count = readUleb();
+      for (let i = 0; i < count; i++) {
+        const bSize = readUleb();
+        bodies.push(bytes.subarray(cursor, cursor + bSize));
+        cursor += bSize;
+      }
+      break;
+    }
+    cursor = end;
+  }
+  return bodies;
+}
+function _executeWasmBody(body, params, globals, memory) {
+  let pc = 0;
+  const readUleb = () => {
+    let res = 0, shift = 0;
+    while (pc < body.length) {
+      const b = body[pc++];
+      res |= (b & 127) << shift;
+      if ((b & 128) === 0)
+        break;
+      shift += 7;
+    }
+    return res;
+  };
+  const readSleb = () => {
+    let res = 0, shift = 0, b = 0;
+    do {
+      b = body[pc++];
+      res |= (b & 127) << shift;
+      shift += 7;
+    } while ((b & 128) !== 0);
+    if (shift < 32 && (b & 64) !== 0)
+      res |= ~0 << shift;
+    return res | 0;
+  };
+  const locals = params.slice();
+  const lCount = readUleb();
+  for (let i = 0; i < lCount; i++) {
+    const c = readUleb();
+    pc++;
+    for (let j = 0; j < c; j++)
+      locals.push(0);
+  }
+  const stack = [];
+  const cStack = [];
+  let steps = 0;
+  while (pc < body.length && steps++ < 1e5) {
+    const op = body[pc++];
+    switch (op) {
+      case 2:
+      case 3:
+        pc++;
+        cStack.push({ isLoop: op === 3, startPc: pc });
+        break;
+      case 11:
+        if (cStack.length === 0)
+          return true;
+        cStack.pop();
+        break;
+      case 32:
+        stack.push(locals[readUleb()] | 0);
+        break;
+      case 33:
+        locals[readUleb()] = stack.pop() || 0;
+        break;
+      case 35:
+        stack.push(globals[readUleb()] | 0);
+        break;
+      case 65:
+        stack.push(readSleb());
+        break;
+      case 45: {
+        readUleb();
+        const off = readUleb();
+        const addr = (stack.pop() || 0) + off;
+        stack.push(memory[addr] || 0);
+        break;
+      }
+      case 58: {
+        readUleb();
+        const off = readUleb();
+        const val = stack.pop() || 0;
+        const addr = (stack.pop() || 0) + off;
+        memory[addr] = val & 255;
+        break;
+      }
+      case 79: {
+        const r = (stack.pop() || 0) >>> 0, l = (stack.pop() || 0) >>> 0;
+        stack.push(l >= r ? 1 : 0);
+        break;
+      }
+      case 106: {
+        const r = stack.pop() || 0, l = stack.pop() || 0;
+        stack.push(l + r | 0);
+        break;
+      }
+      case 107: {
+        const r = stack.pop() || 0, l = stack.pop() || 0;
+        stack.push(l - r | 0);
+        break;
+      }
+      case 108: {
+        const r = stack.pop() || 0, l = stack.pop() || 0;
+        stack.push(Math.imul(l, r));
+        break;
+      }
+      case 113: {
+        const r = stack.pop() || 0, l = stack.pop() || 0;
+        stack.push(l & r);
+        break;
+      }
+      case 114: {
+        const r = stack.pop() || 0, l = stack.pop() || 0;
+        stack.push(l | r);
+        break;
+      }
+      case 115: {
+        const r = stack.pop() || 0, l = stack.pop() || 0;
+        stack.push(l ^ r);
+        break;
+      }
+      case 116: {
+        const s = (stack.pop() || 0) & 31, v = stack.pop() || 0;
+        stack.push(v << s);
+        break;
+      }
+      case 118: {
+        const s = (stack.pop() || 0) & 31, v = stack.pop() || 0;
+        stack.push(v >>> s);
+        break;
+      }
+    }
+  }
+  return true;
+}
+function uint8ArrayToWordArray(arr) {
+  const CryptoJS = require("crypto-js");
+  const words = [];
+  for (let i = 0; i < arr.length; i++) {
+    words[i >>> 2] |= (arr[i] & 255) << 24 - i % 4 * 8;
+  }
+  return CryptoJS.lib.WordArray.create(words, arr.length);
+}
+function decryptAesCbcUrl(rawKey, ivVal, cipherB64, seed) {
+  return __async(this, null, function* () {
+    const CryptoJS = require("crypto-js");
+    const salt = CryptoJS.enc.Utf8.parse(seed);
+    const passphrase = uint8ArrayToWordArray(rawKey);
+    const ivBytes = parseBytes(ivVal);
+    const iv = uint8ArrayToWordArray(ivBytes);
+    const derivedKey = CryptoJS.PBKDF2(passphrase, salt, {
+      keySize: 256 / 32,
+      iterations: 1e3,
+      hasher: CryptoJS.algo.SHA256
+    });
+    const keyBytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      keyBytes[i] = derivedKey.words[i >>> 2] >>> 24 - i % 4 * 8 & 255;
+    }
+    for (let i = 0; i < 32; i++) {
+      keyBytes[i] ^= seed.charCodeAt(i % seed.length);
+    }
+    const finalKey = CryptoJS.SHA256(uint8ArrayToWordArray(keyBytes));
+    const decrypted = CryptoJS.AES.decrypt(cipherB64, finalKey, {
+      iv,
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
+    });
+    const result = decrypted.toString(CryptoJS.enc.Utf8);
+    if (!result)
+      throw new Error("Decryption failed (result empty)");
+    return result.trim();
+  });
+}
+function sha256Hex(text) {
+  return __async(this, null, function* () {
+    const CryptoJS = require("crypto-js");
+    return CryptoJS.SHA256(text).toString(CryptoJS.enc.Hex);
+  });
+}
+
 // src/reanime/index.js
 function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
   return __async(this, null, function* () {
     try {
-      const episodeNumber = mediaType === "tv" ? Number(episode || 1) : 1;
-      const tmdb = yield getTmdbInfo(tmdbId, mediaType);
-      if (!tmdb.title)
+      if (mediaType !== "tv" && mediaType !== "movie")
         return [];
-      const anime = yield searchReanimeAnime(tmdb.title, tmdb.year);
+      let alId = null;
+      let episodeNumber = mediaType === "tv" ? Number(episode || 1) : 1;
+      let searchTitle = "";
+      let searchYear = null;
+      if (typeof tmdbId === "string" && tmdbId.indexOf("anilist:") === 0) {
+        alId = tmdbId.split(":")[1];
+        const tmdb = yield getTmdbInfo(alId, mediaType);
+        searchTitle = tmdb.title;
+        searchYear = tmdb.year;
+      } else {
+        console.log(`[Reanime] Resolving sync info for TMDB ${tmdbId}...`);
+        const syncInfo = yield getSyncInfo(tmdbId, mediaType, season, episodeNumber);
+        searchTitle = syncInfo.title;
+        const syncResult = yield resolveByDate(syncInfo.releaseDate, syncInfo.title, episodeNumber, syncInfo.episodeTitle, syncInfo.dayIndex);
+        if (syncResult && syncResult.alId) {
+          alId = String(syncResult.alId);
+          episodeNumber = syncResult.episode;
+          searchTitle = syncResult.title;
+          console.log(`[Reanime] Verified AniList ID: ${alId}, Episode: ${episodeNumber}`);
+        } else {
+          console.warn(`[Reanime] Could not verify AniList ID via air-date. Falling back to basic search.`);
+          const tmdb = yield getTmdbInfo(tmdbId, mediaType);
+          searchTitle = tmdb.title;
+          searchYear = tmdb.year;
+        }
+      }
+      const anime = yield searchReanimeAnime(searchTitle, searchYear, alId);
       if (!anime || !anime.slug)
         return [];
       const languages = ["sub", "dub"];
       const streams = [];
       for (const language of languages) {
-        const { watchUrl, embeds } = yield getFlixEmbeds(anime.slug, episodeNumber, language, anime.anilistId);
+        const { watchUrl, embeds } = yield getFlixEmbeds(anime.slug, episodeNumber, language, alId || anime.anilistId);
         for (let i = 0; i < embeds.length; i++) {
           try {
+            console.log(`[Reanime] Extracting locally: ${embeds[i]}`);
             const extracted = yield extractFlixCloud(embeds[i], watchUrl);
-            const streamTitle = mediaType === "movie" ? `${tmdb.title} (${language.toUpperCase()})` : `${tmdb.title} - Episode ${episodeNumber} (${language.toUpperCase()})`;
+            console.log(`[Reanime] Successfully extracted: ${extracted.url}`);
+            const streamTitle = mediaType === "movie" ? `${searchTitle} (${language.toUpperCase()})` : `${searchTitle} - Episode ${episodeNumber} (${language.toUpperCase()})`;
             streams.push({
               name: `Reanime ${language.toUpperCase()} HD-${i + 1}`,
               title: streamTitle,
@@ -626,7 +897,7 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
               type: "m3u8"
             });
           } catch (error) {
-            console.warn(`[Reanime] FlixCloud extraction failed: ${error.message}`);
+            console.warn(`[Reanime] Local extraction failed: ${error.message}`);
           }
         }
       }
@@ -639,6 +910,8 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
       });
     } catch (error) {
       console.error(`[Reanime] Error: ${error.message}`);
+      if (error.stack)
+        console.error(error.stack);
       return [];
     }
   });
