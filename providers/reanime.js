@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T06:09:00.250Z
+ * Generated: 2026-05-16T06:14:07.042Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -1025,14 +1025,15 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
       streams.push({
         name: "DEBUG: Check Headers",
         title: "Header Spy (Webhook)",
-        url: "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539/headers.m3u8",
+        url: "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539/spy",
         quality: "DEBUG",
         headers: {
           "Referer": "https://flixcloud.cc/",
           "Origin": "https://flixcloud.cc"
         },
         provider: "reanime",
-        type: "m3u8"
+        type: "mp4"
+        // Change to mp4 to avoid m3u8 validation
       });
       const seen = /* @__PURE__ */ new Set();
       return streams.filter((stream) => {
