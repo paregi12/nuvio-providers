@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T03:32:01.488Z
+ * Generated: 2026-05-16T03:45:11.582Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -867,34 +867,81 @@ function uint8ArrayToWordArray(arr) {
 }
 function decryptAesCbcUrl(rawKey, ivVal, cipherB64, seed) {
   return __async(this, null, function* () {
-    const CryptoJS = require("crypto-js");
-    const salt = CryptoJS.enc.Utf8.parse(seed);
-    const passphrase = uint8ArrayToWordArray(rawKey);
-    const ivBytes = parseBytes(ivVal);
-    const iv = uint8ArrayToWordArray(ivBytes);
-    const derivedKey = CryptoJS.PBKDF2(passphrase, salt, {
-      keySize: 256 / 32,
-      iterations: 1e3,
-      hasher: CryptoJS.algo.SHA256
-    });
-    const keyBytes = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      keyBytes[i] = derivedKey.words[i >>> 2] >>> 24 - i % 4 * 8 & 255;
+    let CryptoJS = null;
+    try {
+      CryptoJS = require("crypto-js");
+    } catch (e) {
     }
-    for (let i = 0; i < 32; i++) {
-      keyBytes[i] ^= seed.charCodeAt(i % seed.length);
+    if (CryptoJS && CryptoJS.AES && typeof CryptoJS.AES.decrypt === "function") {
+      try {
+        const salt = CryptoJS.enc.Utf8.parse(seed);
+        const passphrase = uint8ArrayToWordArray(rawKey);
+        const ivBytes = parseBytes(ivVal);
+        const iv = uint8ArrayToWordArray(ivBytes);
+        const derivedKey = CryptoJS.PBKDF2(passphrase, salt, {
+          keySize: 256 / 32,
+          iterations: 1e3,
+          hasher: CryptoJS.algo.SHA256
+        });
+        const keyBytes = new Uint8Array(32);
+        for (let i = 0; i < 32; i++) {
+          keyBytes[i] = derivedKey.words[i >>> 2] >>> 24 - i % 4 * 8 & 255;
+        }
+        for (let i = 0; i < 32; i++) {
+          keyBytes[i] ^= seed.charCodeAt(i % seed.length);
+        }
+        const finalKey = CryptoJS.SHA256(uint8ArrayToWordArray(keyBytes));
+        const decrypted = CryptoJS.AES.decrypt(cipherB64, finalKey, {
+          iv,
+          mode: CryptoJS.mode.CBC,
+          padding: CryptoJS.pad.Pkcs7
+        });
+        const result = decrypted.toString(CryptoJS.enc.Utf8);
+        if (result)
+          return result.trim();
+      } catch (e) {
+        console.warn("[FlixCloud] Local decryption failed, trying remote...");
+      }
     }
-    const finalKey = CryptoJS.SHA256(uint8ArrayToWordArray(keyBytes));
-    const decrypted = CryptoJS.AES.decrypt(cipherB64, finalKey, {
-      iv,
-      mode: CryptoJS.mode.CBC,
-      padding: CryptoJS.pad.Pkcs7
-    });
-    const result = decrypted.toString(CryptoJS.enc.Utf8);
-    if (!result)
-      throw new Error("Decryption failed (result empty)");
-    return result.trim();
+    console.log("[FlixCloud] Using remote decryption helper...");
+    try {
+      const response = yield fetch("https://id-mapping-api-nuvio-extraction-api.hf.space/decrypt/flixcloud", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rawKey: uint8ArrayToBase64(rawKey),
+          ivVal,
+          cipherText: cipherB64,
+          seed
+        })
+      });
+      if (!response.ok)
+        throw new Error(`Remote decrypt HTTP ${response.status}`);
+      const { decrypted } = yield response.json();
+      if (!decrypted)
+        throw new Error("Remote decrypt returned empty result");
+      return decrypted.trim();
+    } catch (error) {
+      throw new Error(`Decryption failed (Local: Unsupported, Remote: ${error.message})`);
+    }
   });
+}
+function uint8ArrayToBase64(arr) {
+  let bin = "";
+  for (let i = 0; i < arr.length; i++)
+    bin += String.fromCharCode(arr[i]);
+  if (typeof btoa === "function")
+    return btoa(bin);
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let output = "";
+  for (let i = 0; i < bin.length; i += 3) {
+    let a = bin.charCodeAt(i), b = bin.charCodeAt(i + 1), c = bin.charCodeAt(i + 2);
+    output += chars[a >> 2];
+    output += chars[(a & 3) << 4 | b >> 4];
+    output += chars[isNaN(b) ? 64 : (b & 15) << 2 | c >> 6];
+    output += chars[isNaN(b) || isNaN(c) ? 64 : c & 63];
+  }
+  return output;
 }
 function sha256Hex(text) {
   return __async(this, null, function* () {
