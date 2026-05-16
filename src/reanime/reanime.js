@@ -4,7 +4,8 @@ import { HEADERS, REANIME_BASE, TMDB_API_KEY, ANILIST_URL, ARM_BASE, CINEMETA_UR
 function absolutize(path) {
     if (!path) return "";
     if (path.startsWith("http")) return path;
-    return `${REANIME_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return `${REANIME_BASE}${cleanPath}`;
 }
 
 export async function fetchText(url, options = {}) {

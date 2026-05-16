@@ -5,6 +5,27 @@
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
+function getUrlOrigin(url) {
+    if (!url) return "";
+    const match = url.match(/^(https?:\/\/[^\/]+)/);
+    return match ? match[1] : "";
+}
+
+function safeAtob(str) {
+    if (typeof atob === 'function') return atob(str);
+    // Manual base64 decode if atob is missing (Hermes fallback)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    let output = '';
+    str = String(str).replace(/=+$/, '');
+    for (let bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++);
+        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
+            bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+    ) {
+        buffer = chars.indexOf(buffer);
+    }
+    return output;
+}
+
 function parseBytes(val) {
     if (!val) return new Uint8Array(0);
     if (/^[0-9a-f]+$/i.test(val) && val.length % 2 === 0) {
@@ -15,7 +36,7 @@ function parseBytes(val) {
         return out;
     }
     try {
-        const bin = atob(val);
+        const bin = safeAtob(val);
         const out = new Uint8Array(bin.length);
         for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
         return out;
@@ -26,7 +47,7 @@ function parseBytes(val) {
 
 export async function extractFlixCloud(embedUrl, referer) {
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
-    const origin = new URL(pageUrl).origin;
+    const origin = getUrlOrigin(pageUrl);
     
     const response = await fetch(pageUrl, {
         headers: {
