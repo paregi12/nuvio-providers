@@ -110,15 +110,17 @@ export async function extractFlixCloud(embedUrl, referer) {
 
     const streamUrl = await decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
     
+    // Clean the decrypted URL just like the reference implementation
+    const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
+    
     return {
-        url: streamUrl,
+        url: cleanStreamUrl,
         videoId: data.video_id,
         title: data.video_title,
         subtitles: data.subtitles || [],
         headers: {
-            "Referer": cleanReferer,
-            "Origin": origin,
-            "User-Agent": USER_AGENT
+            "Referer": `${origin}/`,
+            "Origin": origin
         }
     };
 }

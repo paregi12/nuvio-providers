@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T03:55:40.812Z
+ * Generated: 2026-05-16T04:08:53.590Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -515,15 +515,15 @@ function extractFlixCloud(embedUrl, referer) {
       parseInt(seed.substring(0, 8), 16)
     );
     const streamUrl = yield decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
+    const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
     return {
-      url: streamUrl,
+      url: cleanStreamUrl,
       videoId: data.video_id,
       title: data.video_title,
       subtitles: data.subtitles || [],
       headers: {
-        "Referer": cleanReferer,
-        "Origin": origin,
-        "User-Agent": USER_AGENT
+        "Referer": `${origin}/`,
+        "Origin": origin
       }
     };
   });
