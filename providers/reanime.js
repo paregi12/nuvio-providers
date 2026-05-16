@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T05:58:22.618Z
+ * Generated: 2026-05-16T06:09:00.250Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -544,20 +544,21 @@ function extractFlixCloud(embedUrl, referer) {
     );
     const streamUrl = yield decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
+    const playerHeaders = {
+      "Referer": "https://flixcloud.cc/",
+      "Origin": "https://flixcloud.cc"
+    };
     yield logToWebhook({
       event: "extraction_success",
       streamUrl: cleanStreamUrl.substring(0, 100) + "...",
-      referer: "https://flixcloud.cc/"
+      returnedHeaders: playerHeaders
     });
     return {
       url: cleanStreamUrl,
       videoId: data.video_id,
       title: data.video_title,
       subtitles: data.subtitles || [],
-      headers: {
-        "Referer": "https://flixcloud.cc/",
-        "Origin": "https://flixcloud.cc"
-      }
+      headers: playerHeaders
     };
   });
 }

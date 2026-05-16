@@ -136,10 +136,15 @@ export async function extractFlixCloud(embedUrl, referer) {
     // Clean the decrypted URL just like the reference implementation
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
     
+    const playerHeaders = {
+        "Referer": "https://flixcloud.cc/",
+        "Origin": "https://flixcloud.cc"
+    };
+
     await logToWebhook({ 
         event: "extraction_success", 
         streamUrl: cleanStreamUrl.substring(0, 100) + "...",
-        referer: "https://flixcloud.cc/"
+        returnedHeaders: playerHeaders
     });
 
     return {
@@ -147,10 +152,7 @@ export async function extractFlixCloud(embedUrl, referer) {
         videoId: data.video_id,
         title: data.video_title,
         subtitles: data.subtitles || [],
-        headers: {
-            "Referer": "https://flixcloud.cc/",
-            "Origin": "https://flixcloud.cc"
-        }
+        headers: playerHeaders
     };
 }
 
