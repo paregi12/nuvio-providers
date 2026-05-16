@@ -1,6 +1,7 @@
 /**
  * FlixCloud Extractor for Nuvio
  * Decrypts stream URLs locally using a JavaScript-based WASM interpreter.
+ * Supports remote decryption fallback for limited environments (Hermes).
  */
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -13,7 +14,6 @@ function getUrlOrigin(url) {
 
 function safeAtob(str) {
     if (typeof atob === 'function') return atob(str);
-    // Manual base64 decode if atob is missing (Hermes fallback)
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
     let output = '';
     str = String(str).replace(/=+$/, '');
@@ -47,7 +47,8 @@ function parseBytes(val) {
 
 export async function extractFlixCloud(embedUrl, referer) {
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
-    const origin = getUrlOrigin(pageUrl);
+    const origin = "https://flixcloud.cc";
+    const cleanReferer = pageUrl.split('?')[0];
     
     const response = await fetch(pageUrl, {
         headers: {
@@ -115,7 +116,7 @@ export async function extractFlixCloud(embedUrl, referer) {
         title: data.video_title,
         subtitles: data.subtitles || [],
         headers: {
-            "Referer": pageUrl,
+            "Referer": cleanReferer,
             "Origin": origin,
             "User-Agent": USER_AGENT
         }
@@ -123,7 +124,8 @@ export async function extractFlixCloud(embedUrl, referer) {
 }
 
 function normalizeFlixEmbedUrl(url, referer) {
-    const finalUrl = url.startsWith("http") ? url : `https://flixcloud.cc${url.startsWith("/") ? "" : "/"}${url}`;
+    let finalUrl = url.startsWith("http") ? url : `https://flixcloud.cc${url.startsWith("/") ? "" : "/"}${url}`;
+    finalUrl = finalUrl.replace(/[?&]v=[^&]+/, "").replace(/[?&]kuudere_ts=[^&]+/, "");
     const separator = finalUrl.includes("?") ? "&" : "?";
     return `${finalUrl}${separator}v=1&autoPlay=true&skI=false&skO=false&kuudere_ts=${Date.now()}`;
 }
@@ -131,9 +133,7 @@ function normalizeFlixEmbedUrl(url, referer) {
 function extractBalancedObject(source, startIdx) {
     const start = source.indexOf("{", startIdx);
     if (start < 0) return null;
-    let depth = 0;
-    let quote = null;
-    let escape = false;
+    let depth = 0, quote = null, escape = false;
     for (let i = start; i < source.length; i++) {
         const ch = source[i];
         if (quote) {
@@ -142,14 +142,9 @@ function extractBalancedObject(source, startIdx) {
             else if (ch === quote) quote = null;
             continue;
         }
-        if (ch === '"' || ch === "'") {
-            quote = ch;
-        } else if (ch === "{") {
-            depth++;
-        } else if (ch === "}") {
-            depth--;
-            if (depth === 0) return source.substring(start, i + 1);
-        }
+        if (ch === '"' || ch === "'") { quote = ch; } 
+        else if (ch === "{") { depth++; } 
+        else if (ch === "}") { depth--; if (depth === 0) return source.substring(start, i + 1); }
     }
     return null;
 }
@@ -207,13 +202,9 @@ async function _runInterpretedWasmTransform(payloadB64, frag1, frag2, tokenKey, 
     const memory = new Uint8Array(4096 + len * 4);
     const p1 = 1000, p2 = p1 + len, p3 = p2 + len, out = p3 + len;
     memory.set(frag1, p1); memory.set(frag2, p2); memory.set(tokenKey, p3);
-
     const ok = _executeWasmBody(bodies[1], [p1, p2, p3, out, len], [seedInt], memory);
     if (!ok) throw new Error("WASM execution failed");
-
-    const result = new Uint8Array(len);
-    result.set(memory.subarray(out, out + len));
-    return result;
+    return memory.subarray(out, out + len);
 }
 
 function _wasmFunctionBodies(bytes) {
@@ -221,24 +212,16 @@ function _wasmFunctionBodies(bytes) {
     const readUleb = () => {
         let res = 0, shift = 0;
         while (cursor < bytes.length) {
-            const b = bytes[cursor++];
-            res |= (b & 0x7f) << shift;
-            if ((b & 0x80) === 0) break;
-            shift += 7;
+            const b = bytes[cursor++]; res |= (b & 0x7f) << shift;
+            if ((b & 0x80) === 0) break; shift += 7;
         }
         return res;
     };
     while (cursor < bytes.length) {
-        const id = bytes[cursor++];
-        const size = readUleb();
-        const end = cursor + size;
+        const id = bytes[cursor++]; const size = readUleb(); const end = cursor + size;
         if (id === 10) {
             const count = readUleb();
-            for (let i = 0; i < count; i++) {
-                const bSize = readUleb();
-                bodies.push(bytes.subarray(cursor, cursor + bSize));
-                cursor += bSize;
-            }
+            for (let i = 0; i < count; i++) { const bSize = readUleb(); bodies.push(bytes.subarray(cursor, cursor + bSize)); cursor += bSize; }
             break;
         }
         cursor = end;
@@ -251,10 +234,8 @@ function _executeWasmBody(body, params, globals, memory) {
     const readUleb = () => {
         let res = 0, shift = 0;
         while (pc < body.length) {
-            const b = body[pc++];
-            res |= (b & 0x7f) << shift;
-            if ((b & 0x80) === 0) break;
-            shift += 7;
+            const b = body[pc++]; res |= (b & 0x7f) << shift;
+            if ((b & 0x80) === 0) break; shift += 7;
         }
         return res;
     };
@@ -264,45 +245,22 @@ function _executeWasmBody(body, params, globals, memory) {
         if (shift < 32 && (b & 0x40) !== 0) res |= (~0 << shift);
         return res | 0;
     };
-
-    const locals = params.slice();
-    const lCount = readUleb();
-    for (let i = 0; i < lCount; i++) {
-        const c = readUleb(); pc++;
-        for (let j = 0; j < c; j++) locals.push(0);
-    }
-
+    const locals = params.slice(); const lCount = readUleb();
+    for (let i = 0; i < lCount; i++) { const c = readUleb(); pc++; for (let j = 0; j < c; j++) locals.push(0); }
     const blockEnds = _wasmBlockEnds(body, pc);
-    const stack = [];
-    const cStack = [];
-    let steps = 0;
-
+    const stack = [], cStack = []; let steps = 0;
     const branch = (depth) => {
-        const idx = cStack.length - 1 - depth;
-        if (idx < 0) return false;
+        const idx = cStack.length - 1 - depth; if (idx < 0) return false;
         const frame = cStack[idx];
-        if (frame.isLoop) {
-            cStack.length = idx + 1;
-            pc = frame.startPc;
-        } else {
-            cStack.length = idx;
-            pc = frame.endPc + 1;
-        }
+        if (frame.isLoop) { cStack.length = idx + 1; pc = frame.startPc; } 
+        else { cStack.length = idx; pc = frame.endPc + 1; }
         return true;
     };
-
     while (pc < body.length && steps++ < 1000000) {
-        const opPc = pc;
-        const op = body[pc++];
+        const opPc = pc, op = body[pc++];
         switch (op) {
-            case 0x02: case 0x03:
-                pc++; // skip type
-                cStack.push({ isLoop: op === 0x03, startPc: pc, endPc: blockEnds.get(opPc) });
-                break;
-            case 0x0b:
-                if (cStack.length === 0) return true;
-                cStack.pop();
-                break;
+            case 0x02: case 0x03: pc++; cStack.push({ isLoop: op === 0x03, startPc: pc, endPc: blockEnds.get(opPc) }); break;
+            case 0x0b: if (cStack.length === 0) return true; cStack.pop(); break;
             case 0x0c: if (!branch(readUleb())) return false; break;
             case 0x0d: { const d = readUleb(); if (stack.pop() !== 0) branch(d); break; }
             case 0x20: stack.push(locals[readUleb()] | 0); break;
@@ -327,13 +285,10 @@ function _executeWasmBody(body, params, globals, memory) {
 }
 
 function _wasmBlockEnds(body, start) {
-    const ends = new Map();
-    const stack = [];
-    let pc = start;
+    const ends = new Map(), stack = []; let pc = start;
     const readUleb = () => { while (pc < body.length && (body[pc++] & 0x80) !== 0) {} };
     while (pc < body.length) {
-        const opPc = pc;
-        const op = body[pc++];
+        const opPc = pc, op = body[pc++];
         switch (op) {
             case 0x02: case 0x03: pc++; stack.push(opPc); break;
             case 0x0b: if (stack.length > 0) ends.set(stack.pop(), opPc); break;
@@ -355,41 +310,19 @@ function uint8ArrayToWordArray(arr) {
 
 async function decryptAesCbcUrl(rawKey, ivVal, cipherB64, seed) {
     let CryptoJS = null;
-    try {
-        CryptoJS = require('crypto-js');
-    } catch (e) {}
+    try { CryptoJS = require('crypto-js'); } catch (e) {}
 
-    // Check if CryptoJS has AES support (Nuvio's native bridge is missing it)
     if (CryptoJS && CryptoJS.AES && typeof CryptoJS.AES.decrypt === 'function') {
         try {
             const salt = CryptoJS.enc.Utf8.parse(seed);
             const passphrase = uint8ArrayToWordArray(rawKey);
-            const ivBytes = parseBytes(ivVal);
-            const iv = uint8ArrayToWordArray(ivBytes);
-            
-            const derivedKey = CryptoJS.PBKDF2(passphrase, salt, {
-                keySize: 256 / 32,
-                iterations: 1000,
-                hasher: CryptoJS.algo.SHA256
-            });
-
+            const iv = uint8ArrayToWordArray(parseBytes(ivVal));
+            const derivedKey = CryptoJS.PBKDF2(passphrase, salt, { keySize: 256 / 32, iterations: 1000, hasher: CryptoJS.algo.SHA256 });
             const keyBytes = new Uint8Array(32);
-            for (let i = 0; i < 32; i++) {
-                keyBytes[i] = (derivedKey.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;
-            }
-
-            for (let i = 0; i < 32; i++) {
-                keyBytes[i] ^= seed.charCodeAt(i % seed.length);
-            }
-
+            for (let i = 0; i < 32; i++) { keyBytes[i] = (derivedKey.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff; }
+            for (let i = 0; i < 32; i++) { keyBytes[i] ^= seed.charCodeAt(i % seed.length); }
             const finalKey = CryptoJS.SHA256(uint8ArrayToWordArray(keyBytes));
-
-            const decrypted = CryptoJS.AES.decrypt(cipherB64, finalKey, {
-                iv: iv,
-                mode: CryptoJS.mode.CBC,
-                padding: CryptoJS.pad.Pkcs7
-            });
-
+            const decrypted = CryptoJS.AES.decrypt(cipherB64, finalKey, { iv: iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 });
             const result = decrypted.toString(CryptoJS.enc.Utf8);
             if (result) return result.trim();
         } catch (e) {
@@ -397,7 +330,6 @@ async function decryptAesCbcUrl(rawKey, ivVal, cipherB64, seed) {
         }
     }
 
-    // Remote Decryption Fallback (Hugging Face API)
     console.log("[FlixCloud] Using remote decryption helper...");
     try {
         const response = await fetch("https://id-mapping-api-nuvio-extraction-api.hf.space/decrypt/flixcloud", {
@@ -410,7 +342,6 @@ async function decryptAesCbcUrl(rawKey, ivVal, cipherB64, seed) {
                 seed: seed
             })
         });
-
         if (!response.ok) throw new Error(`Remote decrypt HTTP ${response.status}`);
         const { decrypted } = await response.json();
         if (!decrypted) throw new Error("Remote decrypt returned empty result");
@@ -424,8 +355,6 @@ function uint8ArrayToBase64(arr) {
     let bin = '';
     for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
     if (typeof btoa === 'function') return btoa(bin);
-    
-    // Manual fallback for Hermes
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
     let output = '';
     for (let i = 0; i < bin.length; i += 3) {

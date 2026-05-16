@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T03:45:11.582Z
+ * Generated: 2026-05-16T03:55:40.812Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -431,12 +431,6 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
 
 // src/reanime/flixcloud.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-function getUrlOrigin(url) {
-  if (!url)
-    return "";
-  const match = url.match(/^(https?:\/\/[^\/]+)/);
-  return match ? match[1] : "";
-}
 function safeAtob(str) {
   if (typeof atob === "function")
     return atob(str);
@@ -471,7 +465,8 @@ function parseBytes(val) {
 function extractFlixCloud(embedUrl, referer) {
   return __async(this, null, function* () {
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
-    const origin = getUrlOrigin(pageUrl);
+    const origin = "https://flixcloud.cc";
+    const cleanReferer = pageUrl.split("?")[0];
     const response = yield fetch(pageUrl, {
       headers: {
         "User-Agent": USER_AGENT,
@@ -526,7 +521,7 @@ function extractFlixCloud(embedUrl, referer) {
       title: data.video_title,
       subtitles: data.subtitles || [],
       headers: {
-        "Referer": pageUrl,
+        "Referer": cleanReferer,
         "Origin": origin,
         "User-Agent": USER_AGENT
       }
@@ -534,7 +529,8 @@ function extractFlixCloud(embedUrl, referer) {
   });
 }
 function normalizeFlixEmbedUrl(url, referer) {
-  const finalUrl = url.startsWith("http") ? url : `https://flixcloud.cc${url.startsWith("/") ? "" : "/"}${url}`;
+  let finalUrl = url.startsWith("http") ? url : `https://flixcloud.cc${url.startsWith("/") ? "" : "/"}${url}`;
+  finalUrl = finalUrl.replace(/[?&]v=[^&]+/, "").replace(/[?&]kuudere_ts=[^&]+/, "");
   const separator = finalUrl.includes("?") ? "&" : "?";
   return `${finalUrl}${separator}v=1&autoPlay=true&skI=false&skO=false&kuudere_ts=${Date.now()}`;
 }
@@ -542,9 +538,7 @@ function extractBalancedObject(source, startIdx) {
   const start = source.indexOf("{", startIdx);
   if (start < 0)
     return null;
-  let depth = 0;
-  let quote = null;
-  let escape = false;
+  let depth = 0, quote = null, escape = false;
   for (let i = start; i < source.length; i++) {
     const ch = source[i];
     if (quote) {
@@ -630,9 +624,7 @@ function _runInterpretedWasmTransform(payloadB64, frag1, frag2, tokenKey, seedIn
     const ok = _executeWasmBody(bodies[1], [p1, p2, p3, out, len], [seedInt], memory);
     if (!ok)
       throw new Error("WASM execution failed");
-    const result = new Uint8Array(len);
-    result.set(memory.subarray(out, out + len));
-    return result;
+    return memory.subarray(out, out + len);
   });
 }
 function _wasmFunctionBodies(bytes) {
@@ -699,8 +691,7 @@ function _executeWasmBody(body, params, globals, memory) {
       locals.push(0);
   }
   const blockEnds = _wasmBlockEnds(body, pc);
-  const stack = [];
-  const cStack = [];
+  const stack = [], cStack = [];
   let steps = 0;
   const branch = (depth) => {
     const idx = cStack.length - 1 - depth;
@@ -717,8 +708,7 @@ function _executeWasmBody(body, params, globals, memory) {
     return true;
   };
   while (pc < body.length && steps++ < 1e6) {
-    const opPc = pc;
-    const op = body[pc++];
+    const opPc = pc, op = body[pc++];
     switch (op) {
       case 2:
       case 3:
@@ -820,16 +810,14 @@ function _executeWasmBody(body, params, globals, memory) {
   return true;
 }
 function _wasmBlockEnds(body, start) {
-  const ends = /* @__PURE__ */ new Map();
-  const stack = [];
+  const ends = /* @__PURE__ */ new Map(), stack = [];
   let pc = start;
   const readUleb = () => {
     while (pc < body.length && (body[pc++] & 128) !== 0) {
     }
   };
   while (pc < body.length) {
-    const opPc = pc;
-    const op = body[pc++];
+    const opPc = pc, op = body[pc++];
     switch (op) {
       case 2:
       case 3:
@@ -876,13 +864,8 @@ function decryptAesCbcUrl(rawKey, ivVal, cipherB64, seed) {
       try {
         const salt = CryptoJS.enc.Utf8.parse(seed);
         const passphrase = uint8ArrayToWordArray(rawKey);
-        const ivBytes = parseBytes(ivVal);
-        const iv = uint8ArrayToWordArray(ivBytes);
-        const derivedKey = CryptoJS.PBKDF2(passphrase, salt, {
-          keySize: 256 / 32,
-          iterations: 1e3,
-          hasher: CryptoJS.algo.SHA256
-        });
+        const iv = uint8ArrayToWordArray(parseBytes(ivVal));
+        const derivedKey = CryptoJS.PBKDF2(passphrase, salt, { keySize: 256 / 32, iterations: 1e3, hasher: CryptoJS.algo.SHA256 });
         const keyBytes = new Uint8Array(32);
         for (let i = 0; i < 32; i++) {
           keyBytes[i] = derivedKey.words[i >>> 2] >>> 24 - i % 4 * 8 & 255;
@@ -891,11 +874,7 @@ function decryptAesCbcUrl(rawKey, ivVal, cipherB64, seed) {
           keyBytes[i] ^= seed.charCodeAt(i % seed.length);
         }
         const finalKey = CryptoJS.SHA256(uint8ArrayToWordArray(keyBytes));
-        const decrypted = CryptoJS.AES.decrypt(cipherB64, finalKey, {
-          iv,
-          mode: CryptoJS.mode.CBC,
-          padding: CryptoJS.pad.Pkcs7
-        });
+        const decrypted = CryptoJS.AES.decrypt(cipherB64, finalKey, { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 });
         const result = decrypted.toString(CryptoJS.enc.Utf8);
         if (result)
           return result.trim();
