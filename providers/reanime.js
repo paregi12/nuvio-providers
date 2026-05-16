@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T06:22:50.282Z
+ * Generated: 2026-05-16T06:37:32.935Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -431,22 +431,6 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
 
 // src/reanime/flixcloud.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-var DEBUG_WEBHOOK = "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539";
-function logToWebhook(data) {
-  return __async(this, null, function* () {
-    try {
-      yield fetch(DEBUG_WEBHOOK, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(__spreadValues({
-          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          scraper: "reanime"
-        }, data))
-      });
-    } catch (e) {
-    }
-  });
-}
 function getUrlOrigin(url) {
   if (!url)
     return "";
@@ -486,7 +470,6 @@ function parseBytes(val) {
 }
 function extractFlixCloud(embedUrl, referer) {
   return __async(this, null, function* () {
-    yield logToWebhook({ event: "extraction_start", embedUrl, referer });
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
     const origin = getUrlOrigin(pageUrl);
     const response = yield fetch(pageUrl, {
@@ -495,17 +478,14 @@ function extractFlixCloud(embedUrl, referer) {
         "Referer": referer || "https://reanime.to/"
       }
     });
-    if (!response.ok) {
-      yield logToWebhook({ event: "embed_http_error", status: response.status, url: pageUrl });
+    if (!response.ok)
       throw new Error(`FlixCloud embed HTTP ${response.status}`);
-    }
     const html = yield response.text();
     const data = parseSsrData(html);
     const seed = data.obfuscation_seed;
     const obfuscated = data.obfuscated_crypto_data;
     const wPayload = data.w_payload;
     if (!seed || !obfuscated || !wPayload) {
-      yield logToWebhook({ event: "payload_missing", htmlSnippet: html.substring(0, 500) });
       throw new Error("FlixCloud crypto payload missing");
     }
     const fields = yield deriveFieldMap(seed);
@@ -518,15 +498,16 @@ function extractFlixCloud(embedUrl, referer) {
     const tokenResponse = yield fetch(`${origin}/api/m3u8/${tokenRef}`, {
       headers: {
         "User-Agent": USER_AGENT,
-        "Accept": "application/json",
+        "Accept": "application/json,*/*",
         "Referer": pageUrl,
-        "Origin": origin
+        "Origin": origin,
+        "sec-ch-ua": '"Not-A.Brand";v="24", "Chromium";v="146"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"'
       }
     });
-    if (!tokenResponse.ok) {
-      yield logToWebhook({ event: "token_http_error", status: tokenResponse.status, url: tokenRef });
+    if (!tokenResponse.ok)
       throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
-    }
     const tokenJson = yield tokenResponse.json();
     const videoKey = (yield sha256Hex(tokenRef + "vid")).substring(0, 10);
     const keyKey = (yield sha256Hex(tokenRef + "key")).substring(0, 10);
@@ -544,29 +525,14 @@ function extractFlixCloud(embedUrl, referer) {
     );
     const streamUrl = yield decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
-    const realHeaders = {
-      "Referer": "https://flixcloud.cc/",
-      "Origin": "https://flixcloud.cc",
-      "User-Agent": USER_AGENT
-    };
-    try {
-      yield fetch(cleanStreamUrl, { method: "HEAD", headers: realHeaders });
-    } catch (e) {
-    }
-    yield logToWebhook({
-      event: "extraction_success",
-      streamUrl: cleanStreamUrl.substring(0, 100) + "...",
-      preHeated: true
-    });
     return {
       url: cleanStreamUrl,
       videoId: data.video_id,
       title: data.video_title,
       subtitles: data.subtitles || [],
       headers: {
-        "Referer": "https://flixcloud.cc/"
-        // We omit Origin and UA here to see if Nuvio's lowercase versions are causing the block.
-        // Referer is the most critical one for segment inheritance.
+        "Referer": "https://flixcloud.cc/",
+        "Origin": "https://flixcloud.cc"
       }
     };
   });
@@ -1031,19 +997,6 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
           }
         }
       }
-      streams.push({
-        name: "DEBUG: Check Headers",
-        title: "Header Spy (Webhook)",
-        url: "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539/spy",
-        quality: "DEBUG",
-        headers: {
-          "Referer": "https://flixcloud.cc/",
-          "Origin": "https://flixcloud.cc"
-        },
-        provider: "reanime",
-        type: "mp4"
-        // Change to mp4 to avoid m3u8 validation
-      });
       const seen = /* @__PURE__ */ new Set();
       return streams.filter((stream) => {
         if (!stream.url || seen.has(stream.url))

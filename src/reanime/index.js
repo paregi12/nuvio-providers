@@ -70,20 +70,6 @@ async function getStreams(tmdbId, mediaType = "tv", season = null, episode = nul
             }
         }
 
-        // Add Debug Header stream
-        streams.push({
-            name: "DEBUG: Check Headers",
-            title: "Header Spy (Webhook)",
-            url: "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539/spy",
-            quality: "DEBUG",
-            headers: {
-                "Referer": "https://flixcloud.cc/",
-                "Origin": "https://flixcloud.cc"
-            },
-            provider: "reanime",
-            type: "mp4" // Change to mp4 to avoid m3u8 validation
-        });
-
         const seen = new Set();
         return streams.filter(stream => {
             if (!stream.url || seen.has(stream.url)) return false;

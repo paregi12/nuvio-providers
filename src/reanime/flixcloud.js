@@ -5,21 +5,6 @@
  */
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-const DEBUG_WEBHOOK = "https://webhook.site/862f6368-b7b0-4c43-a773-783e3e6a3539";
-
-async function logToWebhook(data) {
-    try {
-        await fetch(DEBUG_WEBHOOK, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                timestamp: new Date().toISOString(),
-                scraper: "reanime",
-                ...data
-            })
-        });
-    } catch (e) {}
-}
 
 function getUrlOrigin(url) {
     if (!url) return "";
@@ -61,7 +46,6 @@ function parseBytes(val) {
 }
 
 export async function extractFlixCloud(embedUrl, referer) {
-    await logToWebhook({ event: "extraction_start", embedUrl, referer });
     const pageUrl = normalizeFlixEmbedUrl(embedUrl, referer);
     const origin = getUrlOrigin(pageUrl);
     
@@ -72,10 +56,7 @@ export async function extractFlixCloud(embedUrl, referer) {
         }
     });
 
-    if (!response.ok) {
-        await logToWebhook({ event: "embed_http_error", status: response.status, url: pageUrl });
-        throw new Error(`FlixCloud embed HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`FlixCloud embed HTTP ${response.status}`);
     const html = await response.text();
 
     const data = parseSsrData(html);
@@ -84,7 +65,6 @@ export async function extractFlixCloud(embedUrl, referer) {
     const wPayload = data.w_payload;
 
     if (!seed || !obfuscated || !wPayload) {
-        await logToWebhook({ event: "payload_missing", htmlSnippet: html.substring(0, 500) });
         throw new Error("FlixCloud crypto payload missing");
     }
 
@@ -98,19 +78,21 @@ export async function extractFlixCloud(embedUrl, referer) {
         throw new Error("FlixCloud token fields missing");
     }
 
+    // Step 2: Strict Registration call (The "Authorizer")
+    // This request registers the IP/Token with the FlixCloud security system.
     const tokenResponse = await fetch(`${origin}/api/m3u8/${tokenRef}`, {
         headers: {
             "User-Agent": USER_AGENT,
-            "Accept": "application/json",
+            "Accept": "application/json,*/*",
             "Referer": pageUrl,
-            "Origin": origin
+            "Origin": origin,
+            "sec-ch-ua": '"Not-A.Brand";v="24", \"Chromium\";v="146"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"'
         }
     });
 
-    if (!tokenResponse.ok) {
-        await logToWebhook({ event: "token_http_error", status: tokenResponse.status, url: tokenRef });
-        throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
-    }
+    if (!tokenResponse.ok) throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
     const tokenJson = await tokenResponse.json();
 
     const videoKey = (await sha256Hex(tokenRef + "vid")).substring(0, 10);
@@ -136,34 +118,14 @@ export async function extractFlixCloud(embedUrl, referer) {
     // Clean the decrypted URL
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
     
-    // Header footprint for the "Pre-Heat"
-    const realHeaders = {
-        "Referer": "https://flixcloud.cc/",
-        "Origin": "https://flixcloud.cc",
-        "User-Agent": USER_AGENT
-    };
-
-    // Pre-heat the session by hitting the stream URL from the plugin context
-    // This "authorizes" the user's IP for this specific stream token.
-    try {
-        await fetch(cleanStreamUrl, { method: "HEAD", headers: realHeaders });
-    } catch (e) {}
-
-    await logToWebhook({ 
-        event: "extraction_success", 
-        streamUrl: cleanStreamUrl.substring(0, 100) + "...",
-        preHeated: true
-    });
-
     return {
         url: cleanStreamUrl,
         videoId: data.video_id,
         title: data.video_title,
         subtitles: data.subtitles || [],
         headers: {
-            "Referer": "https://flixcloud.cc/"
-            // We omit Origin and UA here to see if Nuvio's lowercase versions are causing the block.
-            // Referer is the most critical one for segment inheritance.
+            "Referer": "https://flixcloud.cc/",
+            "Origin": "https://flixcloud.cc"
         }
     };
 }
