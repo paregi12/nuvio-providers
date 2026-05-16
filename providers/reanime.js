@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T06:14:07.042Z
+ * Generated: 2026-05-16T06:22:50.282Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -544,21 +544,30 @@ function extractFlixCloud(embedUrl, referer) {
     );
     const streamUrl = yield decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
-    const playerHeaders = {
+    const realHeaders = {
       "Referer": "https://flixcloud.cc/",
-      "Origin": "https://flixcloud.cc"
+      "Origin": "https://flixcloud.cc",
+      "User-Agent": USER_AGENT
     };
+    try {
+      yield fetch(cleanStreamUrl, { method: "HEAD", headers: realHeaders });
+    } catch (e) {
+    }
     yield logToWebhook({
       event: "extraction_success",
       streamUrl: cleanStreamUrl.substring(0, 100) + "...",
-      returnedHeaders: playerHeaders
+      preHeated: true
     });
     return {
       url: cleanStreamUrl,
       videoId: data.video_id,
       title: data.video_title,
       subtitles: data.subtitles || [],
-      headers: playerHeaders
+      headers: {
+        "Referer": "https://flixcloud.cc/"
+        // We omit Origin and UA here to see if Nuvio's lowercase versions are causing the block.
+        // Referer is the most critical one for segment inheritance.
+      }
     };
   });
 }

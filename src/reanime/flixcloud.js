@@ -133,18 +133,26 @@ export async function extractFlixCloud(embedUrl, referer) {
 
     const streamUrl = await decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
     
-    // Clean the decrypted URL just like the reference implementation
+    // Clean the decrypted URL
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
     
-    const playerHeaders = {
+    // Header footprint for the "Pre-Heat"
+    const realHeaders = {
         "Referer": "https://flixcloud.cc/",
-        "Origin": "https://flixcloud.cc"
+        "Origin": "https://flixcloud.cc",
+        "User-Agent": USER_AGENT
     };
+
+    // Pre-heat the session by hitting the stream URL from the plugin context
+    // This "authorizes" the user's IP for this specific stream token.
+    try {
+        await fetch(cleanStreamUrl, { method: "HEAD", headers: realHeaders });
+    } catch (e) {}
 
     await logToWebhook({ 
         event: "extraction_success", 
         streamUrl: cleanStreamUrl.substring(0, 100) + "...",
-        returnedHeaders: playerHeaders
+        preHeated: true
     });
 
     return {
@@ -152,7 +160,11 @@ export async function extractFlixCloud(embedUrl, referer) {
         videoId: data.video_id,
         title: data.video_title,
         subtitles: data.subtitles || [],
-        headers: playerHeaders
+        headers: {
+            "Referer": "https://flixcloud.cc/"
+            // We omit Origin and UA here to see if Nuvio's lowercase versions are causing the block.
+            // Referer is the most critical one for segment inheritance.
+        }
     };
 }
 
