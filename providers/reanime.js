@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T03:15:06.651Z
+ * Generated: 2026-05-16T03:21:45.159Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -602,7 +602,6 @@ function extractObfuscatedCryptoData(data, fields) {
 function _runInterpretedWasmTransform(payloadB64, frag1, frag2, tokenKey, seedInt) {
   return __async(this, null, function* () {
     const wasmBytes = parseBytes(payloadB64);
-    console.log("[FlixCloud] Using WASM interpreter");
     const bodies = _wasmFunctionBodies(wasmBytes);
     const len = frag1.length;
     const memory = new Uint8Array(4096 + len * 4);
@@ -681,22 +680,48 @@ function _executeWasmBody(body, params, globals, memory) {
     for (let j = 0; j < c; j++)
       locals.push(0);
   }
+  const blockEnds = _wasmBlockEnds(body, pc);
   const stack = [];
   const cStack = [];
   let steps = 0;
-  while (pc < body.length && steps++ < 1e5) {
+  const branch = (depth) => {
+    const idx = cStack.length - 1 - depth;
+    if (idx < 0)
+      return false;
+    const frame = cStack[idx];
+    if (frame.isLoop) {
+      cStack.length = idx + 1;
+      pc = frame.startPc;
+    } else {
+      cStack.length = idx;
+      pc = frame.endPc + 1;
+    }
+    return true;
+  };
+  while (pc < body.length && steps++ < 1e6) {
+    const opPc = pc;
     const op = body[pc++];
     switch (op) {
       case 2:
       case 3:
         pc++;
-        cStack.push({ isLoop: op === 3, startPc: pc });
+        cStack.push({ isLoop: op === 3, startPc: pc, endPc: blockEnds.get(opPc) });
         break;
       case 11:
         if (cStack.length === 0)
           return true;
         cStack.pop();
         break;
+      case 12:
+        if (!branch(readUleb()))
+          return false;
+        break;
+      case 13: {
+        const d = readUleb();
+        if (stack.pop() !== 0)
+          branch(d);
+        break;
+      }
       case 32:
         stack.push(locals[readUleb()] | 0);
         break;
@@ -724,6 +749,9 @@ function _executeWasmBody(body, params, globals, memory) {
         memory[addr] = val & 255;
         break;
       }
+      case 69:
+        stack.push((stack.pop() || 0) === 0 ? 1 : 0);
+        break;
       case 79: {
         const r = (stack.pop() || 0) >>> 0, l = (stack.pop() || 0) >>> 0;
         stack.push(l >= r ? 1 : 0);
@@ -772,6 +800,44 @@ function _executeWasmBody(body, params, globals, memory) {
     }
   }
   return true;
+}
+function _wasmBlockEnds(body, start) {
+  const ends = /* @__PURE__ */ new Map();
+  const stack = [];
+  let pc = start;
+  const readUleb = () => {
+    while (pc < body.length && (body[pc++] & 128) !== 0) {
+    }
+  };
+  while (pc < body.length) {
+    const opPc = pc;
+    const op = body[pc++];
+    switch (op) {
+      case 2:
+      case 3:
+        pc++;
+        stack.push(opPc);
+        break;
+      case 11:
+        if (stack.length > 0)
+          ends.set(stack.pop(), opPc);
+        break;
+      case 12:
+      case 13:
+      case 32:
+      case 33:
+      case 35:
+      case 65:
+        readUleb();
+        break;
+      case 45:
+      case 58:
+        readUleb();
+        readUleb();
+        break;
+    }
+  }
+  return ends;
 }
 function uint8ArrayToWordArray(arr) {
   const CryptoJS = require("crypto-js");

@@ -181,15 +181,15 @@ function extractObfuscatedCryptoData(data, fields) {
 
 async function _runInterpretedWasmTransform(payloadB64, frag1, frag2, tokenKey, seedInt) {
     const wasmBytes = parseBytes(payloadB64);
-
-    console.log("[FlixCloud] Using WASM interpreter");
     const bodies = _wasmFunctionBodies(wasmBytes);
     const len = frag1.length;
     const memory = new Uint8Array(4096 + len * 4);
     const p1 = 1000, p2 = p1 + len, p3 = p2 + len, out = p3 + len;
     memory.set(frag1, p1); memory.set(frag2, p2); memory.set(tokenKey, p3);
+
     const ok = _executeWasmBody(bodies[1], [p1, p2, p3, out, len], [seedInt], memory);
     if (!ok) throw new Error("WASM execution failed");
+
     const result = new Uint8Array(len);
     result.set(memory.subarray(out, out + len));
     return result;
@@ -243,24 +243,54 @@ function _executeWasmBody(body, params, globals, memory) {
         if (shift < 32 && (b & 0x40) !== 0) res |= (~0 << shift);
         return res | 0;
     };
+
     const locals = params.slice();
     const lCount = readUleb();
     for (let i = 0; i < lCount; i++) {
         const c = readUleb(); pc++;
         for (let j = 0; j < c; j++) locals.push(0);
     }
-    const stack = []; const cStack = []; let steps = 0;
-    while (pc < body.length && steps++ < 100000) {
+
+    const blockEnds = _wasmBlockEnds(body, pc);
+    const stack = [];
+    const cStack = [];
+    let steps = 0;
+
+    const branch = (depth) => {
+        const idx = cStack.length - 1 - depth;
+        if (idx < 0) return false;
+        const frame = cStack[idx];
+        if (frame.isLoop) {
+            cStack.length = idx + 1;
+            pc = frame.startPc;
+        } else {
+            cStack.length = idx;
+            pc = frame.endPc + 1;
+        }
+        return true;
+    };
+
+    while (pc < body.length && steps++ < 1000000) {
+        const opPc = pc;
         const op = body[pc++];
         switch (op) {
-            case 0x02: case 0x03: pc++; cStack.push({ isLoop: op === 0x03, startPc: pc }); break;
-            case 0x0b: if (cStack.length === 0) return true; cStack.pop(); break;
+            case 0x02: case 0x03:
+                pc++; // skip type
+                cStack.push({ isLoop: op === 0x03, startPc: pc, endPc: blockEnds.get(opPc) });
+                break;
+            case 0x0b:
+                if (cStack.length === 0) return true;
+                cStack.pop();
+                break;
+            case 0x0c: if (!branch(readUleb())) return false; break;
+            case 0x0d: { const d = readUleb(); if (stack.pop() !== 0) branch(d); break; }
             case 0x20: stack.push(locals[readUleb()] | 0); break;
             case 0x21: locals[readUleb()] = stack.pop() || 0; break;
             case 0x23: stack.push(globals[readUleb()] | 0); break;
             case 0x41: stack.push(readSleb()); break;
             case 0x2d: { readUleb(); const off = readUleb(); const addr = (stack.pop() || 0) + off; stack.push(memory[addr] || 0); break; }
             case 0x3a: { readUleb(); const off = readUleb(); const val = stack.pop() || 0; const addr = (stack.pop() || 0) + off; memory[addr] = val & 0xff; break; }
+            case 0x45: stack.push((stack.pop() || 0) === 0 ? 1 : 0); break;
             case 0x4f: { const r = (stack.pop() || 0) >>> 0, l = (stack.pop() || 0) >>> 0; stack.push(l >= r ? 1 : 0); break; }
             case 0x6a: { const r = stack.pop() || 0, l = stack.pop() || 0; stack.push((l + r) | 0); break; }
             case 0x6b: { const r = stack.pop() || 0, l = stack.pop() || 0; stack.push((l - r) | 0); break; }
@@ -273,6 +303,24 @@ function _executeWasmBody(body, params, globals, memory) {
         }
     }
     return true;
+}
+
+function _wasmBlockEnds(body, start) {
+    const ends = new Map();
+    const stack = [];
+    let pc = start;
+    const readUleb = () => { while (pc < body.length && (body[pc++] & 0x80) !== 0) {} };
+    while (pc < body.length) {
+        const opPc = pc;
+        const op = body[pc++];
+        switch (op) {
+            case 0x02: case 0x03: pc++; stack.push(opPc); break;
+            case 0x0b: if (stack.length > 0) ends.set(stack.pop(), opPc); break;
+            case 0x0c: case 0x0d: case 0x20: case 0x21: case 0x23: case 0x41: readUleb(); break;
+            case 0x2d: case 0x3a: readUleb(); readUleb(); break;
+        }
+    }
+    return ends;
 }
 
 function uint8ArrayToWordArray(arr) {
