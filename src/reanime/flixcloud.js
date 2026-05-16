@@ -5,6 +5,9 @@
  */
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const SEC_CH_UA = '"Not-A.Brand";v="99", "Chromium";v="120", "Google Chrome";v="120"';
+const SEC_CH_UA_MOBILE = "?0";
+const SEC_CH_UA_PLATFORM = '"Windows"';
 
 function getUrlOrigin(url) {
     if (!url) return "";
@@ -52,7 +55,10 @@ export async function extractFlixCloud(embedUrl, referer) {
     const response = await fetch(pageUrl, {
         headers: {
             "User-Agent": USER_AGENT,
-            "Referer": referer || "https://reanime.to/"
+            "Referer": referer || "https://reanime.to/",
+            "sec-ch-ua": SEC_CH_UA,
+            "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
+            "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
         }
     });
 
@@ -86,9 +92,9 @@ export async function extractFlixCloud(embedUrl, referer) {
             "Accept": "application/json,*/*",
             "Referer": pageUrl,
             "Origin": origin,
-            "sec-ch-ua": '"Not-A.Brand";v="24", \"Chromium\";v="146"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"'
+            "sec-ch-ua": SEC_CH_UA,
+            "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
+            "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
         }
     });
 
@@ -97,7 +103,7 @@ export async function extractFlixCloud(embedUrl, referer) {
 
     const videoKey = (await sha256Hex(tokenRef + "vid")).substring(0, 10);
     const keyKey = (await sha256Hex(tokenRef + "key")).substring(0, 10);
-    
+
     const encryptedUrlB64 = tokenJson[videoKey];
     const tokenKeyVal = tokenJson[keyKey];
 
@@ -114,10 +120,10 @@ export async function extractFlixCloud(embedUrl, referer) {
     );
 
     const streamUrl = await decryptAesCbcUrl(wasmKey, cryptoParts.ivB64, encryptedUrlB64, seed);
-    
+
     // Clean the decrypted URL
     const cleanStreamUrl = streamUrl.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
-    
+
     return {
         url: cleanStreamUrl,
         videoId: data.video_id,
@@ -125,7 +131,11 @@ export async function extractFlixCloud(embedUrl, referer) {
         subtitles: data.subtitles || [],
         headers: {
             "Referer": "https://flixcloud.cc/",
-            "Origin": "https://flixcloud.cc"
+            "Origin": "https://flixcloud.cc",
+            "User-Agent": USER_AGENT,
+            "sec-ch-ua": SEC_CH_UA,
+            "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
+            "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
         }
     };
 }

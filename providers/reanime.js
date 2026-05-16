@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T06:37:32.935Z
+ * Generated: 2026-05-16T07:21:28.850Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -62,10 +62,10 @@ var __async = (__this, __arguments, generator) => {
   });
 };
 
-// src/reanime/reanime.js
+// nuvio-providers/src/reanime/reanime.js
 var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
 
-// src/reanime/constants.js
+// nuvio-providers/src/reanime/constants.js
 var REANIME_BASE = "https://reanime.to";
 var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 var ANILIST_URL = "https://graphql.anilist.co";
@@ -80,7 +80,7 @@ var FLIX_HEADERS = __spreadProps(__spreadValues({}, HEADERS), {
   "Referer": REANIME_BASE + "/"
 });
 
-// src/reanime/reanime.js
+// nuvio-providers/src/reanime/reanime.js
 function absolutize(path) {
   if (!path)
     return "";
@@ -429,8 +429,11 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
   });
 }
 
-// src/reanime/flixcloud.js
+// nuvio-providers/src/reanime/flixcloud.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+var SEC_CH_UA = '"Not-A.Brand";v="99", "Chromium";v="120", "Google Chrome";v="120"';
+var SEC_CH_UA_MOBILE = "?0";
+var SEC_CH_UA_PLATFORM = '"Windows"';
 function getUrlOrigin(url) {
   if (!url)
     return "";
@@ -475,7 +478,10 @@ function extractFlixCloud(embedUrl, referer) {
     const response = yield fetch(pageUrl, {
       headers: {
         "User-Agent": USER_AGENT,
-        "Referer": referer || "https://reanime.to/"
+        "Referer": referer || "https://reanime.to/",
+        "sec-ch-ua": SEC_CH_UA,
+        "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
+        "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
       }
     });
     if (!response.ok)
@@ -501,9 +507,9 @@ function extractFlixCloud(embedUrl, referer) {
         "Accept": "application/json,*/*",
         "Referer": pageUrl,
         "Origin": origin,
-        "sec-ch-ua": '"Not-A.Brand";v="24", "Chromium";v="146"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"'
+        "sec-ch-ua": SEC_CH_UA,
+        "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
+        "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
       }
     });
     if (!tokenResponse.ok)
@@ -532,7 +538,11 @@ function extractFlixCloud(embedUrl, referer) {
       subtitles: data.subtitles || [],
       headers: {
         "Referer": "https://flixcloud.cc/",
-        "Origin": "https://flixcloud.cc"
+        "Origin": "https://flixcloud.cc",
+        "User-Agent": USER_AGENT,
+        "sec-ch-ua": SEC_CH_UA,
+        "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
+        "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
       }
     };
   });
@@ -938,7 +948,7 @@ function sha256Hex(text) {
   });
 }
 
-// src/reanime/index.js
+// nuvio-providers/src/reanime/index.js
 function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
   return __async(this, null, function* () {
     try {
