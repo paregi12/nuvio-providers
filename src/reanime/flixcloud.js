@@ -119,8 +119,9 @@ export async function extractFlixCloud(embedUrl, referer) {
         title: data.video_title,
         subtitles: data.subtitles || [],
         headers: {
-            "Referer": `${origin}/`,
-            "Origin": origin
+            "Referer": pageUrl,
+            "Origin": origin,
+            "User-Agent": USER_AGENT
         }
     };
 }
