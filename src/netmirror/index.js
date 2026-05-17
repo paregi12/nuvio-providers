@@ -1,5 +1,5 @@
 import { NETMIRROR_URL, PLATFORM_MAP, BASE_HEADERS, TMDB_API_KEY } from './constants.js';
-import { bypass, getUnixTime } from './utils.js';
+import { bypass, getUnixTime, resolveApiUrl, buildNewTvHeaders } from './utils.js';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
     console.log(`[NetMirror] Fetching streams for ${mediaType} ${tmdbId}`);
@@ -39,7 +39,6 @@ async function fetchFromPlatform(platformKey, title, mediaType, season, episode,
 
     if (!searchData.searchResult || searchData.searchResult.length === 0) return null;
 
-    // Simplified: first result. A more robust implementation would check year/title similarity.
     const result = searchData.searchResult[0];
     const contentId = result.id;
 
@@ -66,6 +65,31 @@ async function fetchFromPlatform(platformKey, title, mediaType, season, episode,
         }
     }
 
+    try {
+        const apiBase = await resolveApiUrl();
+        const playerUrl = `${apiBase}/newtv/player.php?id=${targetId}`;
+        const playerResp = await fetch(playerUrl, {
+            headers: buildNewTvHeaders(platform.ott, { 'Usertoken': '' })
+        });
+        const response = await playerResp.json();
+
+        if (response.status === 'ok' && response.video_link) {
+            return [{
+                name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
+                title: `${title}`,
+                url: response.video_link,
+                quality: 'Auto',
+                headers: { 
+                    Referer: response.referer || apiBase,
+                    Cookie: "hd=on"
+                }
+            }];
+        }
+    } catch (error) {
+        console.error(`[NetMirror] Player Error: ${error.message}`);
+    }
+
+    // Fallback to old playlist method if needed (though it might be broken)
     const playlistUrl = `${NETMIRROR_URL}${platform.playlist}?id=${targetId}&t=${encodeURIComponent(title)}&tm=${getUnixTime()}`;
     const playlistResp = await fetch(playlistUrl, {
         headers: { ...BASE_HEADERS, Cookie: `${cookies}; ott=${platform.ott}` }

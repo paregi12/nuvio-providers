@@ -1,6 +1,6 @@
 /**
  * netmirror - Built from src/netmirror/
- * Generated: 2026-05-06T09:03:07.585Z
+ * Generated: 2026-05-17T14:17:41.661Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -99,6 +99,40 @@ var BASE_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 5 Build/TQ3A.230901.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/144.0.7559.132 Safari/537.36 /OS.Gatu v3.0",
   "X-Requested-With": "XMLHttpRequest"
 };
+var NEW_TV_BASE_HEADERS = {
+  "Cache-Control": "no-cache, no-store, must-revalidate",
+  "Pragma": "no-cache",
+  "Expires": "0",
+  "X-Requested-With": "NetmirrorNewTV v1.0",
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:136.0) Gecko/20100101 Firefox/136.0 /OS.GatuNewTV v1.0",
+  "Accept": "application/json, text/plain, */*"
+};
+var NEW_TV_DOMAINS = [
+  "aHR0cHM6Ly9tb2JpbGVkZXRlY3RzLmNvbQ==",
+  "aHR0cHM6Ly9tb2JpbGVkZXRlY3QuYXBw",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LmFydA==",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LmNj",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LmNsaWNr",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0Lmluaw==",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LmxpdmU=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LnBybw==",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LnNob3A=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LnNpdGU=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LnNwYWNl",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LnN0b3Jl",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0LnZpcA==",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0Lndpa2k=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0Lnh5eg==",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5hcnQ=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5jYw==",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5pbmZv",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5pbms=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5saXZl",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5wcm8=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy5zdG9yZQ==",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy50b3A=",
+  "aHR0cHM6Ly9tb2JpZGV0ZWN0cy54eXo="
+];
 
 // src/netmirror/utils.js
 var globalCookie = "";
@@ -117,28 +151,67 @@ function bypass() {
     const headers = __spreadProps(__spreadValues({}, BASE_HEADERS), {
       "Content-Type": "application/x-www-form-urlencoded",
       "Origin": "https://net22.cc",
-      "Referer": "https://net22.cc/verify2"
+      "Referer": "https://net22.cc/verify2",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
     });
-    const response = yield fetch(`${NETMIRROR_URL}/verify.php`, {
-      method: "POST",
-      headers,
-      body: `g-recaptcha-response=${uuid}`,
-      redirect: "manual"
-    });
-    const setCookie = response.headers.get("set-cookie");
-    if (setCookie) {
-      const match = setCookie.match(/t_hash_t=([^;]+)/);
-      if (match) {
-        globalCookie = match[1];
-        cookieTimestamp = Date.now();
-        return globalCookie;
+    try {
+      const response = yield fetch(`${NETMIRROR_URL}/verify.php`, {
+        method: "POST",
+        headers,
+        body: `g-recaptcha-response=${uuid}`,
+        redirect: "manual"
+      });
+      const setCookie = response.headers.get("set-cookie");
+      if (setCookie) {
+        const match = setCookie.match(/t_hash_t=([^;]+)/);
+        if (match) {
+          globalCookie = match[1];
+          cookieTimestamp = Date.now();
+          return globalCookie;
+        }
       }
+    } catch (error) {
+      console.error(`[NetMirror] Bypass Error: ${error.message}`);
     }
     throw new Error("Failed to extract t_hash_t cookie");
   });
 }
 function getUnixTime() {
   return Math.floor(Date.now() / 1e3);
+}
+var resolvedApiUrl = "";
+function safeAtob(encoded) {
+  if (typeof atob === "function") {
+    return atob(encoded);
+  }
+  return Buffer.from(encoded, "base64").toString("binary");
+}
+function resolveApiUrl() {
+  return __async(this, null, function* () {
+    if (resolvedApiUrl)
+      return resolvedApiUrl;
+    for (const encoded of NEW_TV_DOMAINS) {
+      const base = safeAtob(encoded).replace(/\/$/, "");
+      try {
+        const response = yield fetch(`${base}/checknewtv.php`, {
+          headers: NEW_TV_BASE_HEADERS
+        });
+        const data = yield response.json();
+        const tokenHash = data.token_hash;
+        if (tokenHash) {
+          resolvedApiUrl = safeAtob(tokenHash).replace(/\/$/, "");
+          return resolvedApiUrl;
+        }
+      } catch (error) {
+      }
+    }
+    throw new Error("Failed to resolve NewTV API base URL");
+  });
+}
+function buildNewTvHeaders(ott, extra = {}) {
+  return __spreadValues(__spreadProps(__spreadValues({}, NEW_TV_BASE_HEADERS), {
+    "Ott": ott
+  }), extra);
 }
 
 // src/netmirror/index.js
@@ -200,6 +273,28 @@ function fetchFromPlatform(platformKey, title, mediaType, season, episode, cooki
       } else {
         return null;
       }
+    }
+    try {
+      const apiBase = yield resolveApiUrl();
+      const playerUrl = `${apiBase}/newtv/player.php?id=${targetId}`;
+      const playerResp = yield fetch(playerUrl, {
+        headers: buildNewTvHeaders(platform.ott, { "Usertoken": "" })
+      });
+      const response = yield playerResp.json();
+      if (response.status === "ok" && response.video_link) {
+        return [{
+          name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
+          title: `${title}`,
+          url: response.video_link,
+          quality: "Auto",
+          headers: {
+            Referer: response.referer || apiBase,
+            Cookie: "hd=on"
+          }
+        }];
+      }
+    } catch (error) {
+      console.error(`[NetMirror] Player Error: ${error.message}`);
     }
     const playlistUrl = `${NETMIRROR_URL}${platform.playlist}?id=${targetId}&t=${encodeURIComponent(title)}&tm=${getUnixTime()}`;
     const playlistResp = yield fetch(playlistUrl, {
