@@ -1,6 +1,6 @@
 /**
  * netmirror - Built from src/netmirror/
- * Generated: 2026-05-17T14:17:41.661Z
+ * Generated: 2026-05-17T14:28:11.043Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -296,28 +296,7 @@ function fetchFromPlatform(platformKey, title, mediaType, season, episode, cooki
     } catch (error) {
       console.error(`[NetMirror] Player Error: ${error.message}`);
     }
-    const playlistUrl = `${NETMIRROR_URL}${platform.playlist}?id=${targetId}&t=${encodeURIComponent(title)}&tm=${getUnixTime()}`;
-    const playlistResp = yield fetch(playlistUrl, {
-      headers: __spreadProps(__spreadValues({}, BASE_HEADERS), { Cookie: `${cookies}; ott=${platform.ott}` })
-    });
-    const playlist = yield playlistResp.json();
-    const streams = [];
-    if (Array.isArray(playlist)) {
-      playlist.forEach((item) => {
-        if (!item.sources)
-          return;
-        item.sources.forEach((source) => {
-          streams.push({
-            name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
-            title: `${title} ${source.label}`,
-            url: source.file.startsWith("http") ? source.file : `${NETMIRROR_URL}${source.file.startsWith("/") ? "" : "/"}${source.file}`,
-            quality: source.label,
-            headers: { Referer: `${NETMIRROR_URL}/home`, Cookie: "hd=on" }
-          });
-        });
-      });
-    }
-    return streams;
+    return [];
   });
 }
 function getAllEpisodes(contentId, postData, platform, cookies) {

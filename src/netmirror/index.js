@@ -89,30 +89,7 @@ async function fetchFromPlatform(platformKey, title, mediaType, season, episode,
         console.error(`[NetMirror] Player Error: ${error.message}`);
     }
 
-    // Fallback to old playlist method if needed (though it might be broken)
-    const playlistUrl = `${NETMIRROR_URL}${platform.playlist}?id=${targetId}&t=${encodeURIComponent(title)}&tm=${getUnixTime()}`;
-    const playlistResp = await fetch(playlistUrl, {
-        headers: { ...BASE_HEADERS, Cookie: `${cookies}; ott=${platform.ott}` }
-    });
-    const playlist = await playlistResp.json();
-
-    const streams = [];
-    if (Array.isArray(playlist)) {
-        playlist.forEach(item => {
-            if (!item.sources) return;
-            item.sources.forEach(source => {
-                streams.push({
-                    name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
-                    title: `${title} ${source.label}`,
-                    url: source.file.startsWith('http') ? source.file : `${NETMIRROR_URL}${source.file.startsWith('/') ? '' : '/'}${source.file}`,
-                    quality: source.label,
-                    headers: { Referer: `${NETMIRROR_URL}/home`, Cookie: "hd=on" }
-                });
-            });
-        });
-    }
-
-    return streams;
+    return [];
 }
 
 async function getAllEpisodes(contentId, postData, platform, cookies) {
