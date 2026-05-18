@@ -16,6 +16,7 @@ This is a comprehensive guide to developing streaming providers for the Nuvio ap
    - [Async/Await & Transpilation](#asyncawait--transpilation)
    - [HTML Parsing with Cheerio](#html-parsing-with-cheerio)
    - [Handling Encryption](#handling-encryption)
+   - [Provider Settings](#provider-settings)
 8. [Testing & Debugging](#testing--debugging)
 9. [Publishing](#publishing)
 
@@ -255,6 +256,82 @@ import CryptoJS from 'crypto-js';
 const bytes = CryptoJS.AES.decrypt(encryptedText, secretKey);
 const originalText = bytes.toString(CryptoJS.enc.Utf8);
 ```
+
+### Provider Settings
+
+Nuvio allows you to create a custom settings screen for your provider. This is useful for API keys, server selection, or quality preferences.
+
+#### Step 1: Export `onSettings`
+In your `index.js`, export an `onSettings` function that returns a blueprint of your UI.
+
+```javascript
+// src/streamflix/index.js
+async function onSettings() {
+    return [
+        { type: "header", label: "Account Configuration" },
+        { 
+            type: "text", 
+            key: "apiKey", 
+            label: "API Key", 
+            placeholder: "Enter your key",
+            description: "Required for premium streams." 
+        },
+        { type: "header", label: "Preferences" },
+        { 
+            type: "select", 
+            key: "server", 
+            label: "Primary Server",
+            options: [
+                { label: "Auto", value: "auto" },
+                { label: "US East", value: "us" },
+                { label: "Europe", value: "eu" }
+            ],
+            defaultValue: "auto"
+        },
+        { 
+            type: "toggle", 
+            key: "useHq", 
+            label: "Force High Quality", 
+            defaultValue: true 
+        }
+    ];
+}
+
+module.exports = { getStreams, onSettings };
+```
+
+#### Step 2: Enable in Manifest
+Set `"hasSettings": true` in your `manifest.json`.
+
+```json
+{
+  "id": "streamflix",
+  "hasSettings": true,
+  ...
+}
+```
+
+#### Step 3: Use Settings in Scraper
+The user's choices are automatically injected into `globalThis.SCRAPER_SETTINGS`.
+
+```javascript
+async function getStreams(tmdbId, mediaType) {
+    const settings = globalThis.SCRAPER_SETTINGS || {};
+    const apiKey = settings.apiKey;
+    const preferredServer = settings.server || "auto";
+    
+    if (settings.useHq) {
+        // Logic to find 4K/HDR content...
+    }
+}
+```
+
+**Supported Component Types:**
+- `header`: Label only. Used for grouping.
+- `info`: Label only. Used for descriptions or notes.
+- `text`: String input. Supports `isPassword: true` for API keys.
+- `toggle`: Boolean (true/false) switch.
+- `select`: Dropdown list. Requires an `options` array of `{label, value}` objects.
 
 ---
 
