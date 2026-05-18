@@ -215,19 +215,53 @@ function buildNewTvHeaders(ott, extra = {}) {
 }
 
 // src/netmirror/index.js
+async function onSettings() {
+  return [
+    { type: "header", label: "Source Selection" },
+    {
+      type: "select",
+      key: "preferredPlatform",
+      label: "Preferred Streaming Source",
+      description: "Select which platform to try first. If content isn't found, others will be searched as fallback.",
+      options: [
+        { label: "All Sources (Ordered)", value: "all" },
+        { label: "Netflix", value: "netflix" },
+        { label: "Prime Video", value: "primevideo" },
+        { label: "Hotstar / Disney+", value: "hotstar" }
+      ],
+      defaultValue: "all"
+    },
+    { type: "header", label: "Advanced" },
+    {
+      type: "toggle",
+      key: "forceHd",
+      label: "Force HD Quality",
+      description: "Attempts to force the player into HD mode when possible.",
+      defaultValue: true
+    }
+  ];
+}
+
 function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
-    console.log(`[NetMirror] Fetching streams for ${mediaType} ${tmdbId}`);
+    const settings = globalThis.SCRAPER_SETTINGS || {};
+    const preferred = settings.preferredPlatform || "all";
+    const forceHd = settings.forceHd !== false;
+    console.log(`[NetMirror] Fetching streams for ${mediaType} ${tmdbId} (Pref: ${preferred})`);
     try {
       const cookie = yield bypass();
-      const cookies = `t_hash_t=${cookie}; hd=on`;
+      const hdParam = forceHd ? "on" : "off";
+      const cookies = `t_hash_t=${cookie}; hd=${hdParam}`;
       const tmdbType = mediaType === "tv" ? "tv" : "movie";
       const tmdbResp = yield fetch(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
       const tmdbData = yield tmdbResp.json();
       const title = mediaType === "tv" ? tmdbData.name : tmdbData.title;
       if (!title)
         throw new Error("Could not fetch title from TMDB");
-      const platforms = ["netflix", "primevideo", "hotstar", "disney"];
+      let platforms = ["netflix", "primevideo", "hotstar", "disney"];
+      if (preferred !== "all") {
+        platforms = [preferred, ...platforms.filter((p) => p !== preferred)];
+      }
       for (const platformKey of platforms) {
         const platform = PLATFORM_MAP[platformKey];
         const streams = yield fetchFromPlatform(platformKey, title, mediaType, season, episode, cookies);
@@ -336,4 +370,4 @@ function fetchEpisodesPage(contentId, seasonId, page, platform, cookies) {
     return episodes;
   });
 }
-module.exports = { getStreams };
+module.exports = { getStreams, onSettings };
