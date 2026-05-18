@@ -260,7 +260,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
         throw new Error("Could not fetch title from TMDB");
       let platforms = ["netflix", "primevideo", "hotstar", "disney"];
       if (preferred !== "all") {
-        platforms = [preferred, ...platforms.filter((p) => p !== preferred)];
+        platforms = [preferred];
       }
       for (const platformKey of platforms) {
         const platform = PLATFORM_MAP[platformKey];
