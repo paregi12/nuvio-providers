@@ -26,7 +26,7 @@
       "id": "animepahe",
       "name": "AnimePahe",
       "description": "AnimePahe (Sub/Dub)",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -34,6 +34,7 @@
       ],
       "filename": "providers/animepahe.js",
       "enabled": true,
+      "hasSettings": true,
       "formats": [
         "m3u8"
       ],

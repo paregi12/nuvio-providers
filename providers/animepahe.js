@@ -89,11 +89,13 @@ var HEADERS = {
 // src/animepahe/utils.js
 function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
+    const settings = globalThis.SCRAPER_SETTINGS || {};
+    const baseUrl = settings.domain || "https://animepahe.pw";
     const _a = options, { useProxy = true } = _a, fetchOptions = __objRest(_a, ["useProxy"]);
-    const finalUrl = url.startsWith("http") ? url : `${MAIN_URL}${url}`;
+    const finalUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
     const targetUrl = useProxy ? `${PROXY_URL}${encodeURIComponent(finalUrl)}` : finalUrl;
     const response = yield fetch(targetUrl, __spreadValues({
-      headers: HEADERS
+      headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: `${baseUrl}/` })
     }, fetchOptions));
     if (!response.ok)
       throw new Error(`HTTP ${response.status} on ${finalUrl}`);
@@ -334,4 +336,29 @@ function getStreams(tmdbId, mediaType, season, episode) {
     }
   });
 }
-module.exports = { getStreams };
+// Export the main function
+async function onSettings() {
+  return [
+    { type: "header", label: "Domain Selection" },
+    {
+      type: "select",
+      key: "domain",
+      label: "Preferred Domain",
+      description: "AnimePahe frequently rotates domains. Choose the one currently working for you.",
+      options: [
+        { label: "animepahe.pw", value: "https://animepahe.pw" },
+        { label: "animepahe.ru", value: "https://animepahe.ru" },
+        { label: "animepahe.se", value: "https://animepahe.se" }
+      ],
+      defaultValue: "https://animepahe.pw"
+    }
+  ];
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { getStreams, onSettings };
+} else {
+  // For React Native environment
+  global.getStreams = getStreams;
+  global.onSettings = onSettings;
+}
