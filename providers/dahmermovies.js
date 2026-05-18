@@ -7,28 +7,11 @@ console.log('[DahmerMovies] Initializing Dahmer Movies scraper');
 async function onSettings() {
     return [
         { type: "header", label: "Quality Preferences" },
-        {
-            type: "select",
-            key: "preferredQuality",
-            label: "Maximum Quality",
-            description: "Filter streams by maximum resolution. Results equal to or lower than this will be shown.",
-            options: [
-                { label: "All Qualities", value: "all" },
-                { label: "4K (2160p)", value: "2160" },
-                { label: "2K (1440p)", value: "1440" },
-                { label: "FHD (1080p)", value: "1080" },
-                { label: "HD (720p)", value: "720" },
-                { label: "SD (480p)", value: "480" }
-            ],
-            defaultValue: "all"
-        },
-        {
-            type: "toggle",
-            key: "strictQuality",
-            label: "Strict Quality Filter",
-            description: "If enabled, ONLY the selected quality will be shown (no fallbacks).",
-            defaultValue: false
-        }
+        { type: "toggle", key: "q2160", label: "Enable 4K (2160p)", defaultValue: true },
+        { type: "toggle", key: "q1440", label: "Enable 2K (1440p)", defaultValue: true },
+        { type: "toggle", key: "q1080", label: "Enable FHD (1080p)", defaultValue: true },
+        { type: "toggle", key: "q720", label: "Enable HD (720p)", defaultValue: true },
+        { type: "toggle", key: "q480", label: "Enable SD (480p)", defaultValue: true }
     ];
 }
 
@@ -296,8 +279,12 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
     console.log(`[DahmerMovies] Searching for: ${title} (${year})${season ? ` Season ${season}` : ''}${episode ? ` Episode ${episode}` : ''}`);
 
     const settings = globalThis.SCRAPER_SETTINGS || {};
-    const prefQuality = settings.preferredQuality || "all";
-    const isStrict = settings.strictQuality === true;
+    const allowed = [];
+    if (settings.q2160 !== false) allowed.push(2160);
+    if (settings.q1440 !== false) allowed.push(1440);
+    if (settings.q1080 !== false) allowed.push(1080);
+    if (settings.q720 !== false) allowed.push(720);
+    if (settings.q480 !== false) allowed.push(480);
 
     // Construct URL based on content type (with proper encoding)
     const encodedUrl = season === null
@@ -321,13 +308,9 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
             // For movies, filter by quality
             filteredPaths = paths.filter(path => {
                 const q = getIndexQuality(path.text);
-                if (prefQuality === "all") return /(1080p|2160p)/i.test(path.text);
-                
-                const targetQ = parseInt(prefQuality);
-                if (isStrict) return q === targetQ;
-                return q <= targetQ && q > 0;
+                return allowed.includes(q);
             });
-            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} movie links (Pref: ${prefQuality}, Strict: ${isStrict})`);
+            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} movie links (Allowed: ${allowed.join(', ')})`);
         } else {
             // For TV shows, filter by season and episode + quality
             const [seasonSlug, episodeSlug] = getEpisodeSlug(season, episode);
@@ -336,13 +319,9 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
                 if (!episodePattern.test(path.text)) return false;
                 
                 const q = getIndexQuality(path.text);
-                if (prefQuality === "all") return true;
-                
-                const targetQ = parseInt(prefQuality);
-                if (isStrict) return q === targetQ;
-                return q <= targetQ;
+                return allowed.includes(q);
             });
-            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} TV episode links (S${seasonSlug}E${episodeSlug}, Pref: ${prefQuality})`);
+            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} TV episode links (S${seasonSlug}E${episodeSlug}, Allowed: ${allowed.join(', ')})`);
         }
 
         if (filteredPaths.length === 0) {
