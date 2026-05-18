@@ -107,7 +107,7 @@
       "id": "dahmermovies",
       "name": "DahmerMovies",
       "description": "Dahmer Movies streaming service. Can be slow at times to fetch and stream. Only use if needed.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -115,6 +115,7 @@
       ],
       "filename": "providers/dahmermovies.js",
       "enabled": true,
+      "hasSettings": true,
       "formats": [
         "mkv"
       ],
