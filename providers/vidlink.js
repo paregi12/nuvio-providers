@@ -164,7 +164,7 @@ function parseM3U8(content, baseUrl) {
   }
   return streams;
 }
-function fetchAndParseM3U8(playlistUrl, mediaInfo) {
+function fetchAndParseM3U8(playlistUrl, mediaInfo, subtitles) {
   return __async(this, null, function* () {
     console.log(`[Vidlink] Fetching M3U8 playlist: ${playlistUrl.substring(0, 80)}...`);
     try {
@@ -181,7 +181,8 @@ function fetchAndParseM3U8(playlistUrl, mediaInfo) {
           quality: "Auto",
           size: "Unknown",
           headers: VIDLINK_HEADERS,
-          provider: "vidlink"
+          provider: "vidlink",
+          subtitles: subtitles || []
         }];
       }
       console.log(`[Vidlink] Found ${parsedStreams.length} quality variants`);
@@ -194,7 +195,8 @@ function fetchAndParseM3U8(playlistUrl, mediaInfo) {
           quality,
           size: "Unknown",
           headers: VIDLINK_HEADERS,
-          provider: "vidlink"
+          provider: "vidlink",
+          subtitles: subtitles || []
         };
       });
     } catch (error) {
@@ -206,7 +208,8 @@ function fetchAndParseM3U8(playlistUrl, mediaInfo) {
         quality: "Auto",
         size: "Unknown",
         headers: VIDLINK_HEADERS,
-        provider: "vidlink"
+        provider: "vidlink",
+        subtitles: subtitles || []
       }];
     }
   });
@@ -266,6 +269,20 @@ function processVidlinkResponse(data, mediaInfo) {
   try {
     console.log(`[Vidlink] Processing response data`);
     const streamTitle = createStreamTitle(mediaInfo);
+    const subtitles = [];
+    const rawSubtitles = data.subtitles || data.stream && data.stream.subtitles || data.captions || data.stream && data.stream.captions || [];
+    if (Array.isArray(rawSubtitles)) {
+      rawSubtitles.forEach((sub) => {
+        if (sub.url) {
+          subtitles.push({
+            url: sub.url,
+            language: sub.language || sub.lang || sub.label || "Unknown",
+            name: sub.name || sub.label || sub.language || sub.lang || "Unknown",
+            headers: VIDLINK_HEADERS
+          });
+        }
+      });
+    }
     if (data.stream && data.stream.qualities) {
       console.log(`[Vidlink] Processing qualities from stream object`);
       Object.entries(data.stream.qualities).forEach(([qualityKey, qualityData]) => {
@@ -278,7 +295,8 @@ function processVidlinkResponse(data, mediaInfo) {
             quality,
             size: "Unknown",
             headers: VIDLINK_HEADERS,
-            provider: "vidlink"
+            provider: "vidlink",
+            subtitles
           });
         }
       });
@@ -286,7 +304,8 @@ function processVidlinkResponse(data, mediaInfo) {
         streams.push({
           _isPlaylist: true,
           url: data.stream.playlist,
-          mediaInfo: __spreadProps(__spreadValues({}, mediaInfo), { title: streamTitle })
+          mediaInfo: __spreadProps(__spreadValues({}, mediaInfo), { title: streamTitle }),
+          subtitles
         });
       }
     } else if (data.stream && data.stream.playlist && !data.stream.qualities) {
@@ -294,7 +313,8 @@ function processVidlinkResponse(data, mediaInfo) {
       streams.push({
         _isPlaylist: true,
         url: data.stream.playlist,
-        mediaInfo: __spreadProps(__spreadValues({}, mediaInfo), { title: streamTitle })
+        mediaInfo: __spreadProps(__spreadValues({}, mediaInfo), { title: streamTitle }),
+        subtitles
       });
     } else if (data.url) {
       const quality = extractQuality(data);
@@ -305,7 +325,8 @@ function processVidlinkResponse(data, mediaInfo) {
         quality,
         size: "Unknown",
         headers: VIDLINK_HEADERS,
-        provider: "vidlink"
+        provider: "vidlink",
+        subtitles
       });
     } else if (data.streams && Array.isArray(data.streams)) {
       data.streams.forEach((stream, index) => {
@@ -318,7 +339,8 @@ function processVidlinkResponse(data, mediaInfo) {
             quality,
             size: stream.size || "Unknown",
             headers: VIDLINK_HEADERS,
-            provider: "vidlink"
+            provider: "vidlink",
+            subtitles
           });
         }
       });
@@ -333,7 +355,8 @@ function processVidlinkResponse(data, mediaInfo) {
             quality,
             size: link.size || "Unknown",
             headers: VIDLINK_HEADERS,
-            provider: "vidlink"
+            provider: "vidlink",
+            subtitles
           });
         }
       });
@@ -352,7 +375,8 @@ function processVidlinkResponse(data, mediaInfo) {
               quality,
               size: "Unknown",
               headers: VIDLINK_HEADERS,
-              provider: "vidlink"
+              provider: "vidlink",
+              subtitles
             });
           } else if (typeof value === "object" && value !== null) {
             if (!key.toLowerCase().includes("caption") && !key.toLowerCase().includes("subtitle")) {
@@ -415,7 +439,7 @@ function getStreams(tmdbId, mediaType = "movie", seasonNum = null, episodeNum = 
       if (playlistStreams.length > 0) {
         console.log(`[Vidlink] Processing ${playlistStreams.length} M3U8 playlists`);
         const playlistPromises = playlistStreams.map(
-          (ps) => fetchAndParseM3U8(ps.url, ps.mediaInfo)
+          (ps) => fetchAndParseM3U8(ps.url, ps.mediaInfo, ps.subtitles)
         );
         const parsedStreamArrays = yield Promise.all(playlistPromises);
         const allStreams = directStreams.concat(...parsedStreamArrays);

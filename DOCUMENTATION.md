@@ -12,6 +12,7 @@ This is a comprehensive guide to developing streaming providers for the Nuvio ap
 6. [The Provider API](#the-provider-api)
    - [Input Parameters](#input-parameters)
    - [Output Format](#output-format)
+   - [Subtitle Support](#subtitle-support)
 7. [Advanced Topics](#advanced-topics)
    - [Async/Await & Transpilation](#asyncawait--transpilation)
    - [HTML Parsing with Cheerio](#html-parsing-with-cheerio)
@@ -215,10 +216,30 @@ Return an **Array** of objects. Each object represents one playable link.
     "headers": {                   // (Optional) Headers valid for playback
       "User-Agent": "...",
       "Referer": "..."
-    }
+    },
+    "subtitles": [                 // (Optional) Array of subtitle objects
+      {
+        "url": "https://...",      // Subtitle URL (.vtt, .srt)
+        "language": "en",          // Language code (ISO 639-1)
+        "name": "English",         // Display name
+        "headers": {               // (Optional) Headers to fetch the subtitle
+          "User-Agent": "..."
+        }
+      }
+    ]
   }
 ]
 ```
+
+### Subtitle Support
+
+Nuvio supports external subtitles in VTT and SRT formats. You can include an array of subtitle objects within each stream object.
+
+**Subtitle Object Properties:**
+- `url`: The absolute URL to the subtitle file.
+- `language`: The language of the subtitle (e.g., "en", "es", "hi").
+- `name`: The label shown to the user in the subtitle selector.
+- `headers`: (Optional) If the subtitle host requires specific headers (like a `Referer` or `User-Agent`), include them here.
 
 ---
 
