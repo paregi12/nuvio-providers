@@ -131,24 +131,53 @@ function getTMDBDetails(tmdbId, mediaType) {
 // src/castle/decrypt.js
 function decryptCastle(encryptedB64, securityKeyB64) {
   return __async(this, null, function* () {
-    console.log("[Castle] Starting AES-CBC decryption...");
-    const response = yield fetch("https://aesdec.nuvioapp.space/decrypt-castle", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        encryptedData: encryptedB64,
-        securityKey: securityKeyB64
-      })
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    console.log("[Castle] Starting local AES-CBC decryption...");
+    try {
+      const CryptoJS = require("crypto-js");
+      const CASTLE_SUFFIX = "T!BgJB";
+      
+      // 1. Base64 decode the security key
+      const securityKeyWords = CryptoJS.enc.Base64.parse(securityKeyB64);
+      
+      // 2. Append the suffix
+      const suffixWords = CryptoJS.enc.Utf8.parse(CASTLE_SUFFIX);
+      const keyMaterial = securityKeyWords.concat(suffixWords);
+      
+      // 3. Derive 16-byte key (pad with 0s if needed, or truncate)
+      let finalKey;
+      if (keyMaterial.sigBytes < 16) {
+        // Pad with zeros
+        const padding = CryptoJS.lib.WordArray.create(new Array(16 - keyMaterial.sigBytes).fill(0));
+        finalKey = keyMaterial.concat(padding);
+      } else if (keyMaterial.sigBytes > 16) {
+        // Truncate to 16 bytes
+        finalKey = CryptoJS.lib.WordArray.create(keyMaterial.words.slice(0, 4), 16);
+      } else {
+        finalKey = keyMaterial;
+      }
+      
+      // 4. IV is the same as the key
+      const iv = finalKey;
+      
+      console.log(`[Castle] Key Material Derived (${finalKey.sigBytes} bytes)`);
+      
+      const decrypted = CryptoJS.AES.decrypt(encryptedB64, finalKey, {
+        iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
+      
+      const result = decrypted.toString(CryptoJS.enc.Utf8);
+      if (!result) {
+        throw new Error("Decryption resulted in empty string (possible key/IV mismatch)");
+      }
+      
+      console.log("[Castle] Local decryption successful");
+      return result;
+    } catch (error) {
+      console.error(`[Castle] Local decryption failed: ${error.message}`);
+      throw error;
     }
-    const data = yield response.json();
-    if (data.error) {
-      throw new Error(data.error);
-    }
-    console.log("[Castle] Decryption successful");
-    return data.decrypted;
   });
 }
 
@@ -326,6 +355,21 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
     console.log("[Castle] No videoUrl found in response");
     return streams;
   }
+  
+  const subtitles = [];
+  if (data.subtitles && Array.isArray(data.subtitles)) {
+    data.subtitles.forEach((sub) => {
+      if (sub.url) {
+        subtitles.push({
+          url: sub.url,
+          language: sub.abbreviate || "Unknown",
+          name: sub.title || sub.abbreviate || "Unknown",
+          headers: PLAYBACK_HEADERS
+        });
+      }
+    });
+  }
+
   let mediaTitle = mediaInfo.title || "Unknown";
   if (mediaInfo.year) {
     mediaTitle += ` (${mediaInfo.year})`;
@@ -346,7 +390,8 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
         quality: videoQuality,
         size: formatSize(video.size),
         headers: PLAYBACK_HEADERS,
-        provider: "castle"
+        provider: "castle",
+        subtitles
       });
     }
   } else {
@@ -358,7 +403,8 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
       quality,
       size: formatSize(data.size),
       headers: PLAYBACK_HEADERS,
-      provider: "castle"
+      provider: "castle",
+      subtitles
     });
   }
   return streams;
