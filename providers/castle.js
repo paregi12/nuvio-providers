@@ -43,7 +43,7 @@ var __async = (__this, __arguments, generator) => {
 // src/castle/constants.js
 var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 var TMDB_BASE_URL = "https://api.themoviedb.org/3";
-var CASTLE_BASE = "https://api.fstcy.com";
+var CASTLE_BASE = "https://api.hlowb.com";
 var PKG = "com.external.castle";
 var CHANNEL = "IndiaA";
 var CLIENT = "1";
@@ -136,30 +136,21 @@ function decryptCastle(encryptedB64, securityKeyB64) {
       const CryptoJS = require("crypto-js");
       const CASTLE_SUFFIX = "T!BgJB";
       
-      // 1. Base64 decode the security key
       const securityKeyWords = CryptoJS.enc.Base64.parse(securityKeyB64);
-      
-      // 2. Append the suffix
       const suffixWords = CryptoJS.enc.Utf8.parse(CASTLE_SUFFIX);
       const keyMaterial = securityKeyWords.concat(suffixWords);
       
-      // 3. Derive 16-byte key (pad with 0s if needed, or truncate)
       let finalKey;
       if (keyMaterial.sigBytes < 16) {
-        // Pad with zeros
         const padding = CryptoJS.lib.WordArray.create(new Array(16 - keyMaterial.sigBytes).fill(0));
         finalKey = keyMaterial.concat(padding);
       } else if (keyMaterial.sigBytes > 16) {
-        // Truncate to 16 bytes
         finalKey = CryptoJS.lib.WordArray.create(keyMaterial.words.slice(0, 4), 16);
       } else {
         finalKey = keyMaterial;
       }
       
-      // 4. IV is the same as the key
       const iv = finalKey;
-      
-      console.log(`[Castle] Key Material Derived (${finalKey.sigBytes} bytes)`);
       
       const decrypted = CryptoJS.AES.decrypt(encryptedB64, finalKey, {
         iv,
@@ -218,26 +209,27 @@ function searchCastle(securityKey, keyword, page = 1, size = 30) {
 function getDetails(securityKey, movieId) {
   return __async(this, null, function* () {
     console.log(`[Castle] Fetching details for movieId: ${movieId}`);
-    const url = `${CASTLE_BASE}/film-api/v1.1/movie?channel=${CHANNEL}&clientType=${CLIENT}&lang=${LANG}&movieId=${movieId}&packageName=${PKG}`;
+    const url = `${CASTLE_BASE}/film-api/v1.9.9/movie?channel=${CHANNEL}&clientType=${CLIENT}&lang=${LANG}&movieId=${movieId}&packageName=${PKG}`;
     const response = yield makeRequest(url);
     const cipher = yield extractCipherFromResponse(response);
     const decrypted = yield decryptCastle(cipher, securityKey);
     return JSON.parse(decrypted);
   });
 }
-function getVideo2(securityKey, movieId, episodeId, resolution = 2) {
+function getVideoV1(securityKey, movieId, episodeId, languageId, resolution = 2) {
   return __async(this, null, function* () {
-    console.log(`[Castle] Fetching video (v2) for movieId: ${movieId}, episodeId: ${episodeId}`);
+    console.log(`[Castle] Fetching video (v1) for movieId: ${movieId}, languageId: ${languageId}`);
     const url = `${CASTLE_BASE}/film-api/v2.0.1/movie/getVideo2?clientType=${CLIENT}&packageName=${PKG}&channel=${CHANNEL}&lang=${LANG}`;
     const body = {
       mode: "1",
       appMarket: "GuanWang",
-      clientType: "1",
+      clientType: CLIENT,
       woolUser: "false",
       apkSignKey: "ED0955EB04E67A1D9F3305B95454FED485261475",
       androidVersion: "13",
-      movieId,
-      episodeId,
+      movieId: movieId.toString(),
+      episodeId: episodeId.toString(),
+      languageId: languageId.toString(),
       isNewUser: "true",
       resolution: resolution.toString(),
       packageName: PKG
@@ -252,23 +244,28 @@ function getVideo2(securityKey, movieId, episodeId, resolution = 2) {
     return JSON.parse(decrypted);
   });
 }
-function getVideoV1(securityKey, movieId, episodeId, languageId, resolution = 2) {
+function getVideo2(securityKey, movieId, episodeId, resolution = 2) {
   return __async(this, null, function* () {
-    console.log(`[Castle] Fetching video (v1) for movieId: ${movieId}, languageId: ${languageId}`);
-    const params = new URLSearchParams({
-      apkSignKey: "ED0955EB04E67A1D9F3305B95454FED485261475",
-      channel: CHANNEL,
-      clientType: CLIENT,
-      episodeId: episodeId.toString(),
-      lang: LANG,
-      languageId: languageId.toString(),
+    console.log(`[Castle] Fetching video (v2) for movieId: ${movieId}, episodeId: ${episodeId}`);
+    const url = `${CASTLE_BASE}/film-api/v2.0.1/movie/getVideo2?clientType=${CLIENT}&packageName=${PKG}&channel=${CHANNEL}&lang=${LANG}`;
+    const body = {
       mode: "1",
+      appMarket: "GuanWang",
+      clientType: CLIENT,
+      woolUser: "false",
+      apkSignKey: "ED0955EB04E67A1D9F3305B95454FED485261475",
+      androidVersion: "13",
       movieId: movieId.toString(),
-      packageName: PKG,
-      resolution: resolution.toString()
+      episodeId: episodeId.toString(),
+      isNewUser: "true",
+      resolution: resolution.toString(),
+      packageName: PKG
+    };
+    const response = yield makeRequest(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
     });
-    const url = `${CASTLE_BASE}/film-api/v1.9.1/movie/getVideo?${params.toString()}`;
-    const response = yield makeRequest(url);
     const cipher = yield extractCipherFromResponse(response);
     const decrypted = yield decryptCastle(cipher, securityKey);
     return JSON.parse(decrypted);
