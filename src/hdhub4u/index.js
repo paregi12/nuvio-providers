@@ -35,6 +35,14 @@ async function search(query) {
 
 async function getDownloadLinks(mediaUrl) {
   const domain = await getCurrentDomain();
+  if (mediaUrl.includes("hdhub4u.")) {
+    try {
+      const urlObj = new URL(mediaUrl);
+      const domainObj = new URL(domain);
+      urlObj.hostname = domainObj.hostname;
+      mediaUrl = urlObj.toString();
+    } catch (e) {}
+  }
   const response = await fetch(mediaUrl, { headers: { ...HEADERS, Referer: `${domain}/` } });
   const data = await response.text();
   const $ = cheerio.load(data);
@@ -191,7 +199,7 @@ async function getStreams(tmdbId, mediaType = "movie", season = null, episode = 
         url: link.url,
         quality: qualityStr,
         size: formatBytes(link.size),
-        headers: HEADERS,
+        headers: link.headers || undefined,
         provider: "hdhub4u"
       };
     });

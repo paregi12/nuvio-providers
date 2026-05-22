@@ -203,9 +203,11 @@ export async function hubCloudExtractor(url, referer) {
       const text = $(element).text().toLowerCase();
       const fileName = header || headerDetails || "Unknown";
       
-      if (text.includes("download file") || text.includes("fsl server") || text.includes("s3 server") || text.includes("fslv2") || text.includes("mega server")) {
+      if (text.includes("download file") || text.includes("fsl server") || text.includes("s3 server") || text.includes("fslv2") || text.includes("mega server") || (link && link.includes("r2.dev"))) {
         let label = "HubCloud";
-        if (text.includes("fsl server")) label = "HubCloud - FSL";
+        if (link && link.includes("r2.dev")) label = "Direct R2";
+        else if (link && link.includes("workers.dev")) label = "ZipDisk Server";
+        else if (text.includes("fsl server")) label = "HubCloud - FSL";
         else if (text.includes("s3 server")) label = "HubCloud - S3";
         else if (text.includes("fslv2")) label = "HubCloud - FSLv2";
         else if (text.includes("mega server")) label = "HubCloud - Mega";
@@ -224,15 +226,20 @@ export async function hubCloudExtractor(url, referer) {
             links.push({ source: `HubCloud - BuzzServer ${labelExtras}`, quality, url: dlink, size: sizeInBytes, fileName });
           }
         } catch (e) {}
-      } else if (text.includes("10gbps")) {
-          try {
-              const resp = await fetch(link, { method: "GET", redirect: "manual" });
-              const loc = resp.headers.get("location");
-              if (loc && loc.includes("link=")) {
-                  const dlink = loc.substring(loc.indexOf("link=") + 5);
-                  links.push({ source: `HubCloud - 10Gbps ${labelExtras}`, quality, url: dlink, size: sizeInBytes, fileName });
-              }
-          } catch (e) {}
+      } else if (text.includes("10gbps") || (link && link.includes("hubcloud.cx"))) {
+          let targetUrl = link;
+          if (link && !link.includes("hubcloud.cx")) {
+              try {
+                  const resp = await fetch(link, { method: "GET", redirect: "manual" });
+                  const loc = resp.headers.get("location");
+                  if (loc && loc.includes("link=")) {
+                      targetUrl = loc.substring(loc.indexOf("link=") + 5);
+                  }
+              } catch (e) {}
+          }
+          links.push({ source: `HubCloud - 10Gbps ${labelExtras}`, quality, url: targetUrl, size: sizeInBytes, fileName });
+      } else if (text.includes("zipdisk") || (link && link.includes("workers.dev"))) {
+        links.push({ source: `ZipDisk Server ${labelExtras}`, quality, url: link, size: sizeInBytes, fileName });
       } else if (link && link.includes("pixeldra")) {
         const results = await pixelDrainExtractor(link);
         links.push(...results.map(l => ({ ...l, source: `${l.source} ${labelExtras}`, size: sizeInBytes, fileName })));
@@ -249,18 +256,50 @@ export async function hubCdnExtractor(url, referer) {
   try {
     const response = await fetch(url, { headers: { ...HEADERS, Referer: referer } });
     const data = await response.text();
+    const $ = cheerio.load(data);
     
-    const encoded = data.match(/r=([A-Za-z0-9+/=]+)/)?.[1];
-    if (encoded) {
-      const m3u8Link = atob(encoded).substring(atob(encoded).lastIndexOf("link=") + 5);
-      return [{ source: "HubCdn", quality: 1080, url: m3u8Link }];
+    let scriptContent = "";
+    $("script").each((i, el) => {
+        const html = $(el).html();
+        if (html && html.includes("reurl")) {
+            scriptContent = html;
+        }
+    });
+    
+    if (scriptContent) {
+        const match = scriptContent.match(/reurl\s*=\s*["']([^"']+)["']/);
+        if (match && match[1]) {
+            const reurlVal = match[1];
+            if (reurlVal.includes("?r=")) {
+                const queryPart = reurlVal.split('?r=').pop();
+                try {
+                    const decoded = atob(queryPart);
+                    const m3u8Link = decoded.substring(decoded.lastIndexOf("link=") + 5);
+                    if (m3u8Link && m3u8Link.startsWith("http")) {
+                        return [{ source: "HubCdn", quality: 1080, url: m3u8Link }];
+                    }
+                } catch (e) {}
+            } else if (reurlVal.includes("link=")) {
+                const m3u8Link = reurlVal.split("link=").pop();
+                if (m3u8Link && m3u8Link.startsWith("http")) {
+                    return [{ source: "HubCdn", quality: 1080, url: m3u8Link }];
+                }
+            } else if (reurlVal.startsWith("http")) {
+                return [{ source: "HubCdn", quality: 1080, url: reurlVal }];
+            }
+        }
     }
     
-    const scriptEncoded = data.match(/reurl\s*=\s*["']([^"']+)["']/)?.[1];
-    if (scriptEncoded) {
-        const queryPart = scriptEncoded.split('?r=').pop();
-        const m3u8Link = atob(queryPart).substring(atob(queryPart).lastIndexOf("link=") + 5);
-        return [{ source: "HubCdn", quality: 1080, url: m3u8Link }];
+    // Fallback: regex for r=([A-Za-z0-9+/=]+) in page source
+    const encodedMatch = data.match(/r=([A-Za-z0-9+/=]+)/);
+    if (encodedMatch && encodedMatch[1]) {
+        try {
+            const decoded = atob(encodedMatch[1]);
+            const m3u8Link = decoded.substring(decoded.lastIndexOf("link=") + 5);
+            if (m3u8Link && m3u8Link.startsWith("http")) {
+                return [{ source: "HubCdn", quality: 1080, url: m3u8Link }];
+            }
+        } catch (e) {}
     }
     
     return [];
