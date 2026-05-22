@@ -1,6 +1,6 @@
 /**
  * hdhub4u - Built from src/hdhub4u/
- * Generated: 2026-04-26T06:39:24.934Z
+ * Generated: 2026-05-22T13:37:18.265Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -606,7 +606,7 @@ function loadExtractor(_0) {
 function search(query) {
   return __async(this, null, function* () {
     const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-    const searchUrl = `https://search.pingora.fyi/collections/post/documents/search?q=${encodeURIComponent(query)}&query_by=post_title,category&query_by_weights=4,2&sort_by=sort_by_date:desc&limit=15&highlight_fields=none&use_cache=true&page=1&analytics_tag=${today}`;
+    const searchUrl = `https://search.hdhub4u.glass/collections/post/documents/search?q=${encodeURIComponent(query)}&query_by=post_title,category&query_by_weights=4,2&sort_by=sort_by_date:desc&limit=15&highlight_fields=none&use_cache=true&page=1&analytics_tag=${today}`;
     const response = yield fetch(searchUrl, { headers: HEADERS });
     const data = yield response.json();
     if (!data || !data.hits)
