@@ -1,6 +1,6 @@
 /**
  * hianime - Built from src/hianime/
- * Generated: 2026-05-23T17:35:49.284Z
+ * Generated: 2026-05-23T18:18:42.790Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -285,11 +285,11 @@ function getStreams(tmdbId, mediaType = "tv", season = 1, episode = 1) {
         malId = yield searchMalId(showTitle, "movie");
         mappedEp = 1;
       }
-      if (!malId) {
+      if (!malId && mediaType !== "movie") {
         const mapping = yield resolveMapping(imdbId, s, e);
         if (mapping && mapping.mal_id) {
           malId = mapping.mal_id;
-          mappedEp = mediaType === "movie" ? 1 : mapping.mal_episode || episode;
+          mappedEp = mapping.mal_episode || episode;
         }
       }
       if (!malId)

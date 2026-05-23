@@ -169,12 +169,12 @@ async function getStreams(tmdbId, mediaType = 'tv', season = 1, episode = 1) {
             mappedEp = 1;
         }
 
-        // Fallback to Mapping API for series or if movie search failed
-        if (!malId) {
+        // Fallback to Mapping API for series ONLY
+        if (!malId && mediaType !== 'movie') {
             const mapping = await resolveMapping(imdbId, s, e);
             if (mapping && mapping.mal_id) {
                 malId = mapping.mal_id;
-                mappedEp = mediaType === 'movie' ? 1 : (mapping.mal_episode || episode);
+                mappedEp = mapping.mal_episode || episode;
             }
         }
 
