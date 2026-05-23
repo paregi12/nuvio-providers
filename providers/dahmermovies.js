@@ -1,8 +1,6 @@
 // Dahmer Movies Scraper for Nuvio Local Scrapers
 // React Native compatible version
 
-console.log('[DahmerMovies] Initializing Dahmer Movies scraper');
-
 // Settings layout
 async function onSettings() {
     return [
