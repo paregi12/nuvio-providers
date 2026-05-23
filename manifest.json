@@ -553,6 +553,27 @@
       "contentLanguage": [
         "ar"
       ]
+    },
+    {
+      "id": "hianime",
+      "name": "HiAnime",
+      "description": "HiAnime multi-server anime streaming with real-time mapping and subtitles",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/hianime.js",
+      "enabled": true,
+      "hasSettings": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=hianime.to&sz=128",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
