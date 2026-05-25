@@ -31,12 +31,15 @@ export function unpack(code) {
 
 export async function extractKwik(url) {
     try {
+        const settings = globalThis.SCRAPER_SETTINGS || {};
+        const baseUrl = settings.domain || "https://animepahe.com";
+
         // Fetch the kwik page directly (no proxy as it blocks kwik)
-        // Referer must be the URL itself as per Kotlin code: app.get(url, referer=url)
+        // Referer must be the active AnimePahe server URL to prevent blocking
         const html = await fetchText(url, { 
             headers: { 
                 ...HEADERS, 
-                "Referer": url,
+                "Referer": `${baseUrl}/`,
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             },
             useProxy: false 
@@ -68,15 +71,13 @@ export async function extractKwik(url) {
         for (const scriptContent of matches) {
             const unpacked = unpack(scriptContent);
             
-            // Regex to find the source URL - more lenient now
-            const urlMatch = unpacked.match(/source\s*=\s*['"](https?:\/\/.*?)['"]/) || 
-                             unpacked.match(/const\s+source\s*=\s*['"](https?:\/\/.*?)['"]/) ||
-                             unpacked.match(/var\s+source\s*=\s*['"](https?:\/\/.*?)['"]/) ||
-                             unpacked.match(/src\s*:\s*['"](https?:\/\/.*?)['"]/);
+            // Simplified and robust regex matching both single/double quoted m3u8 source URL
+            const m3u8Match = unpacked.match(/source\s*=\s*'([^']+m3u8[^']*)'/) || 
+                              unpacked.match(/source\s*=\s*"([^"]+m3u8[^"]*)"/);
             
-            if (urlMatch) {
+            if (m3u8Match) {
                 return {
-                    url: urlMatch[1],
+                    url: m3u8Match[1],
                     headers: {
                         "Referer": "https://kwik.cx/",
                         "Origin": "https://kwik.cx",

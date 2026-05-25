@@ -124,4 +124,29 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     }
 }
 
-module.exports = { getStreams };
+async function onSettings() {
+    return [
+        { type: "header", label: "Domain Selection" },
+        {
+            type: "select",
+            key: "domain",
+            label: "Preferred Domain",
+            description: "AnimePahe frequently rotates domains. Choose the one currently working for you.",
+            options: [
+                { label: "animepahe.com", value: "https://animepahe.com" },
+                { label: "animepahe.org", value: "https://animepahe.org" },
+                { label: "animepahe.pw", value: "https://animepahe.pw" }
+            ],
+            defaultValue: "https://animepahe.com"
+        }
+    ];
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { getStreams, onSettings };
+} else {
+    global.getStreams = getStreams;
+    global.onSettings = onSettings;
+}
+
+

@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-04-25T11:40:26.173Z
+ * Generated: 2026-05-25T12:39:29.583Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -78,24 +78,22 @@ var __async = (__this, __arguments, generator) => {
 var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
 
 // src/animepahe/constants.js
-var MAIN_URL = "https://animepahe.pw";
+var MAIN_URL = "https://animepahe.com";
 var PROXY_URL = "https://animepaheproxy.phisheranimepahe.workers.dev/?url=";
 var HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
   "Cookie": "__ddg2_=1234567890",
-  "Referer": "https://animepahe.pw/"
+  "Referer": "https://animepahe.com/"
 };
 
 // src/animepahe/utils.js
 function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
-    const settings = globalThis.SCRAPER_SETTINGS || {};
-    const baseUrl = settings.domain || "https://animepahe.pw";
     const _a = options, { useProxy = true } = _a, fetchOptions = __objRest(_a, ["useProxy"]);
-    const finalUrl = url.startsWith("http") ? url : `${baseUrl}${url}`;
+    const finalUrl = url.startsWith("http") ? url : `${MAIN_URL}${url}`;
     const targetUrl = useProxy ? `${PROXY_URL}${encodeURIComponent(finalUrl)}` : finalUrl;
     const response = yield fetch(targetUrl, __spreadValues({
-      headers: __spreadProps(__spreadValues({}, HEADERS), { Referer: `${baseUrl}/` })
+      headers: HEADERS
     }, fetchOptions));
     if (!response.ok)
       throw new Error(`HTTP ${response.status} on ${finalUrl}`);
@@ -181,9 +179,11 @@ function unpack(code) {
 function extractKwik(url) {
   return __async(this, null, function* () {
     try {
+      const settings = globalThis.SCRAPER_SETTINGS || {};
+      const baseUrl = settings.domain || "https://animepahe.com";
       const html = yield fetchText(url, {
         headers: __spreadProps(__spreadValues({}, HEADERS), {
-          "Referer": url,
+          "Referer": `${baseUrl}/`,
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }),
         useProxy: false
@@ -210,10 +210,10 @@ function extractKwik(url) {
       }
       for (const scriptContent of matches) {
         const unpacked = unpack(scriptContent);
-        const urlMatch = unpacked.match(/source\s*=\s*['"](https?:\/\/.*?)['"]/) || unpacked.match(/const\s+source\s*=\s*['"](https?:\/\/.*?)['"]/) || unpacked.match(/var\s+source\s*=\s*['"](https?:\/\/.*?)['"]/) || unpacked.match(/src\s*:\s*['"](https?:\/\/.*?)['"]/);
-        if (urlMatch) {
+        const m3u8Match = unpacked.match(/source\s*=\s*'([^']+m3u8[^']*)'/) || unpacked.match(/source\s*=\s*"([^"]+m3u8[^"]*)"/);
+        if (m3u8Match) {
           return {
-            url: urlMatch[1],
+            url: m3u8Match[1],
             headers: {
               "Referer": "https://kwik.cx/",
               "Origin": "https://kwik.cx",
@@ -336,29 +336,28 @@ function getStreams(tmdbId, mediaType, season, episode) {
     }
   });
 }
-// Export the main function
-async function onSettings() {
-  return [
-    { type: "header", label: "Domain Selection" },
-    {
-      type: "select",
-      key: "domain",
-      label: "Preferred Domain",
-      description: "AnimePahe frequently rotates domains. Choose the one currently working for you.",
-      options: [
-        { label: "animepahe.pw", value: "https://animepahe.pw" },
-        { label: "animepahe.ru", value: "https://animepahe.ru" },
-        { label: "animepahe.se", value: "https://animepahe.se" }
-      ],
-      defaultValue: "https://animepahe.pw"
-    }
-  ];
+function onSettings() {
+  return __async(this, null, function* () {
+    return [
+      { type: "header", label: "Domain Selection" },
+      {
+        type: "select",
+        key: "domain",
+        label: "Preferred Domain",
+        description: "AnimePahe frequently rotates domains. Choose the one currently working for you.",
+        options: [
+          { label: "animepahe.com", value: "https://animepahe.com" },
+          { label: "animepahe.org", value: "https://animepahe.org" },
+          { label: "animepahe.pw", value: "https://animepahe.pw" }
+        ],
+        defaultValue: "https://animepahe.com"
+      }
+    ];
+  });
 }
-
-if (typeof module !== 'undefined' && module.exports) {
+if (typeof module !== "undefined" && module.exports) {
   module.exports = { getStreams, onSettings };
 } else {
-  // For React Native environment
   global.getStreams = getStreams;
   global.onSettings = onSettings;
 }
