@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-05-16T07:21:28.850Z
+ * Generated: 2026-06-01T14:02:01.868Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -62,10 +62,10 @@ var __async = (__this, __arguments, generator) => {
   });
 };
 
-// nuvio-providers/src/reanime/reanime.js
+// src/reanime/reanime.js
 var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
 
-// nuvio-providers/src/reanime/constants.js
+// src/reanime/constants.js
 var REANIME_BASE = "https://reanime.to";
 var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 var ANILIST_URL = "https://graphql.anilist.co";
@@ -80,7 +80,7 @@ var FLIX_HEADERS = __spreadProps(__spreadValues({}, HEADERS), {
   "Referer": REANIME_BASE + "/"
 });
 
-// nuvio-providers/src/reanime/reanime.js
+// src/reanime/reanime.js
 function absolutize(path) {
   if (!path)
     return "";
@@ -429,7 +429,7 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
   });
 }
 
-// nuvio-providers/src/reanime/flixcloud.js
+// src/reanime/flixcloud.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 var SEC_CH_UA = '"Not-A.Brand";v="99", "Chromium";v="120", "Google Chrome";v="120"';
 var SEC_CH_UA_MOBILE = "?0";
@@ -948,7 +948,7 @@ function sha256Hex(text) {
   });
 }
 
-// nuvio-providers/src/reanime/index.js
+// src/reanime/index.js
 function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
   return __async(this, null, function* () {
     try {
