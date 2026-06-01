@@ -1,6 +1,6 @@
 /**
  * hianime - Built from src/hianime/
- * Generated: 2026-06-01T14:02:01.717Z
+ * Generated: 2026-06-01T14:20:20.767Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
