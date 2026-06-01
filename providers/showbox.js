@@ -21,7 +21,7 @@ var __async = (__this, __arguments, generator) => {
 const cheerio = require("cheerio-without-node-native");
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
-const DEFAULT_API_BASE = "https://febapi.nuvioapp.space/api/media";
+const DEFAULT_API_BASE = "https://id-mapping-api-showbox-proxy.hf.space/api/media";
 const WORKING_HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "Accept": "application/json",
@@ -354,6 +354,7 @@ function onSettings() {
       { type: "header", label: "ShowBox Configuration" },
       {
         type: "text",
+        isPassword: true,
         key: "uiToken",
         label: "FebBox UI Token (Cookie)",
         placeholder: "ui=...",
@@ -365,13 +366,6 @@ function onSettings() {
         label: "FebBox OSS Group (Optional)",
         placeholder: "",
         description: "Optional OSS group parameter."
-      },
-      {
-        type: "text",
-        key: "apiBase",
-        label: "ShowBox API Base Proxy",
-        placeholder: "https://febapi.nuvioapp.space/api/media",
-        description: "Base URL of the ShowBox API proxy server to resolve TMDB IDs."
       }
     ];
   });
