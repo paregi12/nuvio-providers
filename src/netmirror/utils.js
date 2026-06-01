@@ -26,7 +26,7 @@ export async function bypass() {
     try {
         const response = await fetch(`${NETMIRROR_URL}/verify.php`, {
             method: 'POST',
-            headers,
+            headers: { ...headers, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
             body: `g-recaptcha-response=${uuid}`,
             redirect: 'manual'
         });
@@ -81,7 +81,7 @@ export async function resolveApiUrl() {
         const base = safeAtob(encoded).replace(/\/$/, '');
         try {
             const response = await fetch(`${base}/checknewtv.php`, {
-                headers: NEW_TV_BASE_HEADERS
+                headers: { ...NEW_TV_BASE_HEADERS, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
             });
             const data = await response.json();
             const tokenHash = data.token_hash;

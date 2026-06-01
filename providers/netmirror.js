@@ -1,6 +1,6 @@
 /**
  * netmirror - Built from src/netmirror/
- * Generated: 2026-06-01T14:20:20.899Z
+ * Generated: 2026-06-01T21:56:44.574Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -44,7 +44,7 @@ var __async = (__this, __arguments, generator) => {
 
 // src/netmirror/constants.js
 var NETMIRROR_URL = "https://net52.cc";
-var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
+var TMDB_API_KEY = "1865f43a0549ca50d341dd9ab8b29f49";
 var PLATFORM_MAP = {
   netflix: {
     ott: "nf",
@@ -157,7 +157,7 @@ function bypass() {
     try {
       const response = yield fetch(`${NETMIRROR_URL}/verify.php`, {
         method: "POST",
-        headers,
+        headers: __spreadProps(__spreadValues({}, headers), { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }),
         body: `g-recaptcha-response=${uuid}`,
         redirect: "manual"
       });
@@ -194,7 +194,7 @@ function resolveApiUrl() {
       const base = safeAtob(encoded).replace(/\/$/, "");
       try {
         const response = yield fetch(`${base}/checknewtv.php`, {
-          headers: NEW_TV_BASE_HEADERS
+          headers: __spreadProps(__spreadValues({}, NEW_TV_BASE_HEADERS), { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" })
         });
         const data = yield response.json();
         const tokenHash = data.token_hash;
@@ -222,7 +222,12 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const cookie = yield bypass();
       const cookies = `t_hash_t=${cookie}; hd=on`;
       const tmdbType = mediaType === "tv" ? "tv" : "movie";
-      const tmdbResp = yield fetch(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
+      const tmdbResp = yield fetch(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_API_KEY}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+          "Accept": "application/json"
+        }
+      });
       const tmdbData = yield tmdbResp.json();
       const title = mediaType === "tv" ? tmdbData.name : tmdbData.title;
       if (!title)

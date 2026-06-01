@@ -1,5 +1,5 @@
 export const NETMIRROR_URL = 'https://net52.cc';
-export const TMDB_API_KEY = '439c478a771f35c05022f9feabcca01c';
+export const TMDB_API_KEY = '1865f43a0549ca50d341dd9ab8b29f49';
 
 export const PLATFORM_MAP = {
     netflix: {
@@ -92,4 +92,3 @@ export const NEW_TV_DOMAINS = [
     "aHR0cHM6Ly9tb2JpZGV0ZWN0cy50b3A=",
     "aHR0cHM6Ly9tb2JpZGV0ZWN0cy54eXo="
 ];
-

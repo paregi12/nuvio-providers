@@ -8,7 +8,12 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         const cookies = `t_hash_t=${cookie}; hd=on`;
 
         const tmdbType = mediaType === 'tv' ? 'tv' : 'movie';
-        const tmdbResp = await fetch(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_API_KEY}`);
+        const tmdbResp = await fetch(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_API_KEY}`, {
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'Accept': 'application/json'
+            }
+        });
         const tmdbData = await tmdbResp.json();
         const title = mediaType === 'tv' ? tmdbData.name : tmdbData.title;
 

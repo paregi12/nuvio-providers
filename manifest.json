@@ -556,6 +556,28 @@
       ]
     },
     {
+      "id": "moviesdrive",
+      "name": "MoviesDrive",
+      "description": "MoviesDrive streaming with HubCloud and Google Drive extraction",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/moviesdrive.js",
+      "enabled": true,
+      "formats": [
+        "mkv",
+        "mp4"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=moviesdrives.my&sz=128",
+      "contentLanguage": [
+        "en",
+        "hin"
+      ]
+    },
+    {
       "id": "hianime",
       "name": "HiAnime",
       "description": "HiAnime multi-server anime streaming with real-time mapping and subtitles",
