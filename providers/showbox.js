@@ -19,6 +19,7 @@ var __async = (__this, __arguments, generator) => {
   });
 };
 const cheerio = require("cheerio-without-node-native");
+const CryptoJS = require("crypto-js");
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 const TMDB_BASE_URL = "https://api.themoviedb.org/3";
 const DEFAULT_API_BASE = "https://id-mapping-api-showbox-proxy.hf.space/api/media";
@@ -30,12 +31,47 @@ const WORKING_HEADERS = {
 };
 function getUiToken() {
   try {
+    let rawToken = "";
     if (typeof global !== "undefined" && global.SCRAPER_SETTINGS && global.SCRAPER_SETTINGS.uiToken) {
-      return String(global.SCRAPER_SETTINGS.uiToken);
+      rawToken = String(global.SCRAPER_SETTINGS.uiToken).trim();
+    } else if (typeof window !== "undefined" && window.SCRAPER_SETTINGS && window.SCRAPER_SETTINGS.uiToken) {
+      rawToken = String(window.SCRAPER_SETTINGS.uiToken).trim();
     }
-    if (typeof window !== "undefined" && window.SCRAPER_SETTINGS && window.SCRAPER_SETTINGS.uiToken) {
-      return String(window.SCRAPER_SETTINGS.uiToken);
+    if (!rawToken)
+      return "";
+    if (rawToken.startsWith("eyJ")) {
+      console.log("[ShowBox] Base64 JWT/JSON token detected. Attempting automatic decryption...");
+      try {
+        const parsedWords = CryptoJS.enc.Base64.parse(rawToken);
+        const decodedStr = parsedWords.toString(CryptoJS.enc.Utf8);
+        const parsed = JSON.parse(decodedStr);
+        if (parsed && parsed.encrypt_data) {
+          const IV_KEY = "wEiphTn!";
+          const DES_KEY = "123d6cedf626dy54233aa1w6";
+          const key = CryptoJS.enc.Utf8.parse(DES_KEY);
+          const iv = CryptoJS.enc.Utf8.parse(IV_KEY);
+          const decrypted = CryptoJS.TripleDES.decrypt(
+            parsed.encrypt_data,
+            key,
+            {
+              iv,
+              mode: CryptoJS.mode.CBC,
+              padding: CryptoJS.pad.Pkcs7
+            }
+          );
+          const decryptedText = decrypted.toString(CryptoJS.enc.Utf8);
+          console.log("[ShowBox] Decrypted successfully:", decryptedText);
+          const decryptedJson = JSON.parse(decryptedText);
+          if (decryptedJson && decryptedJson.uid) {
+            console.log("[ShowBox] Extracted UID from payload:", decryptedJson.uid);
+            return String(decryptedJson.uid);
+          }
+        }
+      } catch (err) {
+        console.error("[ShowBox] Failed to decrypt base64 uiToken:", err.message);
+      }
     }
+    return rawToken;
   } catch (e) {
   }
   return "";
