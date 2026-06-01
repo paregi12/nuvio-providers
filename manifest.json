@@ -435,6 +435,7 @@
       ],
       "filename": "providers/showbox.js",
       "enabled": true,
+      "hasSettings": true,
       "formats": [
         "mp4",
         "mkv"
