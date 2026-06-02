@@ -597,6 +597,27 @@
       "contentLanguage": [
         "en"
       ]
+    },
+    {
+      "id": "kurage",
+      "name": "Kurage",
+      "description": "Kurage.live anime streaming with tRPC API and multi-server proxy support",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/kurage.js",
+      "enabled": true,
+      "formats": [
+        "mp4"
+      ],
+      "logo": "https://kurage.live/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
+
