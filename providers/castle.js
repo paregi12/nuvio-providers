@@ -134,6 +134,41 @@ function decryptCastle(encryptedB64, securityKeyB64) {
     console.log("[Castle] Starting local AES-CBC decryption...");
     try {
       const CryptoJS = require("crypto-js");
+      
+      // Monkey-patch to bypass NuvioMobile QuickJS JNI typed array mapping bug
+      if (typeof __crypto_aes_decrypt_raw !== 'undefined') {
+        const originalDecrypt = CryptoJS.AES.decrypt;
+        CryptoJS.AES.decrypt = function(cipher, key, options) {
+          try {
+            const wordArrayToBytes = (wordArray) => {
+              const bytes = new Uint8Array(wordArray.sigBytes);
+              for (let i = 0; i < wordArray.sigBytes; i++) {
+                bytes[i] = (wordArray.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;
+              }
+              return bytes;
+            };
+            const toUint8Array = (data) => {
+              if (data instanceof Uint8Array) return data;
+              if (data instanceof ArrayBuffer) return new Uint8Array(data);
+              if (data && typeof data.length === 'number') return new Uint8Array(Array.prototype.slice.call(data));
+              return new Uint8Array(0);
+            };
+            const data = typeof cipher === 'string'
+              ? new Uint8Array(Array.from(atob(cipher), c => c.charCodeAt(0)))
+              : (cipher.ciphertext ? wordArrayToBytes(cipher.ciphertext) : toUint8Array(cipher));
+            const kBytes = wordArrayToBytes(key);
+            const ivBytes = (options && options.iv) ? wordArrayToBytes(options.iv) : new Uint8Array(0);
+            const mode = (options && options.mode) || 'AES-CBC';
+            const resBytes = __crypto_aes_decrypt_raw(mode, kBytes.buffer, ivBytes.buffer, data.buffer);
+            const plain = new TextDecoder().decode(resBytes);
+            return { toString: function() { return plain; } };
+          } catch (err) {
+            console.error("[Castle JNI Patch] Decrypt failed, falling back:", err);
+            return originalDecrypt.call(CryptoJS.AES, cipher, key, options);
+          }
+        };
+      }
+
       const CASTLE_SUFFIX = "T!BgJB";
       
       const securityKeyWords = CryptoJS.enc.Base64.parse(securityKeyB64);
