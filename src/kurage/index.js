@@ -15,13 +15,13 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         const { alId, episode: alEp } = resolved;
         console.log(`[Kurage] Resolved to AniList ID: ${alId}, Episode: ${alEp}`);
 
-        // Step 2: Fetch Sources from Kurage tRPC API
-        // Format: catalog.anilistInfo,episodes.source?batch=1&input={"0":{"json":{"id":AL_ID}},"1":{"json":{"animeId":AL_ID,"episode":AL_EP,"language":"sub"}}}
+        // Step 2: Fetch Sources from Kurage tRPC API (Sub & Dub)
         const input = {
             "0": { "json": { "id": alId } },
-            "1": { "json": { "animeId": alId, "episode": alEp, "language": "sub" } }
+            "1": { "json": { "animeId": alId, "episode": alEp, "language": "sub" } },
+            "2": { "json": { "animeId": alId, "episode": alEp, "language": "dub" } }
         };
-        const url = `${KURAGE_BASE}/api/trpc/catalog.anilistInfo,episodes.source?batch=1&input=${encodeURIComponent(JSON.stringify(input))}`;
+        const url = `${KURAGE_BASE}/api/trpc/catalog.anilistInfo,episodes.source,episodes.source?batch=1&input=${encodeURIComponent(JSON.stringify(input))}`;
 
         const data = await fetchJson(url, {
             headers: {
@@ -31,44 +31,38 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         });
 
         // Step 3: Parse and Format Streams
-        const sourceResult = data.find(r => r.result?.data?.json?.servers);
-        if (!sourceResult) {
-            console.log(`[Kurage] No streams found for AniList ID ${alId}`);
-            return [];
-        }
+        const allStreams = [];
+        data.forEach(r => {
+            const servers = r.result?.data?.json?.servers || [];
+            servers.forEach(server => {
+                const url = server.url.startsWith('/') ? `${KURAGE_BASE}${server.url}` : server.url;
+                
+                // Extract original headers from URL if we want to provide them to the player
+                let extraHeaders = {};
+                try {
+                    const urlObj = new URL(url);
+                    const headersParam = urlObj.searchParams.get('headers');
+                    if (headersParam) {
+                        extraHeaders = JSON.parse(atob(headersParam));
+                    }
+                } catch (e) {}
 
-        const servers = sourceResult.result.data.json.servers || [];
-        const streams = servers.map(server => {
-            // Decrypt headers from Base64 if needed, but the proxy handles it.
-            // We just need to pass the full URL and ensure we include the proxy's expected headers if Nuvio allows.
-            // Actually, the proxy URL contains everything it needs in the query string.
-            
-            const url = server.url.startsWith('/') ? `${KURAGE_BASE}${server.url}` : server.url;
-            
-            // Extract original headers from URL if we want to provide them to the player
-            let extraHeaders = {};
-            try {
-                const urlObj = new URL(url);
-                const headersParam = urlObj.searchParams.get('headers');
-                if (headersParam) {
-                    extraHeaders = JSON.parse(atob(headersParam));
-                }
-            } catch (e) {}
-
-            return {
-                name: `Kurage [${server.label}]`,
-                title: `${syncInfo.title} - ${alEp} (${server.language.toUpperCase()})`,
-                url: url,
-                quality: 'Auto',
-                headers: {
-                    ...DEFAULT_HEADERS,
-                    ...extraHeaders
-                },
-                provider: 'kurage'
-            };
+                allStreams.push({
+                    name: `Kurage [${server.label}]`,
+                    title: `${syncInfo.title} - ${alEp} (${server.language.toUpperCase()})`,
+                    url: url,
+                    quality: 'Auto',
+                    headers: {
+                        ...DEFAULT_HEADERS,
+                        ...extraHeaders
+                    },
+                    provider: 'kurage'
+                });
+            });
         });
 
-        return streams;
+        return allStreams;
+
 
     } catch (e) {
         console.error(`[Kurage] Error: ${e.message}`);

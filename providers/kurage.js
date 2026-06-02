@@ -1,6 +1,6 @@
 /**
  * kurage - Built from src/kurage/
- * Generated: 2026-06-02T13:54:07.933Z
+ * Generated: 2026-06-02T14:06:56.519Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -209,45 +209,42 @@ function getStreams(tmdbId, mediaType, season, episode) {
       console.log(`[Kurage] Resolved to AniList ID: ${alId}, Episode: ${alEp}`);
       const input = {
         "0": { "json": { "id": alId } },
-        "1": { "json": { "animeId": alId, "episode": alEp, "language": "sub" } }
+        "1": { "json": { "animeId": alId, "episode": alEp, "language": "sub" } },
+        "2": { "json": { "animeId": alId, "episode": alEp, "language": "dub" } }
       };
-      const url = `${KURAGE_BASE}/api/trpc/catalog.anilistInfo,episodes.source?batch=1&input=${encodeURIComponent(JSON.stringify(input))}`;
+      const url = `${KURAGE_BASE}/api/trpc/catalog.anilistInfo,episodes.source,episodes.source?batch=1&input=${encodeURIComponent(JSON.stringify(input))}`;
       const data = yield fetchJson(url, {
         headers: {
           "trpc-accept": "application/json",
           "x-trpc-source": "nextjs-react"
         }
       });
-      const sourceResult = data.find((r) => {
+      const allStreams = [];
+      data.forEach((r) => {
         var _a, _b, _c;
-        return (_c = (_b = (_a = r.result) == null ? void 0 : _a.data) == null ? void 0 : _b.json) == null ? void 0 : _c.servers;
-      });
-      if (!sourceResult) {
-        console.log(`[Kurage] No streams found for AniList ID ${alId}`);
-        return [];
-      }
-      const servers = sourceResult.result.data.json.servers || [];
-      const streams = servers.map((server) => {
-        const url2 = server.url.startsWith("/") ? `${KURAGE_BASE}${server.url}` : server.url;
-        let extraHeaders = {};
-        try {
-          const urlObj = new URL(url2);
-          const headersParam = urlObj.searchParams.get("headers");
-          if (headersParam) {
-            extraHeaders = JSON.parse(atob(headersParam));
+        const servers = ((_c = (_b = (_a = r.result) == null ? void 0 : _a.data) == null ? void 0 : _b.json) == null ? void 0 : _c.servers) || [];
+        servers.forEach((server) => {
+          const url2 = server.url.startsWith("/") ? `${KURAGE_BASE}${server.url}` : server.url;
+          let extraHeaders = {};
+          try {
+            const urlObj = new URL(url2);
+            const headersParam = urlObj.searchParams.get("headers");
+            if (headersParam) {
+              extraHeaders = JSON.parse(atob(headersParam));
+            }
+          } catch (e) {
           }
-        } catch (e) {
-        }
-        return {
-          name: `Kurage [${server.label}]`,
-          title: `${syncInfo.title} - ${alEp} (${server.language.toUpperCase()})`,
-          url: url2,
-          quality: "Auto",
-          headers: __spreadValues(__spreadValues({}, DEFAULT_HEADERS), extraHeaders),
-          provider: "kurage"
-        };
+          allStreams.push({
+            name: `Kurage [${server.label}]`,
+            title: `${syncInfo.title} - ${alEp} (${server.language.toUpperCase()})`,
+            url: url2,
+            quality: "Auto",
+            headers: __spreadValues(__spreadValues({}, DEFAULT_HEADERS), extraHeaders),
+            provider: "kurage"
+          });
+        });
       });
-      return streams;
+      return allStreams;
     } catch (e) {
       console.error(`[Kurage] Error: ${e.message}`);
       return [];
