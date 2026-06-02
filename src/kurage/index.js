@@ -48,8 +48,8 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                 } catch (e) {}
 
                 allStreams.push({
-                    name: `Kurage [${server.label}]`,
-                    title: `${syncInfo.title} - ${alEp} (${server.language.toUpperCase()})`,
+                    name: `Kurage [${server.label}] (${server.language.toUpperCase()})`,
+                    title: `${syncInfo.title} - ${alEp}`,
                     url: url,
                     quality: 'Auto',
                     headers: {

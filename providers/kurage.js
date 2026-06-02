@@ -1,6 +1,6 @@
 /**
  * kurage - Built from src/kurage/
- * Generated: 2026-06-02T14:06:56.519Z
+ * Generated: 2026-06-02T14:11:39.285Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -235,8 +235,8 @@ function getStreams(tmdbId, mediaType, season, episode) {
           } catch (e) {
           }
           allStreams.push({
-            name: `Kurage [${server.label}]`,
-            title: `${syncInfo.title} - ${alEp} (${server.language.toUpperCase()})`,
+            name: `Kurage [${server.label}] (${server.language.toUpperCase()})`,
+            title: `${syncInfo.title} - ${alEp}`,
             url: url2,
             quality: "Auto",
             headers: __spreadValues(__spreadValues({}, DEFAULT_HEADERS), extraHeaders),
