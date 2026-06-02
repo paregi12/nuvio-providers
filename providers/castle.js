@@ -159,7 +159,13 @@ function decryptCastle(encryptedB64, securityKeyB64) {
             const kBytes = wordArrayToBytes(key);
             const ivBytes = (options && options.iv) ? wordArrayToBytes(options.iv) : new Uint8Array(0);
             const mode = (options && options.mode) || 'AES-CBC';
-            const resBytes = __crypto_aes_decrypt_raw(mode, kBytes.buffer, ivBytes.buffer, data.buffer);
+            
+            // Map Uint8Array (unsigned) to Int8Array (signed) to match Kotlin ByteArray
+            const keyArg = typeof Int8Array !== 'undefined' ? new Int8Array(kBytes.buffer) : kBytes;
+            const ivArg = typeof Int8Array !== 'undefined' ? new Int8Array(ivBytes.buffer) : ivBytes;
+            const dataArg = typeof Int8Array !== 'undefined' ? new Int8Array(data.buffer) : data;
+            
+            const resBytes = __crypto_aes_decrypt_raw(mode, keyArg, ivArg, dataArg);
             const plain = new TextDecoder().decode(resBytes);
             return { toString: function() { return plain; } };
           } catch (err) {
