@@ -47,8 +47,9 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                     }
                 } catch (e) {}
 
+                const lang = (server.language || 'sub').toUpperCase();
                 allStreams.push({
-                    name: `Kurage [${server.label}] (${server.language.toUpperCase()})`,
+                    name: `[${lang}] Kurage - ${server.label}`,
                     title: `${syncInfo.title} - ${alEp}`,
                     url: url,
                     quality: 'Auto',
@@ -56,7 +57,8 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                         ...DEFAULT_HEADERS,
                         ...extraHeaders
                     },
-                    provider: 'kurage'
+                    provider: 'kurage',
+                    type: server.sourceType || 'mp4'
                 });
             });
         });

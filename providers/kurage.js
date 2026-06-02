@@ -1,6 +1,6 @@
 /**
  * kurage - Built from src/kurage/
- * Generated: 2026-06-02T14:11:39.285Z
+ * Generated: 2026-06-02T14:17:12.167Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -234,13 +234,15 @@ function getStreams(tmdbId, mediaType, season, episode) {
             }
           } catch (e) {
           }
+          const lang = (server.language || "sub").toUpperCase();
           allStreams.push({
-            name: `Kurage [${server.label}] (${server.language.toUpperCase()})`,
+            name: `[${lang}] Kurage - ${server.label}`,
             title: `${syncInfo.title} - ${alEp}`,
             url: url2,
             quality: "Auto",
             headers: __spreadValues(__spreadValues({}, DEFAULT_HEADERS), extraHeaders),
-            provider: "kurage"
+            provider: "kurage",
+            type: server.sourceType || "mp4"
           });
         });
       });
