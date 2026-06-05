@@ -51,47 +51,61 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         const streams = [];
         const $epPage = cheerio.load(episodeHtml);
 
-        // Find server names and audio info from buttons in the modal
-        const serverInfos = [];
-        $epPage('button[wire\\:click^="setVideo"]').each((i, el) => {
-            const $btn = $epPage(el);
-            const serverName = $btn.find('div.text-lg').text().trim() || 'Unknown';
-            const btnText = $btn.text();
-            
-            let format = "Sub";
-            const hasJapanese = btnText.includes('Japanese');
-            const hasEnglish = btnText.includes('English');
-            
-            if (hasEnglish && !hasJapanese) format = "Dub";
-            else if (hasEnglish && hasJapanese) format = "Sub & Dub";
-            
-            serverInfos.push({ name: serverName, format: format });
-        });
+        // Extract Stream URL from media-player element or fallback to regex
+        let masterUrl = $epPage('media-player').attr('src');
+        if (!masterUrl) {
+            const matches = episodeHtml.match(/https:\/\/[^"']+\/master\.m3u8/);
+            if (matches) {
+                masterUrl = matches[0];
+            }
+        }
 
-        const m3u8Matches = [...new Set(episodeHtml.match(/https:\/\/[^"']+\/master\.m3u8/g) || [])];
-        
-        m3u8Matches.forEach((masterUrl, index) => {
-            const info = serverInfos[index] || { name: `Server ${index + 1}`, format: "Sub" };
-            
-            const subtitles = [];
-            const assMatches = episodeHtml.matchAll(/id="vds-ass-subtitles-([^"]+)"[^>]+label="([^"]+)"[^>]+srclang="([^"]+)"/g);
-            for (const match of assMatches) {
+        // Extract subtitles from track elements
+        const subtitles = [];
+        $epPage('track').each((i, el) => {
+            const src = $epPage(el).attr('src');
+            const kind = $epPage(el).attr('kind');
+            if (src && (kind === 'subtitles' || kind === 'captions' || src.endsWith('.ass') || src.endsWith('.vtt'))) {
                 subtitles.push({
-                    url: match[1],
-                    name: match[2],
-                    language: match[3]
+                    url: src,
+                    name: $epPage(el).attr('label') || 'English',
+                    language: $epPage(el).attr('srclang') || 'en'
                 });
             }
+        });
 
+        // Determine format (Sub/Dub) from button texts
+        let format = "Sub";
+        $epPage('button').each((i, el) => {
+            const text = $epPage(el).text();
+            if (text.includes('Audio:')) {
+                const hasJapanese = text.includes('Japanese');
+                const hasEnglish = text.includes('English');
+                if (hasEnglish && !hasJapanese) format = "Dub";
+                else if (hasEnglish && hasJapanese) format = "Sub & Dub";
+            }
+        });
+
+        if (format === "Sub") {
+            $epPage('button[wire\\:click^="setVideo"]').each((i, el) => {
+                const btnText = $epPage(el).text();
+                const hasJapanese = btnText.includes('Japanese');
+                const hasEnglish = btnText.includes('English');
+                if (hasEnglish && !hasJapanese) format = "Dub";
+                else if (hasEnglish && hasJapanese) format = "Sub & Dub";
+            });
+        }
+
+        if (masterUrl) {
             streams.push({
-                name: `AniZone [${info.name}]`,
-                title: `${animeTitle} - Episode ${mappedEp} [${info.format}]`,
+                name: "AniZone",
+                title: `${animeTitle} - Episode ${mappedEp} [${format}]`,
                 url: masterUrl,
                 quality: "Multi",
                 headers: HEADERS,
                 subtitles: subtitles
             });
-        });
+        }
 
         return streams;
 

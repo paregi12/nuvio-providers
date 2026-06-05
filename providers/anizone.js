@@ -1,6 +1,6 @@
 /**
  * anizone - Built from src/anizone/
- * Generated: 2026-06-05T17:37:47.600Z
+ * Generated: 2026-06-05T17:56:35.671Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -167,41 +167,58 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const episodeHtml = yield fetchText(episodeUrl);
       const streams = [];
       const $epPage = import_cheerio_without_node_native.default.load(episodeHtml);
-      const serverInfos = [];
-      $epPage('button[wire\\:click^="setVideo"]').each((i, el) => {
-        const $btn = $epPage(el);
-        const serverName = $btn.find("div.text-lg").text().trim() || "Unknown";
-        const btnText = $btn.text();
-        let format = "Sub";
-        const hasJapanese = btnText.includes("Japanese");
-        const hasEnglish = btnText.includes("English");
-        if (hasEnglish && !hasJapanese)
-          format = "Dub";
-        else if (hasEnglish && hasJapanese)
-          format = "Sub & Dub";
-        serverInfos.push({ name: serverName, format });
-      });
-      const m3u8Matches = [...new Set(episodeHtml.match(/https:\/\/[^"']+\/master\.m3u8/g) || [])];
-      m3u8Matches.forEach((masterUrl, index) => {
-        const info = serverInfos[index] || { name: `Server ${index + 1}`, format: "Sub" };
-        const subtitles = [];
-        const assMatches = episodeHtml.matchAll(/id="vds-ass-subtitles-([^"]+)"[^>]+label="([^"]+)"[^>]+srclang="([^"]+)"/g);
-        for (const match of assMatches) {
+      let masterUrl = $epPage("media-player").attr("src");
+      if (!masterUrl) {
+        const matches = episodeHtml.match(/https:\/\/[^"']+\/master\.m3u8/);
+        if (matches) {
+          masterUrl = matches[0];
+        }
+      }
+      const subtitles = [];
+      $epPage("track").each((i, el) => {
+        const src = $epPage(el).attr("src");
+        const kind = $epPage(el).attr("kind");
+        if (src && (kind === "subtitles" || kind === "captions" || src.endsWith(".ass") || src.endsWith(".vtt"))) {
           subtitles.push({
-            url: match[1],
-            name: match[2],
-            language: match[3]
+            url: src,
+            name: $epPage(el).attr("label") || "English",
+            language: $epPage(el).attr("srclang") || "en"
           });
         }
+      });
+      let format = "Sub";
+      $epPage("button").each((i, el) => {
+        const text = $epPage(el).text();
+        if (text.includes("Audio:")) {
+          const hasJapanese = text.includes("Japanese");
+          const hasEnglish = text.includes("English");
+          if (hasEnglish && !hasJapanese)
+            format = "Dub";
+          else if (hasEnglish && hasJapanese)
+            format = "Sub & Dub";
+        }
+      });
+      if (format === "Sub") {
+        $epPage('button[wire\\:click^="setVideo"]').each((i, el) => {
+          const btnText = $epPage(el).text();
+          const hasJapanese = btnText.includes("Japanese");
+          const hasEnglish = btnText.includes("English");
+          if (hasEnglish && !hasJapanese)
+            format = "Dub";
+          else if (hasEnglish && hasJapanese)
+            format = "Sub & Dub";
+        });
+      }
+      if (masterUrl) {
         streams.push({
-          name: `AniZone [${info.name}]`,
-          title: `${animeTitle} - Episode ${mappedEp} [${info.format}]`,
+          name: "AniZone",
+          title: `${animeTitle} - Episode ${mappedEp} [${format}]`,
           url: masterUrl,
           quality: "Multi",
           headers: HEADERS,
           subtitles
         });
-      });
+      }
       return streams;
     } catch (error) {
       return [];
