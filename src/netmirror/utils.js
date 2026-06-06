@@ -1,50 +1,4 @@
-import { NETMIRROR_URL, BASE_HEADERS, NEW_TV_BASE_HEADERS, NEW_TV_DOMAINS } from './constants.js';
-
-let globalCookie = "";
-let cookieTimestamp = 0;
-const COOKIE_EXPIRY = 54000000; // 15 hours
-
-export async function bypass() {
-    const now = Date.now();
-    if (globalCookie && now - cookieTimestamp < COOKIE_EXPIRY) {
-        return globalCookie;
-    }
-
-    const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-
-    const headers = {
-        ...BASE_HEADERS,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Origin": "https://net22.cc",
-        "Referer": "https://net22.cc/verify2",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
-    };
-
-    try {
-        const response = await fetch(`${NETMIRROR_URL}/verify.php`, {
-            method: 'POST',
-            headers: { ...headers, 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-            body: `g-recaptcha-response=${uuid}`,
-            redirect: 'manual'
-        });
-
-        const setCookie = response.headers.get('set-cookie');
-        if (setCookie) {
-            const match = setCookie.match(/t_hash_t=([^;]+)/);
-            if (match) {
-                globalCookie = match[1];
-                cookieTimestamp = Date.now();
-                return globalCookie;
-            }
-        }
-    } catch (error) {
-        console.error(`[NetMirror] Bypass Error: ${error.message}`);
-    }
-    throw new Error("Failed to extract t_hash_t cookie");
-}
+import { NEW_TV_BASE_HEADERS, NEW_TV_DOMAINS } from './constants.js';
 
 export function getUnixTime() {
     return Math.floor(Date.now() / 1000);
@@ -70,7 +24,6 @@ function safeAtob(encoded) {
     if (typeof atob === 'function') {
         return atob(encoded);
     }
-    // Simple fallback for environment where atob is missing (like some Node versions or Hermes without polyfill)
     return Buffer.from(encoded, 'base64').toString('binary');
 }
 

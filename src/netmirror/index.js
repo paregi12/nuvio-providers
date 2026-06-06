@@ -1,12 +1,8 @@
-import { NETMIRROR_URL, PLATFORM_MAP, BASE_HEADERS, TMDB_API_KEY } from './constants.js';
-import { bypass, getUnixTime, resolveApiUrl, buildNewTvHeaders } from './utils.js';
+import { PLATFORM_MAP, TMDB_API_KEY } from './constants.js';
+import { resolveApiUrl, buildNewTvHeaders } from './utils.js';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
-    console.log(`[NetMirror] Fetching streams for ${mediaType} ${tmdbId}`);
     try {
-        const cookie = await bypass();
-        const cookies = `t_hash_t=${cookie}; hd=on`;
-
         const tmdbType = mediaType === 'tv' ? 'tv' : 'movie';
         const tmdbResp = await fetch(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_API_KEY}`, {
             headers: { 
@@ -21,24 +17,27 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         const platforms = ['netflix', 'primevideo', 'hotstar', 'disney'];
         for (const platformKey of platforms) {
-            const platform = PLATFORM_MAP[platformKey];
-            const streams = await fetchFromPlatform(platformKey, title, mediaType, season, episode, cookies);
-            if (streams && streams.length > 0) return streams;
+            try {
+                const streams = await fetchFromPlatform(platformKey, title, mediaType, season, episode);
+                if (streams && streams.length > 0) return streams;
+            } catch (e) {
+                // Try next platform
+            }
         }
 
         return [];
     } catch (error) {
-        console.error(`[NetMirror] Error: ${error.message}`);
         return [];
     }
 }
 
-async function fetchFromPlatform(platformKey, title, mediaType, season, episode, cookies) {
+async function fetchFromPlatform(platformKey, title, mediaType, season, episode) {
     const platform = PLATFORM_MAP[platformKey];
-    const searchUrl = `${NETMIRROR_URL}${platform.search}?s=${encodeURIComponent(title)}&t=${getUnixTime()}`;
-    
+    const apiBase = await resolveApiUrl();
+
+    const searchUrl = `${apiBase}/newtv/search.php?s=${encodeURIComponent(title)}`;
     const searchResp = await fetch(searchUrl, {
-        headers: { ...BASE_HEADERS, Cookie: `${cookies}; ott=${platform.ott}` }
+        headers: buildNewTvHeaders(platform.ott)
     });
     const searchData = await searchResp.json();
 
@@ -47,89 +46,106 @@ async function fetchFromPlatform(platformKey, title, mediaType, season, episode,
     const result = searchData.searchResult[0];
     const contentId = result.id;
 
-    const postUrl = `${NETMIRROR_URL}${platform.post}?id=${contentId}&t=${getUnixTime()}`;
+    const postUrl = `${apiBase}/newtv/post.php?id=${contentId}`;
     const postResp = await fetch(postUrl, {
-        headers: { ...BASE_HEADERS, Cookie: `${cookies}; ott=${platform.ott}` }
+        headers: buildNewTvHeaders(platform.ott, { Lastep: "", Usertoken: "" })
     });
     const postData = await postResp.json();
 
     let targetId = contentId;
     if (mediaType === 'tv') {
-        const episodes = await getAllEpisodes(contentId, postData, platform, cookies);
-        const targetEp = episodes.find(ep => {
-            if (!ep) return false;
-            const s = parseInt(ep.s.replace('S', ''));
-            const e = parseInt(ep.ep.replace('E', ''));
-            return s === season && e === episode;
-        });
+        const episodes = await getAllEpisodes(contentId, postData, platform, apiBase);
+        const targetEp = episodes.find(ep => ep && ep.s === season && ep.ep === episode);
 
         if (targetEp) {
             targetId = targetEp.id;
         } else {
             return null;
         }
+    } else {
+        const isSeries = postData.type === 't' || (postData.episodes && postData.episodes.filter(e => e !== null).length > 0);
+        if (isSeries) return null;
+        targetId = postData.main_id || contentId;
     }
 
-    try {
-        const apiBase = await resolveApiUrl();
-        const playerUrl = `${apiBase}/newtv/player.php?id=${targetId}`;
-        const playerResp = await fetch(playerUrl, {
-            headers: buildNewTvHeaders(platform.ott, { 'Usertoken': '' })
-        });
-        const response = await playerResp.json();
+    const playerUrl = `${apiBase}/newtv/player.php?id=${targetId}`;
+    const playerResp = await fetch(playerUrl, {
+        headers: buildNewTvHeaders(platform.ott, { 'Usertoken': '' })
+    });
+    const response = await playerResp.json();
 
-        if (response.status === 'ok' && response.video_link) {
-            return [{
-                name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
-                title: `${title}`,
-                url: response.video_link,
-                quality: 'Auto',
-                headers: { 
-                    Referer: response.referer || apiBase,
-                    Cookie: "hd=on"
-                }
-            }];
-        }
-    } catch (error) {
-        console.error(`[NetMirror] Player Error: ${error.message}`);
+    if (response.status === 'ok' && response.video_link) {
+        return [{
+            name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
+            title: `${title}`,
+            url: response.video_link,
+            quality: 'Auto',
+            headers: { 
+                Referer: response.referer || apiBase
+            }
+        }];
     }
 
-    return [];
+    return null;
 }
 
-async function getAllEpisodes(contentId, postData, platform, cookies) {
-    const episodes = [...(postData.episodes || [])].filter(e => e !== null);
-    
-    if (postData.nextPageShow === 1 && postData.nextPageSeason) {
-        const more = await fetchEpisodesPage(contentId, postData.nextPageSeason, 2, platform, cookies);
+async function getAllEpisodes(contentId, postData, platform, apiBase) {
+    const episodes = [];
+    const selectedSeasonIdx = postData.season ? postData.season.findIndex(s => s.selected === true) : -1;
+    const selectedSeasonId = selectedSeasonIdx >= 0 ? postData.season[selectedSeasonIdx].id : postData.nextPageSeason;
+    const selectedSeasonNumber = selectedSeasonIdx >= 0 ? (selectedSeasonIdx + 1) : null;
+
+    if (postData.episodes) {
+        postData.episodes.filter(e => e !== null).forEach(ep => {
+            const epNum = ep.ep ? parseInt(ep.ep) : (ep.epNum ? parseInt(ep.epNum.replace('E', '')) : null);
+            const sNum = selectedSeasonNumber || (ep.sNum ? parseInt(ep.sNum.replace('S', '')) : null);
+            episodes.push({
+                id: ep.id,
+                s: sNum,
+                ep: epNum
+            });
+        });
+    }
+
+    if (postData.nextPageShow === 1 && selectedSeasonId) {
+        const more = await fetchEpisodesPage(contentId, selectedSeasonId, 2, selectedSeasonNumber, platform, apiBase);
         episodes.push(...more);
     }
 
-    if (postData.season && postData.season.length > 1) {
-        // Handle multiple seasons
-        for (let i = 0; i < postData.season.length - 1; i++) {
-            const season = postData.season[i];
-            const more = await fetchEpisodesPage(contentId, season.id, 1, platform, cookies);
-            episodes.push(...more);
+    if (postData.season) {
+        for (let index = 0; index < postData.season.length; index++) {
+            const season = postData.season[index];
+            if (season.id !== selectedSeasonId && season.id) {
+                const more = await fetchEpisodesPage(contentId, season.id, 1, index + 1, platform, apiBase);
+                episodes.push(...more);
+            }
         }
     }
 
     return episodes;
 }
 
-async function fetchEpisodesPage(contentId, seasonId, page, platform, cookies) {
+async function fetchEpisodesPage(contentId, seasonId, page, seasonNumber, platform, apiBase) {
     const episodes = [];
     let pg = page;
     while (true) {
-        const url = `${NETMIRROR_URL}${platform.episodes}?s=${seasonId}&series=${contentId}&t=${getUnixTime()}&page=${pg}`;
+        const url = `${apiBase}/newtv/episodes.php?id=${seasonId}&page=${pg}`;
         const resp = await fetch(url, {
-            headers: { ...BASE_HEADERS, Cookie: `${cookies}; ott=${platform.ott}` }
+            headers: buildNewTvHeaders(platform.ott)
         });
         const data = await resp.json();
         if (data.episodes) {
-            episodes.push(...data.episodes.filter(e => e !== null));
+            data.episodes.filter(e => e !== null).forEach(ep => {
+                const epNum = ep.ep ? parseInt(ep.ep) : (ep.epNum ? parseInt(ep.epNum.replace('E', '')) : null);
+                const sNum = seasonNumber || (ep.sNum ? parseInt(ep.sNum.replace('S', '')) : null);
+                episodes.push({
+                    id: ep.id,
+                    s: sNum,
+                    ep: epNum
+                });
+            });
         }
-        if (data.nextPageShow === 0) break;
+        if (data.nextPageShow !== 1) break;
         pg++;
     }
     return episodes;
