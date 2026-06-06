@@ -219,7 +219,7 @@ Return an **Array** of objects. Each object represents one playable link.
     },
     "subtitles": [                 // (Optional) Array of subtitle objects
       {
-        "url": "https://...",      // Subtitle URL (.vtt, .srt)
+        "url": "https://...",      // Subtitle URL (supports all formats: .vtt, .srt, .ass, etc.)
         "language": "en",          // Language code (ISO 639-1)
         "name": "English",         // Display name
         "headers": {               // (Optional) Headers to fetch the subtitle
@@ -233,7 +233,7 @@ Return an **Array** of objects. Each object represents one playable link.
 
 ### Subtitle Support
 
-Nuvio supports external subtitles in VTT and SRT formats. You can include an array of subtitle objects within each stream object.
+Nuvio supports external subtitles in all formats (including VTT, SRT, ASS, SSA, etc.). You can include an array of subtitle objects within each stream object.
 
 **Subtitle Object Properties:**
 - `url`: The absolute URL to the subtitle file.
