@@ -1,6 +1,6 @@
 /**
  * anichi - Built from src/anichi/
- * Generated: 2026-06-07T21:21:30.245Z
+ * Generated: 2026-06-07T21:42:10.426Z
  */
 var __async = (__this, __arguments, generator) => {
   return new Promise((resolve, reject) => {
@@ -121,6 +121,323 @@ function extractQuality(url) {
   if (url.includes("360"))
     return "360p";
   return "Unknown";
+}
+
+// src/anichi/extractors.js
+function unpack(code) {
+  try {
+    const match = code.match(/}\((['"])([\s\S]*?)\1,\s*(\d+),\s*(\d+),\s*(['"])([\s\S]*?)\5\.split\((['"])\|\7\)/);
+    if (match) {
+      let [_, quote1, p, a, c, quote2, kStr] = match;
+      p = p.replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+      a = parseInt(a);
+      c = parseInt(c);
+      const k = kStr.split("|");
+      const e = (c2) => (c2 < a ? "" : e(parseInt(c2 / a))) + ((c2 = c2 % a) > 35 ? String.fromCharCode(c2 + 29) : c2.toString(36));
+      const d = {};
+      while (c--)
+        d[e(c)] = k[c] || e(c);
+      return p.replace(/\b\w+\b/g, (w) => d[w]);
+    }
+  } catch (e) {
+    console.error("[Anichi Extractor] Unpack error:", e.message);
+  }
+  return code;
+}
+function base64ToBytes(b64) {
+  if (typeof atob !== "undefined") {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i) & 255;
+    }
+    return bytes;
+  }
+  if (typeof Buffer !== "undefined") {
+    const buf = Buffer.from(b64, "base64");
+    return new Uint8Array(buf.buffer, buf.byteOffset, buf.length);
+  }
+  throw new Error("Base64 decoding not supported in this environment");
+}
+function b64UrlDecode(s) {
+  const fixed = s.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = (4 - fixed.length % 4) % 4;
+  const padded = fixed + "=".repeat(pad);
+  return base64ToBytes(padded);
+}
+function utf8Decode(bytes) {
+  if (typeof TextDecoder !== "undefined") {
+    return new TextDecoder().decode(bytes);
+  }
+  let out = "";
+  for (let i = 0; i < bytes.length; ) {
+    const b0 = bytes[i++];
+    if (b0 < 128) {
+      out += String.fromCharCode(b0);
+    } else if (b0 >= 192 && b0 < 224) {
+      const b1 = bytes[i++] & 63;
+      out += String.fromCharCode((b0 & 31) << 6 | b1);
+    } else if (b0 >= 224 && b0 < 240) {
+      const b1 = bytes[i++] & 63;
+      const b2 = bytes[i++] & 63;
+      out += String.fromCharCode((b0 & 15) << 12 | b1 << 6 | b2);
+    } else {
+      const b1 = bytes[i++] & 63;
+      const b2 = bytes[i++] & 63;
+      const b3 = bytes[i++] & 63;
+      let code = (b0 & 7) << 18 | b1 << 12 | b2 << 6 | b3;
+      code -= 65536;
+      out += String.fromCharCode(55296 + (code >> 10), 56320 + (code & 1023));
+    }
+  }
+  return out;
+}
+function buildAesKey(playback) {
+  const p1 = b64UrlDecode(playback.key_parts[0]);
+  const p2 = b64UrlDecode(playback.key_parts[1]);
+  const keyBytes = new Uint8Array(p1.length + p2.length);
+  keyBytes.set(p1, 0);
+  keyBytes.set(p2, p1.length);
+  return keyBytes;
+}
+function decryptPlayback(playback) {
+  return __async(this, null, function* () {
+    var _a, _b;
+    const keyBytes = buildAesKey(playback);
+    const ivBytes = b64UrlDecode(playback.iv);
+    const cipherBytes = b64UrlDecode(playback.payload);
+    let webCrypto;
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+      webCrypto = crypto.subtle;
+    } else {
+      try {
+        const nodeCrypto = require("crypto");
+        if (nodeCrypto.webcrypto) {
+          webCrypto = nodeCrypto.webcrypto.subtle;
+        }
+      } catch (e) {
+      }
+    }
+    if (!webCrypto) {
+      throw new Error("WebCrypto API is not available");
+    }
+    const cryptoKey = yield webCrypto.importKey(
+      "raw",
+      keyBytes,
+      { name: "AES-GCM" },
+      false,
+      ["decrypt"]
+    );
+    const plainBuffer = yield webCrypto.decrypt(
+      {
+        name: "AES-GCM",
+        iv: ivBytes,
+        tagLength: 128
+      },
+      cryptoKey,
+      cipherBytes
+    );
+    const jsonStr = utf8Decode(new Uint8Array(plainBuffer)).trim();
+    const cleanJson = jsonStr.startsWith("\uFEFF") ? jsonStr.substring(1) : jsonStr;
+    const data = JSON.parse(cleanJson);
+    return ((_b = (_a = data.sources) == null ? void 0 : _a[0]) == null ? void 0 : _b.url) || null;
+  });
+}
+function getBaseUrl(url) {
+  const u = new URL(url);
+  return `${u.protocol}//${u.host}`;
+}
+function getCodeFromUrl(url) {
+  const u = new URL(url);
+  const path = u.pathname;
+  const parts = path.split("/").filter(Boolean);
+  return parts[parts.length - 1] || "";
+}
+function getDetails(mainUrl) {
+  return __async(this, null, function* () {
+    const base = getBaseUrl(mainUrl);
+    const code = getCodeFromUrl(mainUrl);
+    const url = `${base}/api/videos/${code}/embed/details`;
+    const res = yield fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Referer": mainUrl
+      }
+    });
+    if (!res.ok)
+      return null;
+    return yield res.json();
+  });
+}
+function getPlayback(mainUrl) {
+  return __async(this, null, function* () {
+    const details = yield getDetails(mainUrl);
+    if (!details || !details.embed_frame_url)
+      return null;
+    const embedFrameUrl = details.embed_frame_url;
+    const embedBase = getBaseUrl(embedFrameUrl);
+    const code = getCodeFromUrl(embedFrameUrl);
+    const playbackUrl = `${embedBase}/api/videos/${code}/embed/playback`;
+    const headers = {
+      "accept": "*/*",
+      "accept-language": "en-US,en;q=0.5",
+      "referer": embedFrameUrl,
+      "x-embed-parent": embedFrameUrl,
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    };
+    let res = yield fetch(playbackUrl, { headers });
+    if (res.status === 200) {
+      return yield res.json();
+    } else {
+      const postHeaders = {
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Content-Type": "application/json",
+        "Referer": embedFrameUrl,
+        "X-Embed-Parent": mainUrl,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+      };
+      const body = JSON.stringify({ fingerprint: {} });
+      res = yield fetch(playbackUrl, {
+        method: "POST",
+        headers: postHeaders,
+        body
+      });
+      if (res.ok) {
+        return yield res.json();
+      }
+    }
+    return null;
+  });
+}
+function extractBysekoze(url) {
+  return __async(this, null, function* () {
+    try {
+      const playbackRoot = yield getPlayback(url);
+      if (!playbackRoot || !playbackRoot.playback)
+        return null;
+      return yield decryptPlayback(playbackRoot.playback);
+    } catch (e) {
+      console.error(`[Anichi Extractor] Bysekoze error: ${e.message}`);
+    }
+    return null;
+  });
+}
+function extractStreamWish(url) {
+  return __async(this, null, function* () {
+    try {
+      const embedUrl = url.includes("/e/") ? url : url.replace("/f/", "/e/");
+      const res = yield fetch(embedUrl);
+      if (!res.ok)
+        return null;
+      const html = yield res.text();
+      const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\(['"]\|['"]\)\)/g);
+      if (packedMatch) {
+        for (const script of packedMatch) {
+          const unpacked = unpack(script);
+          const fileMatch = unpacked.match(/file\s*:\s*["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.m3u8(?:\?[^"'\s]*)?)["']/);
+          if (fileMatch) {
+            return fileMatch[1];
+          }
+        }
+      }
+      const m3u8Match = html.match(/["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.m3u8(?:\?[^"'\s]*)?)["']/);
+      if (m3u8Match)
+        return m3u8Match[1];
+    } catch (e) {
+      console.error(`[Anichi Extractor] Streamwish error: ${e.message}`);
+    }
+    return null;
+  });
+}
+function extractFilemoon(url) {
+  return __async(this, null, function* () {
+    try {
+      const res = yield fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "Referer": url
+        }
+      });
+      if (!res.ok)
+        return null;
+      const html = yield res.text();
+      const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\(['"]\|['"]\)\)/g);
+      if (packedMatch) {
+        for (const script of packedMatch) {
+          const unpacked = unpack(script);
+          const fileMatch = unpacked.match(/file\s*:\s*["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.m3u8(?:\?[^"'\s]*)?)["']/) || unpacked.match(/sources\s*:\s*\[\s*\{\s*file\s*:\s*["']([^"'\s]+)["']/);
+          if (fileMatch) {
+            return fileMatch[1];
+          }
+        }
+      }
+      const m3u8Match = html.match(/["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.m3u8(?:\?[^"'\s]*)?)["']/);
+      if (m3u8Match)
+        return m3u8Match[1];
+    } catch (e) {
+      console.error(`[Anichi Extractor] Filemoon error: ${e.message}`);
+    }
+    return null;
+  });
+}
+function extractOkRu(url) {
+  return __async(this, null, function* () {
+    var _a;
+    try {
+      const res = yield fetch(url);
+      if (!res.ok)
+        return null;
+      const html = yield res.text();
+      const dataOptionsMatch = html.match(/data-options="([^"]+)"/);
+      if (dataOptionsMatch) {
+        const unescaped = dataOptionsMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+        const options = JSON.parse(unescaped);
+        const metadataStr = (_a = options.flashvars) == null ? void 0 : _a.metadata;
+        if (metadataStr) {
+          const metadata = JSON.parse(metadataStr);
+          const videos = metadata.videos || [];
+          const qualityOrder = { "odnoklassniki": 6, "hd": 5, "sd": 4, "low": 3, "lowest": 2, "mobile": 1 };
+          videos.sort((a, b) => (qualityOrder[b.name] || 0) - (qualityOrder[a.name] || 0));
+          if (videos.length > 0 && videos[0].url) {
+            return {
+              url: videos[0].url,
+              quality: videos[0].name === "hd" ? "720p" : videos[0].name === "sd" ? "480p" : "Unknown"
+            };
+          }
+        }
+      }
+    } catch (e) {
+      console.error(`[Anichi Extractor] OkRu error: ${e.message}`);
+    }
+    return null;
+  });
+}
+function extractMp4Upload(url) {
+  return __async(this, null, function* () {
+    try {
+      const res = yield fetch(url);
+      if (!res.ok)
+        return null;
+      const html = yield res.text();
+      const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\(['"]\|['"]\)\)/g);
+      if (packedMatch) {
+        for (const script of packedMatch) {
+          const unpacked = unpack(script);
+          const srcMatch = unpacked.match(/player\.src\(\s*\{\s*src\s*:\s*["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.mp4(?:\?[^"'\s]*)?)["']/) || unpacked.match(/player\.src\(\s*["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.mp4(?:\?[^"'\s]*)?)["']/) || unpacked.match(/src\s*:\s*["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.mp4(?:\?[^"'\s]*)?)["']/);
+          if (srcMatch) {
+            return srcMatch[1];
+          }
+        }
+      }
+      const mp4Match = html.match(/["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.mp4(?:\?[^"'\s]*)?)["']/);
+      if (mp4Match)
+        return mp4Match[1];
+    } catch (e) {
+      console.error(`[Anichi Extractor] Mp4Upload error: ${e.message}`);
+    }
+    return null;
+  });
 }
 
 // src/anichi/index.js
@@ -273,20 +590,80 @@ function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
               console.error(`[Anichi] Error fetching clock URL: ${e.message}`);
             }
           } else {
-            const quality = extractQuality(rawUrl);
-            const name = `Anichi ${source.sourceName} (${type}) - ${quality}`;
+            let streamUrl = rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
+            const quality = extractQuality(streamUrl);
             const cleanHeaders = {
               "User-Agent": HEADERS["User-Agent"]
             };
-            streams.push({
-              name,
-              title: `${match.name} - Episode ${mappedEp}`,
-              url: rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl,
-              quality,
-              size: "Unknown",
-              headers: cleanHeaders,
-              provider: "anichi"
-            });
+            let extractedUrl = null;
+            let extractedQuality = quality;
+            let isMirror = false;
+            if (streamUrl.includes("ok.ru")) {
+              isMirror = true;
+              try {
+                const res = yield extractOkRu(streamUrl);
+                if (res && res.url) {
+                  extractedUrl = res.url;
+                  if (res.quality) {
+                    extractedQuality = res.quality;
+                  }
+                }
+              } catch (err) {
+                console.error(`[Anichi] OkRu extraction failed: ${err.message}`);
+              }
+            } else if (streamUrl.includes("mp4upload.com")) {
+              isMirror = true;
+              try {
+                extractedUrl = yield extractMp4Upload(streamUrl);
+              } catch (err) {
+                console.error(`[Anichi] Mp4Upload extraction failed: ${err.message}`);
+              }
+            } else if (streamUrl.includes("streamwish") || streamUrl.includes("swiftplayers")) {
+              isMirror = true;
+              try {
+                extractedUrl = yield extractStreamWish(streamUrl);
+              } catch (err) {
+                console.error(`[Anichi] Streamwish extraction failed: ${err.message}`);
+              }
+            } else if (streamUrl.includes("bysekoze.com") || streamUrl.includes("byse.sx")) {
+              isMirror = true;
+              try {
+                extractedUrl = yield extractBysekoze(streamUrl);
+              } catch (err) {
+                console.error(`[Anichi] Bysekoze extraction failed: ${err.message}`);
+              }
+            } else if (streamUrl.includes("filemoon")) {
+              isMirror = true;
+              try {
+                extractedUrl = (yield extractBysekoze(streamUrl)) || (yield extractFilemoon(streamUrl));
+              } catch (err) {
+                console.error(`[Anichi] Filemoon extraction failed: ${err.message}`);
+              }
+            }
+            if (isMirror) {
+              if (extractedUrl) {
+                const finalQuality = extractedQuality === "Unknown" ? extractQuality(extractedUrl) : extractedQuality;
+                streams.push({
+                  name: `Anichi ${source.sourceName} (${type}) - ${finalQuality}`,
+                  title: `${match.name} - Episode ${mappedEp}`,
+                  url: extractedUrl,
+                  quality: finalQuality,
+                  size: "Unknown",
+                  headers: cleanHeaders,
+                  provider: "anichi"
+                });
+              }
+            } else {
+              streams.push({
+                name: `Anichi ${source.sourceName} (${type}) - ${quality}`,
+                title: `${match.name} - Episode ${mappedEp}`,
+                url: streamUrl,
+                quality,
+                size: "Unknown",
+                headers: cleanHeaders,
+                provider: "anichi"
+              });
+            }
           }
         }
       }

@@ -1,6 +1,7 @@
 // src/anichi/index.js
 import { API_URL, BASE_URL, HEADERS, SEARCH_HASH, DETAIL_HASH, SERVER_HASH } from './constants.js';
 import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality } from './utils.js';
+import { extractOkRu, extractMp4Upload, extractStreamWish, extractBysekoze, extractFilemoon } from './extractors.js';
 
 async function fetchFromAnichi(url) {
     const res = await fetch(url, { headers: HEADERS });
@@ -172,24 +173,85 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                         console.error(`[Anichi] Error fetching clock URL: ${e.message}`);
                     }
                 } else {
-                    // Direct links or other iframe sources
-                    const quality = extractQuality(rawUrl);
-                    const name = `Anichi ${source.sourceName} (${type}) - ${quality}`;
-
+                    let streamUrl = rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl;
+                    const quality = extractQuality(streamUrl);
+                    
                     // Do NOT pass Allanime mobile headers to external CDNs/mirrors to prevent blocking
                     const cleanHeaders = {
                         "User-Agent": HEADERS["User-Agent"]
                     };
 
-                    streams.push({
-                        name: name,
-                        title: `${match.name} - Episode ${mappedEp}`,
-                        url: rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl,
-                        quality: quality,
-                        size: "Unknown",
-                        headers: cleanHeaders,
-                        provider: "anichi"
-                    });
+                    let extractedUrl = null;
+                    let extractedQuality = quality;
+                    let isMirror = false;
+
+                    if (streamUrl.includes("ok.ru")) {
+                        isMirror = true;
+                        try {
+                            const res = await extractOkRu(streamUrl);
+                            if (res && res.url) {
+                                extractedUrl = res.url;
+                                if (res.quality) {
+                                    extractedQuality = res.quality;
+                                }
+                            }
+                        } catch (err) {
+                            console.error(`[Anichi] OkRu extraction failed: ${err.message}`);
+                        }
+                    } else if (streamUrl.includes("mp4upload.com")) {
+                        isMirror = true;
+                        try {
+                            extractedUrl = await extractMp4Upload(streamUrl);
+                        } catch (err) {
+                            console.error(`[Anichi] Mp4Upload extraction failed: ${err.message}`);
+                        }
+                    } else if (streamUrl.includes("streamwish") || streamUrl.includes("swiftplayers")) {
+                        isMirror = true;
+                        try {
+                            extractedUrl = await extractStreamWish(streamUrl);
+                        } catch (err) {
+                            console.error(`[Anichi] Streamwish extraction failed: ${err.message}`);
+                        }
+                    } else if (streamUrl.includes("bysekoze.com") || streamUrl.includes("byse.sx")) {
+                        isMirror = true;
+                        try {
+                            extractedUrl = await extractBysekoze(streamUrl);
+                        } catch (err) {
+                            console.error(`[Anichi] Bysekoze extraction failed: ${err.message}`);
+                        }
+                    } else if (streamUrl.includes("filemoon")) {
+                        isMirror = true;
+                        try {
+                            extractedUrl = await extractBysekoze(streamUrl) || await extractFilemoon(streamUrl);
+                        } catch (err) {
+                            console.error(`[Anichi] Filemoon extraction failed: ${err.message}`);
+                        }
+                    }
+
+                    if (isMirror) {
+                        if (extractedUrl) {
+                            const finalQuality = (extractedQuality === 'Unknown') ? extractQuality(extractedUrl) : extractedQuality;
+                            streams.push({
+                                name: `Anichi ${source.sourceName} (${type}) - ${finalQuality}`,
+                                title: `${match.name} - Episode ${mappedEp}`,
+                                url: extractedUrl,
+                                quality: finalQuality,
+                                size: "Unknown",
+                                headers: cleanHeaders,
+                                provider: "anichi"
+                            });
+                        }
+                    } else {
+                        streams.push({
+                            name: `Anichi ${source.sourceName} (${type}) - ${quality}`,
+                            title: `${match.name} - Episode ${mappedEp}`,
+                            url: streamUrl,
+                            quality: quality,
+                            size: "Unknown",
+                            headers: cleanHeaders,
+                            provider: "anichi"
+                        });
+                    }
                 }
             }
         }
