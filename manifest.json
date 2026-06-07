@@ -307,6 +307,27 @@
       ]
     },
     {
+      "id": "vidrock",
+      "name": "Vidrock",
+      "description": "Vidrock streaming with encrypted TMDB ID support and multiple servers",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/vidrock.js",
+      "enabled": true,
+      "formats": [
+        "mp4",
+        "m3u8"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=vidrock.ru&sz=128",
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
       "id": "vidnest",
       "name": "Vidnest",
       "description": "Vidnest streaming with encrypted AES-GCM sources",
