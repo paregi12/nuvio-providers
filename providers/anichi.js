@@ -1,6 +1,6 @@
 /**
  * anichi - Built from src/anichi/
- * Generated: 2026-06-07T21:02:33.834Z
+ * Generated: 2026-06-07T21:21:30.245Z
  */
 var __async = (__this, __arguments, generator) => {
   return new Promise((resolve, reject) => {
@@ -31,7 +31,7 @@ var HEADERS = {
   "app-version": "android_c-247",
   "from-app": "animechicken",
   "platformstr": "android_c",
-  "Referer": "https://allmanga.to/"
+  "Referer": "https://allmanga.to"
 };
 var SEARCH_HASH = "a24c500a1b765c68ae1d8dd85174931f661c71369c89b92b88b75a725afc471c";
 var DETAIL_HASH = "bb263f91e5bdd048c1c978f324613aeccdfe2cbc694a419466a31edb58c0cc0b";
@@ -239,14 +239,31 @@ function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                 const links = clockData.links || [];
                 links.forEach((item) => {
                   if (item.link) {
-                    const quality = item.resolutionStr || extractQuality(item.link);
+                    let quality = item.resolutionStr || extractQuality(item.link);
+                    if ((quality === "Hls" || quality === "Adaptive" || quality === "Unknown") && item.link) {
+                      if (item.link.includes("1080p") || item.link.includes("1080"))
+                        quality = "1080p";
+                      else if (item.link.includes("720p") || item.link.includes("720"))
+                        quality = "720p";
+                      else if (item.link.includes("480p") || item.link.includes("480"))
+                        quality = "480p";
+                      else if (item.link.includes("360p") || item.link.includes("360"))
+                        quality = "360p";
+                    }
+                    const defaultPlaybackHeaders = item.link.includes("wixmp.com") || item.link.includes("wixstatic.com") ? {
+                      "Referer": "https://repackager.wixmp.com/",
+                      "Origin": "https://repackager.wixmp.com",
+                      "User-Agent": HEADERS["User-Agent"]
+                    } : {
+                      "User-Agent": HEADERS["User-Agent"]
+                    };
                     streams.push({
                       name: `Anichi ${source.sourceName} (${type}) - ${quality}`,
                       title: `${match.name} - Episode ${mappedEp}`,
                       url: item.link,
                       quality,
                       size: "Unknown",
-                      headers: item.headers || HEADERS,
+                      headers: item.headers || defaultPlaybackHeaders,
                       provider: "anichi"
                     });
                   }
@@ -258,18 +275,33 @@ function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
           } else {
             const quality = extractQuality(rawUrl);
             const name = `Anichi ${source.sourceName} (${type}) - ${quality}`;
+            const cleanHeaders = {
+              "User-Agent": HEADERS["User-Agent"]
+            };
             streams.push({
               name,
               title: `${match.name} - Episode ${mappedEp}`,
               url: rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl,
               quality,
               size: "Unknown",
-              headers: HEADERS,
+              headers: cleanHeaders,
               provider: "anichi"
             });
           }
         }
       }
+      const prioritySources = ["Default", "Luf-Mp4", "Ur-mp4", "Ak"];
+      const qualityOrder = { "1080p": 4, "720p": 3, "480p": 2, "360p": 1, "Unknown": 0 };
+      streams.sort((a, b) => {
+        const aPri = prioritySources.some((src) => a.name.includes(src)) || a.url.includes("wixmp.com") || a.url.includes("wixstatic.com") ? 1 : 0;
+        const bPri = prioritySources.some((src) => b.name.includes(src)) || b.url.includes("wixmp.com") || b.url.includes("wixstatic.com") ? 1 : 0;
+        if (aPri !== bPri) {
+          return bPri - aPri;
+        }
+        const aQ = qualityOrder[a.quality] || 0;
+        const bQ = qualityOrder[b.quality] || 0;
+        return bQ - aQ;
+      });
       console.log(`[Anichi] Total streams found: ${streams.length}`);
       return streams;
     } catch (e) {

@@ -7,7 +7,7 @@ export const HEADERS = {
     "app-version": "android_c-247",
     "from-app": "animechicken",
     "platformstr": "android_c",
-    "Referer": "https://allmanga.to/"
+    "Referer": "https://allmanga.to"
 };
 
 export const SEARCH_HASH = "a24c500a1b765c68ae1d8dd85174931f661c71369c89b92b88b75a725afc471c";
