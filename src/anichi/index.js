@@ -1,0 +1,184 @@
+// src/anichi/index.js
+import { API_URL, BASE_URL, HEADERS, SEARCH_HASH, DETAIL_HASH, SERVER_HASH } from './constants.js';
+import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality } from './utils.js';
+
+async function fetchFromAnichi(url) {
+    const res = await fetch(url, { headers: HEADERS });
+    if (!res.ok) throw new Error(`Anichi HTTP ${res.status}`);
+    return await res.json();
+}
+
+async function getEpisodeLinks(showId, translationType, episodeString) {
+    const variables = {
+        showId: showId,
+        translationType: translationType,
+        episodeString: episodeString
+    };
+    const url = `${API_URL}?variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: SERVER_HASH } }))}`;
+    
+    try {
+        const data = await fetchFromAnichi(url);
+        return data.data?.episode?.sourceUrls || [];
+    } catch (e) {
+        console.error(`[Anichi] Failed to fetch episode links: ${e.message}`);
+        return [];
+    }
+}
+
+async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
+    console.log(`[Anichi] Starting extraction for TMDB ID: ${tmdbId}, Type: ${mediaType}, S:${seasonNum} E:${episodeNum}`);
+    
+    try {
+        let animeTitle = "";
+        let mappedEp = episodeNum;
+
+        // 1. Resolve mapping to MAL / Title
+        if (mediaType === 'tv') {
+            const imdbId = await getImdbId(tmdbId, mediaType);
+            if (imdbId) {
+                const mapping = await resolveMapping(imdbId, seasonNum, episodeNum);
+                if (mapping && mapping.mal_id) {
+                    mappedEp = mapping.mal_episode || episodeNum;
+                    animeTitle = await getMalTitle(mapping.mal_id);
+                }
+            }
+        }
+        
+        // Fallback to direct TMDB title lookup if mapping failed or if it's a movie
+        if (!animeTitle) {
+            const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
+            const tmdbRes = await fetch(tmdbUrl);
+            if (tmdbRes.ok) {
+                const tmdbData = await tmdbRes.json();
+                animeTitle = tmdbData.name || tmdbData.title || tmdbData.original_name || tmdbData.original_title;
+            }
+        }
+
+        if (!animeTitle) {
+            console.error("[Anichi] Could not resolve anime title.");
+            return [];
+        }
+
+        console.log(`[Anichi] Resolved Title: "${animeTitle}"`);
+
+        // 2. Search Anichi/Allanime
+        const searchVariables = {
+            search: { query: animeTitle },
+            limit: 26,
+            page: 1,
+            translationType: "sub",
+            countryOrigin: "ALL"
+        };
+        const searchUrl = `${API_URL}?variables=${encodeURIComponent(JSON.stringify(searchVariables))}&extensions=${encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: SEARCH_HASH } }))}`;
+        
+        const searchData = await fetchFromAnichi(searchUrl);
+        const edges = searchData.data?.shows?.edges || [];
+        if (edges.length === 0) {
+            console.log("[Anichi] No anime found matching query.");
+            return [];
+        }
+
+        // Match closest name
+        const match = edges.find(e => 
+            e.name.toLowerCase() === animeTitle.toLowerCase() || 
+            (e.englishName && e.englishName.toLowerCase() === animeTitle.toLowerCase())
+        ) || edges[0];
+
+        const showId = match._id;
+        console.log(`[Anichi] Found Show ID: ${showId} (${match.name})`);
+
+        // 3. Load Show Details to verify episode list
+        const detailVariables = { _id: showId };
+        const detailUrl = `${API_URL}?variables=${encodeURIComponent(JSON.stringify(detailVariables))}&extensions=${encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: DETAIL_HASH } }))}`;
+        
+        const detailData = await fetchFromAnichi(detailUrl);
+        const show = detailData.data?.show;
+        if (!show) return [];
+
+        const subEpisodes = show.availableEpisodesDetail?.sub || [];
+        const dubEpisodes = show.availableEpisodesDetail?.dub || [];
+
+        const hasSub = subEpisodes.includes(String(mappedEp));
+        const hasDub = dubEpisodes.includes(String(mappedEp));
+
+        if (!hasSub && !hasDub) {
+            console.log(`[Anichi] Episode ${mappedEp} is not available.`);
+            return [];
+        }
+
+        const streams = [];
+        const sourcePromises = [];
+
+        // Query sources for Sub and Dub if available
+        if (hasSub) {
+            sourcePromises.push(getEpisodeLinks(showId, "sub", String(mappedEp)).then(sources => ({ type: "Sub", sources })));
+        }
+        if (hasDub) {
+            sourcePromises.push(getEpisodeLinks(showId, "dub", String(mappedEp)).then(sources => ({ type: "Dub", sources })));
+        }
+
+        const resolvedTypes = await Promise.all(sourcePromises);
+
+        for (const { type, sources } of resolvedTypes) {
+            for (const source of sources) {
+                let rawUrl = source.sourceUrl;
+                if (!rawUrl) continue;
+
+                // Decrypt hex links
+                if (rawUrl.startsWith("--")) {
+                    rawUrl = decrypthex(rawUrl);
+                }
+
+                // If it is a clock/download API route, resolve it
+                if (rawUrl.includes("/apivtwo/clock")) {
+                    const fixedLink = fixUrlPath(rawUrl);
+                    try {
+                        const clockRes = await fetch(fixedLink, { headers: HEADERS });
+                        if (clockRes.ok) {
+                            const clockData = await clockRes.json();
+                            const links = clockData.links || [];
+                            links.forEach(item => {
+                                if (item.link) {
+                                    const quality = item.resolutionStr || extractQuality(item.link);
+                                    streams.push({
+                                        name: `Anichi ${source.sourceName} (${type}) - ${quality}`,
+                                        title: `${match.name} - Episode ${mappedEp}`,
+                                        url: item.link,
+                                        quality: quality,
+                                        size: "Unknown",
+                                        headers: item.headers || HEADERS,
+                                        provider: "anichi"
+                                    });
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.error(`[Anichi] Error fetching clock URL: ${e.message}`);
+                    }
+                } else {
+                    // Direct links or other iframe sources
+                    const quality = extractQuality(rawUrl);
+                    const name = `Anichi ${source.sourceName} (${type}) - ${quality}`;
+                    streams.push({
+                        name: name,
+                        title: `${match.name} - Episode ${mappedEp}`,
+                        url: rawUrl.startsWith("//") ? `https:${rawUrl}` : rawUrl,
+                        quality: quality,
+                        size: "Unknown",
+                        headers: HEADERS,
+                        provider: "anichi"
+                    });
+                }
+            }
+        }
+
+        console.log(`[Anichi] Total streams found: ${streams.length}`);
+        return streams;
+
+    } catch (e) {
+        console.error(`[Anichi] Error in getStreams: ${e.message}`);
+        return [];
+    }
+}
+
+module.exports = { getStreams };
