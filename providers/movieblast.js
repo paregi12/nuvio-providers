@@ -1,6 +1,6 @@
 /**
  * movieblast - Built from src/movieblast/
- * Generated: 2026-03-30T05:44:57.393Z
+ * Generated: 2026-06-01T14:20:20.783Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -234,8 +234,11 @@ function getStreams(tmdbId, mediaType = "movie", season = null, episode = null) 
           url: signedUrl,
           quality: matchQuality(vid.server),
           headers: {
-            "User-Agent": "MovieBlast",
+            "Accept-Encoding": "identity",
+            "Connection": "Keep-Alive",
+            "Icy-MetaData": "1",
             "Referer": "MovieBlast",
+            "User-Agent": "MovieBlast",
             "x-request-x": "com.movieblast"
           },
           provider: "movieblast"

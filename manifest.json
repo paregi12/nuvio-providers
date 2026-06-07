@@ -23,28 +23,10 @@
       ]
     },
     {
-      "id": "animekai",
-      "name": "AnimeKai",
-      "description": "AnimeKai TV episodes via AnimeKai servers",
-      "version": "1.1.0",
-      "author": "Nuvio Team",
-      "supportedTypes": [
-        "movie",
-        "tv"
-      ],
-      "filename": "providers/animekai.js",
-      "enabled": true,
-      "limited": true,
-      "logo": "https://animekai.to/assets/uploads/37585a39fe8c8d8fafaa2c7bfbf5374ecac859ea6a0288a6da2c61f5.png",
-      "contentLanguage": [
-        "en"
-      ]
-    },
-    {
       "id": "animepahe",
       "name": "AnimePahe",
       "description": "AnimePahe (Sub/Dub)",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -52,6 +34,7 @@
       ],
       "filename": "providers/animepahe.js",
       "enabled": true,
+      "hasSettings": true,
       "formats": [
         "m3u8"
       ],
@@ -104,7 +87,7 @@
       "id": "dahmermovies",
       "name": "DahmerMovies",
       "description": "Dahmer Movies streaming service. Can be slow at times to fetch and stream. Only use if needed.",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -112,6 +95,7 @@
       ],
       "filename": "providers/dahmermovies.js",
       "enabled": true,
+      "hasSettings": true,
       "formats": [
         "mkv"
       ],
@@ -124,7 +108,7 @@
       "id": "netmirror",
       "name": "NetMirror",
       "description": "Streaming links from netmirror. Automatically disabled on iOS due to compatibility issues.",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -132,6 +116,7 @@
       ],
       "filename": "providers/netmirror.js",
       "enabled": true,
+      "hasSettings": true,
       "logo": "https://net22.cc/favicon.ico",
       "contentLanguage": [
         "en"
@@ -450,6 +435,7 @@
       ],
       "filename": "providers/showbox.js",
       "enabled": true,
+      "hasSettings": true,
       "formats": [
         "mp4",
         "mkv"
@@ -496,7 +482,7 @@
       "formats": [
         "m3u8"
       ],
-      "logo": "https://www.google.com/s2/favicons?domain=allmovieland.you&sz=128",
+      "logo": "https://www.google.com/s2/favicons?domain=allmovieland.one&sz=128",
       "contentLanguage": [
         "en",
         "hi",
@@ -568,6 +554,90 @@
       "contentLanguage": [
         "ar"
       ]
+    },
+    {
+      "id": "moviesdrive",
+      "name": "MoviesDrive",
+      "description": "MoviesDrive streaming with HubCloud and Google Drive extraction",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/moviesdrive.js",
+      "enabled": true,
+      "formats": [
+        "mkv",
+        "mp4"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=moviesdrives.my&sz=128",
+      "contentLanguage": [
+        "en",
+        "hin"
+      ]
+    },
+    {
+      "id": "hianime",
+      "name": "HiAnime",
+      "description": "HiAnime multi-server anime streaming with real-time mapping and subtitles",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/hianime.js",
+      "enabled": true,
+      "hasSettings": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=hianime.to&sz=128",
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
+      "id": "kurage",
+      "name": "Kurage",
+      "description": "Kurage.live anime streaming with tRPC API and multi-server proxy support",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/kurage.js",
+      "enabled": true,
+      "formats": [
+        "mp4"
+      ],
+      "logo": "https://kurage.live/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
+    },
+    {
+      "id": "anizone",
+      "name": "AniZone",
+      "description": "AniZone high-quality anime streaming with multi-audio and soft subtitles",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/anizone.js",
+      "enabled": true,
+      "formats": [
+        "m3u8"
+      ],
+      "logo": "https://anizone.to/favicon.ico",
+      "contentLanguage": [
+        "en"
+      ]
     }
   ]
 }
+

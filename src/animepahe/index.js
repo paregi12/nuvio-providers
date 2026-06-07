@@ -1,6 +1,6 @@
 import cheerio from 'cheerio-without-node-native';
 import { fetchJson, fetchText, searchAnime, extractQuality, getImdbId, resolveMapping, getMalTitle } from './utils.js';
-import { extractKwik } from './extractors.js';
+import { extractKwik, extractPahe } from './extractors.js';
 import { MAIN_URL } from './constants.js';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
@@ -91,6 +91,8 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         const streams = [];
         const promises = [];
+
+        // 1. Extract from resolutionMenu (Kwik m3u8 and direct mp4 streams)
         $('#resolutionMenu button').each((i, el) => {
             const $btn = $(el);
             const kwikUrl = $btn.attr('data-src');
@@ -102,15 +104,54 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                 promises.push(
                     extractKwik(kwikUrl).then(res => {
                         if (res) {
+                            if (res.m3u8) {
+                                streams.push({
+                                    name: `AnimePahe [HLS] (${quality} ${type})`,
+                                    title: `${animeTitle} - Episode ${mappedEp}`,
+                                    url: res.m3u8,
+                                    quality: quality,
+                                    headers: res.headers
+                                });
+                            }
+                            if (res.mp4) {
+                                streams.push({
+                                    name: `AnimePahe [MP4] (${quality} ${type})`,
+                                    title: `${animeTitle} - Episode ${mappedEp}`,
+                                    url: res.mp4,
+                                    quality: quality,
+                                    headers: {
+                                        ...res.headers,
+                                        "Referer": kwikUrl
+                                    }
+                                });
+                            }
+                        }
+                    }).catch(() => {})
+                );
+            }
+        });
+
+        // 2. Extract from pickDownload links (Pahe/win direct mp4 downloads)
+        $('div#pickDownload a').each((i, el) => {
+            const $link = $(el);
+            const paheUrl = $link.attr('href');
+            const linkText = $link.text();
+            const quality = extractQuality(linkText);
+            const type = $link.find('span').text().toLowerCase().includes('eng') ? 'Dub' : 'Sub';
+
+            if (paheUrl && (paheUrl.includes('pahe.win') || paheUrl.includes('pahe.me') || paheUrl.includes('pahe.li') || paheUrl.includes('kwik'))) {
+                promises.push(
+                    extractPahe(paheUrl).then(res => {
+                        if (res && res.url) {
                             streams.push({
-                                name: `AnimePahe (${quality} ${type})`,
+                                name: `AnimePahe [Direct] (${quality} ${type})`,
                                 title: `${animeTitle} - Episode ${mappedEp}`,
                                 url: res.url,
                                 quality: quality,
                                 headers: res.headers
                             });
                         }
-                    })
+                    }).catch(() => {})
                 );
             }
         });
@@ -124,4 +165,29 @@ async function getStreams(tmdbId, mediaType, season, episode) {
     }
 }
 
-module.exports = { getStreams };
+async function onSettings() {
+    return [
+        { type: "header", label: "Domain Selection" },
+        {
+            type: "select",
+            key: "domain",
+            label: "Preferred Domain",
+            description: "AnimePahe frequently rotates domains. Choose the one currently working for you.",
+            options: [
+                { label: "animepahe.com", value: "https://animepahe.com" },
+                { label: "animepahe.org", value: "https://animepahe.org" },
+                { label: "animepahe.pw", value: "https://animepahe.pw" }
+            ],
+            defaultValue: "https://animepahe.com"
+        }
+    ];
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { getStreams, onSettings };
+} else {
+    global.getStreams = getStreams;
+    global.onSettings = onSettings;
+}
+
+

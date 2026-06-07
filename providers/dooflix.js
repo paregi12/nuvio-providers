@@ -1,6 +1,6 @@
 /**
  * dooflix - Built from src/dooflix/
- * Generated: 2026-03-21T08:41:32.792Z
+ * Generated: 2026-06-01T14:20:20.721Z
  */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;

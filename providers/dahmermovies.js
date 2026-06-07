@@ -1,7 +1,17 @@
 // Dahmer Movies Scraper for Nuvio Local Scrapers
 // React Native compatible version
 
-console.log('[DahmerMovies] Initializing Dahmer Movies scraper');
+// Settings layout
+async function onSettings() {
+    return [
+        { type: "header", label: "Quality Preferences" },
+        { type: "toggle", key: "q2160", label: "Enable 4K (2160p)", defaultValue: true },
+        { type: "toggle", key: "q1440", label: "Enable 2K (1440p)", defaultValue: true },
+        { type: "toggle", key: "q1080", label: "Enable FHD (1080p)", defaultValue: true },
+        { type: "toggle", key: "q720", label: "Enable HD (720p)", defaultValue: true },
+        { type: "toggle", key: "q480", label: "Enable SD (480p)", defaultValue: true }
+    ];
+}
 
 // Constants
 const TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
@@ -266,6 +276,14 @@ function parseLinks(html) {
 function invokeDahmerMovies(title, year, season = null, episode = null) {
     console.log(`[DahmerMovies] Searching for: ${title} (${year})${season ? ` Season ${season}` : ''}${episode ? ` Episode ${episode}` : ''}`);
 
+    const settings = globalThis.SCRAPER_SETTINGS || {};
+    const allowed = [];
+    if (settings.q2160 !== false) allowed.push(2160);
+    if (settings.q1440 !== false) allowed.push(1440);
+    if (settings.q1080 !== false) allowed.push(1080);
+    if (settings.q720 !== false) allowed.push(720);
+    if (settings.q480 !== false) allowed.push(480);
+
     // Construct URL based on content type (with proper encoding)
     const encodedUrl = season === null
         ? `${DAHMER_MOVIES_API}/movies/${encodeURIComponent(title.replace(/:/g, '') + ' (' + year + ')')}/`
@@ -282,22 +300,26 @@ function invokeDahmerMovies(title, year, season = null, episode = null) {
         const paths = parseLinks(html);
         console.log(`[DahmerMovies] Found ${paths.length} total links`);
 
-        // Filter based on content type
+        // Filter based on content type and quality settings
         let filteredPaths;
         if (season === null) {
-            // For movies, filter by quality (1080p or 2160p)
-            filteredPaths = paths.filter(path =>
-                /(1080p|2160p)/i.test(path.text)
-            );
-            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} movie links (1080p/2160p only)`);
+            // For movies, filter by quality
+            filteredPaths = paths.filter(path => {
+                const q = getIndexQuality(path.text);
+                return allowed.includes(q);
+            });
+            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} movie links (Allowed: ${allowed.join(', ')})`);
         } else {
-            // For TV shows, filter by season and episode
+            // For TV shows, filter by season and episode + quality
             const [seasonSlug, episodeSlug] = getEpisodeSlug(season, episode);
             const episodePattern = new RegExp(`S${seasonSlug}E${episodeSlug}`, 'i');
-            filteredPaths = paths.filter(path =>
-                episodePattern.test(path.text)
-            );
-            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} TV episode links (S${seasonSlug}E${episodeSlug})`);
+            filteredPaths = paths.filter(path => {
+                if (!episodePattern.test(path.text)) return false;
+                
+                const q = getIndexQuality(path.text);
+                return allowed.includes(q);
+            });
+            console.log(`[DahmerMovies] Filtered to ${filteredPaths.length} TV episode links (S${seasonSlug}E${episodeSlug}, Allowed: ${allowed.join(', ')})`);
         }
 
         if (filteredPaths.length === 0) {
@@ -421,8 +443,9 @@ function getStreams(tmdbId, mediaType = 'movie', seasonNum = null, episodeNum = 
 
 // Export the main function
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { getStreams };
+    module.exports = { getStreams, onSettings };
 } else {
     // For React Native environment
     global.getStreams = getStreams;
+    global.onSettings = onSettings;
 }

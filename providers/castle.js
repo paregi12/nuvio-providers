@@ -43,7 +43,7 @@ var __async = (__this, __arguments, generator) => {
 // src/castle/constants.js
 var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 var TMDB_BASE_URL = "https://api.themoviedb.org/3";
-var CASTLE_BASE = "https://api.fstcy.com";
+var CASTLE_BASE = "https://api.hlowb.com";
 var PKG = "com.external.castle";
 var CHANNEL = "IndiaA";
 var CLIENT = "1";
@@ -131,24 +131,85 @@ function getTMDBDetails(tmdbId, mediaType) {
 // src/castle/decrypt.js
 function decryptCastle(encryptedB64, securityKeyB64) {
   return __async(this, null, function* () {
-    console.log("[Castle] Starting AES-CBC decryption...");
-    const response = yield fetch("https://aesdec.nuvioapp.space/decrypt-castle", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        encryptedData: encryptedB64,
-        securityKey: securityKeyB64
-      })
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    console.log("[Castle] Starting local AES-CBC decryption...");
+    try {
+      const CryptoJS = require("crypto-js");
+      
+      // Monkey-patch to bypass NuvioMobile QuickJS JNI typed array mapping bug
+      if (typeof __crypto_aes_decrypt_raw !== 'undefined') {
+        const originalDecrypt = CryptoJS.AES.decrypt;
+        CryptoJS.AES.decrypt = function(cipher, key, options) {
+          try {
+            const wordArrayToBytes = (wordArray) => {
+              const bytes = new Uint8Array(wordArray.sigBytes);
+              for (let i = 0; i < wordArray.sigBytes; i++) {
+                bytes[i] = (wordArray.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;
+              }
+              return bytes;
+            };
+            const toUint8Array = (data) => {
+              if (data instanceof Uint8Array) return data;
+              if (data instanceof ArrayBuffer) return new Uint8Array(data);
+              if (data && typeof data.length === 'number') return new Uint8Array(Array.prototype.slice.call(data));
+              return new Uint8Array(0);
+            };
+            const data = typeof cipher === 'string'
+              ? new Uint8Array(Array.from(atob(cipher), c => c.charCodeAt(0)))
+              : (cipher.ciphertext ? wordArrayToBytes(cipher.ciphertext) : toUint8Array(cipher));
+            const kBytes = wordArrayToBytes(key);
+            const ivBytes = (options && options.iv) ? wordArrayToBytes(options.iv) : new Uint8Array(0);
+            const mode = (options && options.mode) || 'AES-CBC';
+            
+            // Map Uint8Array (unsigned) to Int8Array (signed) to match Kotlin ByteArray
+            const keyArg = typeof Int8Array !== 'undefined' ? new Int8Array(kBytes.buffer) : kBytes;
+            const ivArg = typeof Int8Array !== 'undefined' ? new Int8Array(ivBytes.buffer) : ivBytes;
+            const dataArg = typeof Int8Array !== 'undefined' ? new Int8Array(data.buffer) : data;
+            
+            const resBytes = __crypto_aes_decrypt_raw(mode, keyArg, ivArg, dataArg);
+            const plain = new TextDecoder().decode(resBytes);
+            return { toString: function() { return plain; } };
+          } catch (err) {
+            console.error("[Castle JNI Patch] Decrypt failed, falling back:", err);
+            return originalDecrypt.call(CryptoJS.AES, cipher, key, options);
+          }
+        };
+      }
+
+      const CASTLE_SUFFIX = "T!BgJB";
+      
+      const securityKeyWords = CryptoJS.enc.Base64.parse(securityKeyB64);
+      const suffixWords = CryptoJS.enc.Utf8.parse(CASTLE_SUFFIX);
+      const keyMaterial = securityKeyWords.concat(suffixWords);
+      
+      let finalKey;
+      if (keyMaterial.sigBytes < 16) {
+        const padding = CryptoJS.lib.WordArray.create(new Array(16 - keyMaterial.sigBytes).fill(0));
+        finalKey = keyMaterial.concat(padding);
+      } else if (keyMaterial.sigBytes > 16) {
+        finalKey = CryptoJS.lib.WordArray.create(keyMaterial.words.slice(0, 4), 16);
+      } else {
+        finalKey = keyMaterial;
+      }
+      
+      const iv = finalKey;
+      
+      const decrypted = CryptoJS.AES.decrypt(encryptedB64, finalKey, {
+        iv,
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
+      });
+      
+      const result = decrypted.toString(CryptoJS.enc.Utf8);
+      if (!result) {
+        throw new Error("Decryption resulted in empty string (possible key/IV mismatch)");
+      }
+      
+      console.log("[Castle] Local decryption successful");
+      return result;
+    } catch (error) {
+      console.error(`[Castle] Local decryption failed: ${error.message}`);
+      throw error;
     }
-    const data = yield response.json();
-    if (data.error) {
-      throw new Error(data.error);
-    }
-    console.log("[Castle] Decryption successful");
-    return data.decrypted;
   });
 }
 
@@ -189,26 +250,27 @@ function searchCastle(securityKey, keyword, page = 1, size = 30) {
 function getDetails(securityKey, movieId) {
   return __async(this, null, function* () {
     console.log(`[Castle] Fetching details for movieId: ${movieId}`);
-    const url = `${CASTLE_BASE}/film-api/v1.1/movie?channel=${CHANNEL}&clientType=${CLIENT}&lang=${LANG}&movieId=${movieId}&packageName=${PKG}`;
+    const url = `${CASTLE_BASE}/film-api/v1.9.9/movie?channel=${CHANNEL}&clientType=${CLIENT}&lang=${LANG}&movieId=${movieId}&packageName=${PKG}`;
     const response = yield makeRequest(url);
     const cipher = yield extractCipherFromResponse(response);
     const decrypted = yield decryptCastle(cipher, securityKey);
     return JSON.parse(decrypted);
   });
 }
-function getVideo2(securityKey, movieId, episodeId, resolution = 2) {
+function getVideoV1(securityKey, movieId, episodeId, languageId, resolution = 2) {
   return __async(this, null, function* () {
-    console.log(`[Castle] Fetching video (v2) for movieId: ${movieId}, episodeId: ${episodeId}`);
+    console.log(`[Castle] Fetching video (v1) for movieId: ${movieId}, languageId: ${languageId}`);
     const url = `${CASTLE_BASE}/film-api/v2.0.1/movie/getVideo2?clientType=${CLIENT}&packageName=${PKG}&channel=${CHANNEL}&lang=${LANG}`;
     const body = {
       mode: "1",
       appMarket: "GuanWang",
-      clientType: "1",
+      clientType: CLIENT,
       woolUser: "false",
       apkSignKey: "ED0955EB04E67A1D9F3305B95454FED485261475",
       androidVersion: "13",
-      movieId,
-      episodeId,
+      movieId: movieId.toString(),
+      episodeId: episodeId.toString(),
+      languageId: languageId.toString(),
       isNewUser: "true",
       resolution: resolution.toString(),
       packageName: PKG
@@ -223,23 +285,28 @@ function getVideo2(securityKey, movieId, episodeId, resolution = 2) {
     return JSON.parse(decrypted);
   });
 }
-function getVideoV1(securityKey, movieId, episodeId, languageId, resolution = 2) {
+function getVideo2(securityKey, movieId, episodeId, resolution = 2) {
   return __async(this, null, function* () {
-    console.log(`[Castle] Fetching video (v1) for movieId: ${movieId}, languageId: ${languageId}`);
-    const params = new URLSearchParams({
-      apkSignKey: "ED0955EB04E67A1D9F3305B95454FED485261475",
-      channel: CHANNEL,
-      clientType: CLIENT,
-      episodeId: episodeId.toString(),
-      lang: LANG,
-      languageId: languageId.toString(),
+    console.log(`[Castle] Fetching video (v2) for movieId: ${movieId}, episodeId: ${episodeId}`);
+    const url = `${CASTLE_BASE}/film-api/v2.0.1/movie/getVideo2?clientType=${CLIENT}&packageName=${PKG}&channel=${CHANNEL}&lang=${LANG}`;
+    const body = {
       mode: "1",
+      appMarket: "GuanWang",
+      clientType: CLIENT,
+      woolUser: "false",
+      apkSignKey: "ED0955EB04E67A1D9F3305B95454FED485261475",
+      androidVersion: "13",
       movieId: movieId.toString(),
-      packageName: PKG,
-      resolution: resolution.toString()
+      episodeId: episodeId.toString(),
+      isNewUser: "true",
+      resolution: resolution.toString(),
+      packageName: PKG
+    };
+    const response = yield makeRequest(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
     });
-    const url = `${CASTLE_BASE}/film-api/v1.9.1/movie/getVideo?${params.toString()}`;
-    const response = yield makeRequest(url);
     const cipher = yield extractCipherFromResponse(response);
     const decrypted = yield decryptCastle(cipher, securityKey);
     return JSON.parse(decrypted);
@@ -326,6 +393,21 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
     console.log("[Castle] No videoUrl found in response");
     return streams;
   }
+  
+  const subtitles = [];
+  if (data.subtitles && Array.isArray(data.subtitles)) {
+    data.subtitles.forEach((sub) => {
+      if (sub.url) {
+        subtitles.push({
+          url: sub.url,
+          language: sub.abbreviate || "Unknown",
+          name: sub.title || sub.abbreviate || "Unknown",
+          headers: PLAYBACK_HEADERS
+        });
+      }
+    });
+  }
+
   let mediaTitle = mediaInfo.title || "Unknown";
   if (mediaInfo.year) {
     mediaTitle += ` (${mediaInfo.year})`;
@@ -346,7 +428,8 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
         quality: videoQuality,
         size: formatSize(video.size),
         headers: PLAYBACK_HEADERS,
-        provider: "castle"
+        provider: "castle",
+        subtitles
       });
     }
   } else {
@@ -358,7 +441,8 @@ function processVideoResponse(videoData, mediaInfo, seasonNum, episodeNum, resol
       quality,
       size: formatSize(data.size),
       headers: PLAYBACK_HEADERS,
-      provider: "castle"
+      provider: "castle",
+      subtitles
     });
   }
   return streams;

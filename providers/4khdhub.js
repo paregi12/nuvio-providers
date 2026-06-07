@@ -1,7 +1,3 @@
-/**
- * 4khdhub - Built from src/4khdhub/
- * Generated: 2025-12-31T21:33:16.718Z
- */
 "use strict";
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -42,19 +38,16 @@ var __async = (__this, __arguments, generator) => {
     step((generator = generator.apply(__this, __arguments)).next());
   });
 };
-
-// src/4khdhub/constants.js
 var BASE_URL = "https://4khdhub.click";
 var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
 var DOMAINS_URL = "https://raw.githubusercontent.com/phisher98/TVVVV/refs/heads/main/domains.json";
-
-// src/4khdhub/utils.js
 var domainCache = { url: BASE_URL, ts: 0 };
 function fetchLatestDomain() {
   return __async(this, null, function* () {
     const now = Date.now();
-    if (now - domainCache.ts < 36e5) return domainCache.url;
+    if (now - domainCache.ts < 36e5)
+      return domainCache.url;
     try {
       const response = yield fetch(DOMAINS_URL);
       const data = yield response.json();
@@ -62,29 +55,33 @@ function fetchLatestDomain() {
         domainCache.url = data["4khdhub"];
         domainCache.ts = now;
       }
-    } catch (e) {}
+    } catch (e) {
+    }
     return domainCache.url;
   });
 }
-
-// src/4khdhub/http.js
 function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
-    try {
-      const response = yield fetch(url, {
-        headers: __spreadValues({
-          "User-Agent": USER_AGENT
-        }, options.headers)
-      });
-      return yield response.text();
-    } catch (err) {
-      console.log(`[4KHDHub] Request failed for ${url}: ${err.message}`);
-      return null;
+    const retries = options.retries !== void 0 ? options.retries : 2;
+    const delay = options.delay !== void 0 ? options.delay : 1e3;
+    for (let i = 0; i <= retries; i++) {
+      try {
+        const response = yield fetch(url, {
+          headers: __spreadValues({
+            "User-Agent": USER_AGENT
+          }, options.headers)
+        });
+        return yield response.text();
+      } catch (err) {
+        console.log(`[4KHDHub] Request failed for ${url}: ${err.message}${i < retries ? `, retrying (${i + 1}/${retries})...` : ""}`);
+      }
+      if (i < retries) {
+        yield new Promise((r) => setTimeout(r, delay * Math.pow(2, i)));
+      }
     }
+    return null;
   });
 }
-
-// src/4khdhub/tmdb.js
 function getTmdbDetails(tmdbId, type) {
   return __async(this, null, function* () {
     const isSeries = type === "series" || type === "tv";
@@ -111,8 +108,6 @@ function getTmdbDetails(tmdbId, type) {
     }
   });
 }
-
-// src/4khdhub/utils.js
 function atob(input) {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
   let str = String(input).replace(/=+$/, "");
@@ -186,8 +181,6 @@ function formatBytes(val) {
     i = 0;
   return parseFloat((val / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 }
-
-// src/4khdhub/search.js
 var cheerio = require("cheerio-without-node-native");
 function fetchPageUrl(name, year, isSeries) {
   return __async(this, null, function* () {
@@ -236,18 +229,19 @@ function fetchPageUrl(name, year, isSeries) {
     return matchingCards.length > 0 ? matchingCards[0] : null;
   });
 }
-
-// src/4khdhub/extractor.js
 var cheerio2 = require("cheerio-without-node-native");
 function resolveRedirectUrl(redirectUrl) {
   return __async(this, null, function* () {
+    if (redirectUrl.includes("hubcloud.") || redirectUrl.includes("hubdrive.")) {
+      return redirectUrl;
+    }
     const redirectHtml = yield fetchText(redirectUrl);
     if (!redirectHtml)
-      return null;
+      return redirectUrl;
     try {
       const redirectDataMatch = redirectHtml.match(/'o','(.*?)'/);
       if (!redirectDataMatch)
-        return null;
+        return redirectUrl;
       const step1 = atob(redirectDataMatch[1]);
       const step2 = atob(step1);
       const step3 = rot13Cipher(step2);
@@ -259,7 +253,7 @@ function resolveRedirectUrl(redirectUrl) {
     } catch (e) {
       console.log(`[4KHDHub] Error resolving redirect: ${e.message}`);
     }
-    return null;
+    return redirectUrl;
   });
 }
 function extractSourceResults($, el) {
@@ -277,19 +271,31 @@ function extractSourceResults($, el) {
       height,
       title
     };
-    const hubCloudLink = $(el).find("a").filter((_, a) => $(a).text().includes("HubCloud")).attr("href");
+    const hubCloudLink = $(el).find("a").filter((_, a) => {
+      const text = $(a).text();
+      const href = $(a).attr("href") || "";
+      return text.includes("HubCloud") || href.includes("hubcloud.") || href.includes("hubcloud/");
+    }).attr("href");
     if (hubCloudLink) {
       const resolved = yield resolveRedirectUrl(hubCloudLink);
       return { url: resolved, meta };
     }
-    const hubDriveLink = $(el).find("a").filter((_, a) => $(a).text().includes("HubDrive")).attr("href");
+    const hubDriveLink = $(el).find("a").filter((_, a) => {
+      const text = $(a).text();
+      const href = $(a).attr("href") || "";
+      return text.includes("HubDrive") || href.includes("hubdrive.") || href.includes("hubdrive/");
+    }).attr("href");
     if (hubDriveLink) {
       const resolvedDrive = yield resolveRedirectUrl(hubDriveLink);
       if (resolvedDrive) {
         const hubDriveHtml = yield fetchText(resolvedDrive);
         if (hubDriveHtml) {
           const $2 = cheerio2.load(hubDriveHtml);
-          const innerCloudLink = $2('a:contains("HubCloud")').attr("href");
+          const innerCloudLink = $2('a:contains("HubCloud")').attr("href") || $2("a").filter((_, a) => {
+            const text = $2(a).text();
+            const href = $2(a).attr("href") || "";
+            return text.includes("HubCloud") || href.includes("hubcloud.") || href.includes("hubcloud/");
+          }).attr("href");
           if (innerCloudLink) {
             return { url: innerCloudLink, meta };
           }
@@ -322,21 +328,32 @@ function extractHubCloud(hubCloudUrl, baseMeta) {
       title: titleText || baseMeta.title
     });
     $("a").each((_, el) => {
-      const text = $(el).text();
+      const text = $(el).text().trim();
       const href = $(el).attr("href");
       if (!href)
         return;
-      if (text.includes("FSL") || text.includes("Download File")) {
+      if (text.includes("10Gbps") || text.includes("PixelServer") || href.includes("hubcloud.cx")) {
         results.push({
-          source: "FSL",
+          source: "HubCloud 10Gbps",
           url: href,
           meta: currentMeta
         });
-      } else if (text.includes("PixelServer")) {
-        const pixelUrl = href.replace("/u/", "/api/file/");
+      } else if (text.includes("Download File") || href.includes("r2.dev")) {
         results.push({
-          source: "PixelServer",
-          url: pixelUrl,
+          source: "Direct R2",
+          url: href,
+          meta: currentMeta
+        });
+      } else if (text.includes("ZipDisk") || href.includes("workers.dev")) {
+        results.push({
+          source: "ZipDisk Server",
+          url: href,
+          meta: currentMeta
+        });
+      } else if (text.includes("FSL")) {
+        results.push({
+          source: "FSL",
+          url: href,
           meta: currentMeta
         });
       }
@@ -344,8 +361,6 @@ function extractHubCloud(hubCloudUrl, baseMeta) {
     return results;
   });
 }
-
-// src/4khdhub/index.js
 var cheerio3 = require("cheerio-without-node-native");
 function getStreams(tmdbId, type, season, episode) {
   return __async(this, null, function* () {

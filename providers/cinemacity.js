@@ -1,11 +1,15 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-04-26T06:45:39.580Z
+ * Generated: 2026-06-01T14:20:20.706Z
  */
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
+var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __propIsEnum = Object.prototype.propertyIsEnumerable;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
@@ -21,6 +25,22 @@ var __spreadValues = (a, b) => {
   return a;
 };
 var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __async = (__this, __arguments, generator) => {
   return new Promise((resolve, reject) => {
     var fulfilled = (value) => {
@@ -41,6 +61,9 @@ var __async = (__this, __arguments, generator) => {
     step((generator = generator.apply(__this, __arguments)).next());
   });
 };
+
+// src/cinemacity/index.js
+var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-native"));
 
 // src/cinemacity/constants.js
 var MAIN_URL = "https://cinemacity.cc";
@@ -94,16 +117,21 @@ function extractQuality(url) {
 // src/cinemacity/index.js
 function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
+    var _a;
+    const streams = [];
     try {
-      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=${TMDB_API_KEY}`;
+      const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`;
       const tmdbRes = yield fetch(tmdbUrl, { skipSizeCheck: true });
-      const mediaInfo = yield tmdbRes.json();
-      const animeTitle = mediaInfo.title || mediaInfo.name;
-      if (!animeTitle)
+      const tmdbData = yield tmdbRes.json();
+      const imdbId = ((_a = tmdbData.external_ids) == null ? void 0 : _a.imdb_id) || tmdbData.imdb_id;
+      const animeTitle = mediaType === "movie" ? tmdbData.title : tmdbData.name;
+      if (!animeTitle && !imdbId)
         return [];
-      const searchUrl = `${MAIN_URL}/?do=search&subaction=search&search_start=0&full_search=0&story=${encodeURIComponent(animeTitle)}`;
+      const searchQuery = imdbId || animeTitle;
+      const searchUrl = `${MAIN_URL}/?do=search&subaction=search&search_start=0&full_search=0&story=${encodeURIComponent(searchQuery)}`;
+      console.log(`[CinemaCity] Searching for: ${searchQuery}`);
       const searchHtml = yield fetchText(searchUrl);
-      const $search = cheerio.load(searchHtml);
+      const $search = import_cheerio_without_node_native.default.load(searchHtml);
       let mediaUrl = null;
       $search("div.dar-short_item").each((i, el) => {
         if (mediaUrl)
@@ -111,32 +139,36 @@ function getStreams(tmdbId, mediaType, season, episode) {
         const anchor = $search(el).find("a").filter((idx, a) => ($search(a).attr("href") || "").includes(".html")).first();
         if (!anchor.length)
           return;
-        const foundTitle = anchor.text().split("(")[0].trim();
         const href = anchor.attr("href");
-        if (foundTitle.toLowerCase() === animeTitle.toLowerCase() || foundTitle.toLowerCase().includes(animeTitle.toLowerCase()) || animeTitle.toLowerCase().includes(foundTitle.toLowerCase())) {
+        const foundTitle = anchor.text().toLowerCase();
+        if (imdbId && searchHtml.includes(imdbId)) {
+          mediaUrl = href;
+        } else if (foundTitle.includes(animeTitle.toLowerCase()) || animeTitle.toLowerCase().includes(foundTitle)) {
           mediaUrl = href;
         }
       });
-      if (!mediaUrl) {
-        const homeHtml = yield fetchText(MAIN_URL);
-        const $home = cheerio.load(homeHtml);
-        $home("div.dar-short_item").each((i, el) => {
+      if (!mediaUrl && imdbId && searchQuery !== animeTitle) {
+        console.log(`[CinemaCity] IMDB search failed, falling back to title search: ${animeTitle}`);
+        const titleSearchUrl = `${MAIN_URL}/?do=search&subaction=search&search_start=0&full_search=0&story=${encodeURIComponent(animeTitle)}`;
+        const titleSearchHtml = yield fetchText(titleSearchUrl);
+        const $titleSearch = import_cheerio_without_node_native.default.load(titleSearchHtml);
+        $titleSearch("div.dar-short_item").each((i, el) => {
           if (mediaUrl)
             return;
-          const anchor = $home(el).find("a").filter((idx, a) => ($home(a).attr("href") || "").includes(".html")).first();
-          if (!anchor.length)
-            return;
-          const foundTitle = anchor.text().split("(")[0].trim();
-          const href = anchor.attr("href");
-          if (foundTitle.toLowerCase() === animeTitle.toLowerCase())
-            mediaUrl = href;
+          const anchor = $titleSearch(el).find("a").filter((idx, a) => ($titleSearch(a).attr("href") || "").includes(".html")).first();
+          if (anchor.length)
+            mediaUrl = anchor.attr("href");
         });
       }
-      if (!mediaUrl)
+      if (!mediaUrl) {
+        console.log(`[CinemaCity] No media found for ${animeTitle}`);
         return [];
+      }
+      console.log(`[CinemaCity] Loading media page: ${mediaUrl}`);
       const pageHtml = yield fetchText(mediaUrl);
-      const $page = cheerio.load(pageHtml);
+      const $page = import_cheerio_without_node_native.default.load(pageHtml);
       let fileData = null;
+      let globalSubtitleData = null;
       $page("script").each((i, el) => {
         if (fileData)
           return;
@@ -145,36 +177,61 @@ function getStreams(tmdbId, mediaType, season, episode) {
           const regex = /atob\s*\(\s*(['"])(.*?)\1\s*\)/g;
           let match;
           while ((match = regex.exec(html)) !== null) {
-            const decoded = atobPolyfill(match[2]);
-            const fileMatch = decoded.match(new RegExp(`file\\s*:\\s*(['"])(.*?)\\1`, "s")) || decoded.match(new RegExp("file\\s*:\\s*(\\[.*?\\])", "s"));
-            if (fileMatch) {
-              let rawFile = fileMatch[2] || fileMatch[1];
-              if (rawFile && rawFile.length > 5) {
-                if (rawFile.startsWith("[") || rawFile.startsWith("{")) {
-                  try {
-                    const unescaped = rawFile.replace(/\\(.)/g, "$1");
-                    fileData = JSON.parse(unescaped);
-                  } catch (e) {
+            try {
+              const decoded = atobPolyfill(match[2]);
+              const fileMatch = decoded.match(new RegExp(`file\\s*:\\s*(['"])(.*?)\\1`, "s")) || decoded.match(new RegExp("file\\s*:\\s*(\\[.*?\\])", "s")) || decoded.match(new RegExp("file\\s*:\\s*(\\{.*?\\})", "s"));
+              const subMatch = decoded.match(new RegExp(`subtitle\\s*:\\s*(['"])(.*?)\\1`, "s"));
+              if (fileMatch) {
+                let rawFile = fileMatch[2] || fileMatch[1];
+                if (rawFile && rawFile.length > 5) {
+                  if (rawFile.startsWith("[") || rawFile.startsWith("{")) {
                     try {
-                      fileData = JSON.parse(rawFile);
-                    } catch (e2) {
-                      fileData = rawFile;
+                      const unescaped = rawFile.replace(/\\(.)/g, "$1");
+                      fileData = JSON.parse(unescaped);
+                    } catch (e) {
+                      try {
+                        fileData = JSON.parse(rawFile);
+                      } catch (e2) {
+                        fileData = rawFile;
+                      }
                     }
+                  } else {
+                    fileData = rawFile;
                   }
-                } else {
-                  fileData = rawFile;
                 }
-                if (fileData)
-                  break;
               }
+              if (subMatch) {
+                globalSubtitleData = subMatch[2];
+              }
+              if (fileData)
+                break;
+            } catch (err) {
             }
           }
         }
       });
-      if (!fileData)
+      if (!fileData) {
+        console.log(`[CinemaCity] Failed to extract player data`);
         return [];
-      const streams = [];
-      const addStream = (url, title, quality) => {
+      }
+      const parseSubtitles = (raw) => {
+        const subtitles = [];
+        if (!raw || typeof raw !== "string")
+          return subtitles;
+        raw.split(",").forEach((entry) => {
+          const match = entry.trim().match(/\[(.+?)\](https?:\/\/.+)/);
+          if (match) {
+            subtitles.push({
+              url: match[2],
+              language: match[1],
+              name: match[1],
+              headers: { Referer: "https://cinemacity.cc/" }
+            });
+          }
+        });
+        return subtitles;
+      };
+      const addStream = (url, title, quality, subtitles) => {
         if (!url || !url.startsWith("http") || url.length < 15)
           return;
         streams.push({
@@ -183,32 +240,35 @@ function getStreams(tmdbId, mediaType, season, episode) {
           url,
           quality: quality || extractQuality(url),
           headers: __spreadProps(__spreadValues({}, HEADERS), {
-            // Re-include cookies as they may be required for the CDN
             Referer: "https://cinemacity.cc/"
-          })
+          }),
+          subtitles: subtitles || []
         });
       };
-      const processStr = (str, title) => {
+      const processStr = (str, title, subtitles) => {
         if (str.includes(".urlset/master.m3u8")) {
-          addStream(str, title, "Auto");
+          addStream(str, title, "Auto", subtitles);
         } else {
           const urls = str.includes("[") ? str.split(",") : [str];
           urls.forEach((u) => {
             const m = u.match(/\[(.*?)\](.*)/);
             if (m)
-              addStream(m[2], title, m[1]);
+              addStream(m[2], title, m[1], subtitles);
             else
-              addStream(u, title, extractQuality(u));
+              addStream(u, title, extractQuality(u), subtitles);
           });
         }
       };
       if (mediaType === "movie") {
         if (Array.isArray(fileData)) {
           const obj = fileData.find((f) => !f.folder && f.file) || fileData[0];
-          if (obj && obj.file)
-            processStr(obj.file, animeTitle);
+          if (obj && obj.file) {
+            const subs = parseSubtitles(obj.subtitle || globalSubtitleData);
+            processStr(obj.file, animeTitle, subs);
+          }
         } else if (typeof fileData === "string") {
-          processStr(fileData, animeTitle);
+          const subs = parseSubtitles(globalSubtitleData);
+          processStr(fileData, animeTitle, subs);
         }
       } else {
         if (Array.isArray(fileData)) {
@@ -217,13 +277,17 @@ function getStreams(tmdbId, mediaType, season, episode) {
           if (sObj && sObj.folder) {
             const eLabel = `Episode ${episode}`;
             const eObj = sObj.folder.find((e) => (e.title || "").includes(eLabel) || (e.title || "").includes(`E${episode}`));
-            if (eObj && eObj.file)
-              processStr(eObj.file, `${animeTitle} S${season}E${episode}`);
+            if (eObj && eObj.file) {
+              const subs = parseSubtitles(eObj.subtitle || sObj.subtitle || globalSubtitleData);
+              processStr(eObj.file, `${animeTitle} S${season}E${episode}`, subs);
+            }
           }
         }
       }
+      console.log(`[CinemaCity] Successfully processed ${streams.length} streams`);
       return streams;
     } catch (error) {
+      console.error(`[CinemaCity] Error in getStreams: ${error.message}`);
       return [];
     }
   });

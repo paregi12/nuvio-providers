@@ -31,12 +31,15 @@ export function unpack(code) {
 
 export async function extractKwik(url) {
     try {
+        const settings = globalThis.SCRAPER_SETTINGS || {};
+        const baseUrl = settings.domain || "https://animepahe.com";
+
         // Fetch the kwik page directly (no proxy as it blocks kwik)
-        // Referer must be the URL itself as per Kotlin code: app.get(url, referer=url)
+        // Referer must be the active AnimePahe server URL to prevent blocking
         const html = await fetchText(url, { 
             headers: { 
                 ...HEADERS, 
-                "Referer": url,
+                "Referer": `${baseUrl}/`,
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             },
             useProxy: false 
@@ -68,15 +71,27 @@ export async function extractKwik(url) {
         for (const scriptContent of matches) {
             const unpacked = unpack(scriptContent);
             
-            // Regex to find the source URL - more lenient now
-            const urlMatch = unpacked.match(/source\s*=\s*['"](https?:\/\/.*?)['"]/) || 
-                             unpacked.match(/const\s+source\s*=\s*['"](https?:\/\/.*?)['"]/) ||
-                             unpacked.match(/var\s+source\s*=\s*['"](https?:\/\/.*?)['"]/) ||
-                             unpacked.match(/src\s*:\s*['"](https?:\/\/.*?)['"]/);
+            // Simplified and robust regex matching both single/double quoted m3u8 source URL
+            const m3u8Match = unpacked.match(/source\s*=\s*'([^']+m3u8[^']*)'/) || 
+                              unpacked.match(/source\s*=\s*"([^"]+m3u8[^"]*)"/);
             
-            if (urlMatch) {
+            if (m3u8Match) {
+                const m3u8Url = m3u8Match[1];
+                
+                // Extract title from HTML
+                const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/);
+                const title = titleMatch ? titleMatch[1].trim() : "video";
+                const fileName = title.endsWith(".mp4") ? title : title + ".mp4";
+                
+                // Generate mp4Url like Phisher98
+                const urlParts = m3u8Url.replace("/stream/", "/mp4/").split("/");
+                urlParts.pop();
+                const mp4Base = urlParts.join("/");
+                const mp4Url = `${mp4Base}?file=${encodeURIComponent(fileName)}`;
+
                 return {
-                    url: urlMatch[1],
+                    m3u8: m3u8Url,
+                    mp4: mp4Url,
                     headers: {
                         "Referer": "https://kwik.cx/",
                         "Origin": "https://kwik.cx",
@@ -118,31 +133,95 @@ function paheDecrypt(fullString, key, v1, v2) {
 }
 
 export async function extractPahe(url) {
-    // Porting the complex 302 redirect logic is hard in some JS environments 
-    // because fetch might auto-follow. We'll attempt a direct approach first.
     try {
-        // Pahe logic in Kotlin involves getting /i first
         const initUrl = url.endsWith('/i') ? url : `${url}/i`;
-        const html = await fetchText(initUrl, { headers: { ...HEADERS, Referer: 'https://pahe.win/' } });
+        
+        // 1. Fetch initial url /i with redirect manual
+        const initRes = await fetch(initUrl, {
+            method: 'GET',
+            redirect: 'manual',
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://pahe.win/"
+            }
+        });
+        
+        const redirectLoc = initRes.headers.get('location') || initRes.headers.get('Location');
+        if (!redirectLoc) return null;
+        
+        const kwikUrl = redirectLoc.startsWith('http') ? redirectLoc : `https://${redirectLoc.replace(/^\/+/, '')}`;
+        
+        // 2. Fetch kwik page with referer: "https://kwik.cx/"
+        const kwikRes = await fetch(kwikUrl, {
+            method: 'GET',
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Referer": "https://kwik.cx/"
+            }
+        });
+        
+        const html = await kwikRes.text();
+        const setCookieHeader = kwikRes.headers.get('set-cookie') || kwikRes.headers.get('Set-Cookie');
+        let cookie = '';
+        if (setCookieHeader) {
+            cookie = setCookieHeader.split(';')[0];
+        }
         
         const kwikParamsRegex = /\("(\w+)",\d+,"(\w+)",(\d+),(\d+),\d+\)/;
         const match = html.match(kwikParamsRegex);
+        if (!match) return null;
         
-        if (match) {
-            const [_, fullString, key, v1, v2] = match;
-            const decrypted = paheDecrypt(fullString, key, parseInt(v1), parseInt(v2));
+        const [_, fullString, key, v1, v2] = match;
+        const decrypted = paheDecrypt(fullString, key, parseInt(v1), parseInt(v2));
+        
+        const actionMatch = decrypted.match(/action="([^"]+)"/);
+        const tokenMatch = decrypted.match(/value="([^"]+)"/);
+        
+        if (!actionMatch || !tokenMatch) return null;
+        
+        const postUri = actionMatch[1];
+        const token = tokenMatch[1];
+        
+        // Prepare POST form body
+        const formData = new URLSearchParams();
+        formData.append('_token', token);
+        
+        // 3. Post to the action URL to get 302 redirect
+        let tries = 0;
+        let postRes = null;
+        let location = null;
+        
+        while (tries < 20) {
+            postRes = await fetch(postUri, {
+                method: 'POST',
+                redirect: 'manual',
+                headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer": kwikUrl,
+                    "Cookie": cookie,
+                    "Content-Type": "application/x-www-form-urlencoded"
+                },
+                body: formData.toString()
+            });
             
-            const actionMatch = decrypted.match(/action="([^"]+)"/);
-            const tokenMatch = decrypted.match(/value="([^"]+)"/);
-            
-            if (actionMatch && tokenMatch) {
-                // This would usually be a POST that returns a 302
-                // For now, we'll return null and focus on Kwik which provides M3U8
-                console.log('[AnimePahe] Pahe extractor (MP4) requires 302 handling');
+            if (postRes.status === 302 || postRes.status === 301) {
+                location = postRes.headers.get('location') || postRes.headers.get('Location');
+                break;
             }
+            tries++;
+        }
+        
+        if (location) {
+            return {
+                url: location,
+                headers: {
+                    "Referer": "https://kwik.cx/",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+            };
         }
     } catch (e) {
-        // ignore
+        console.error('[AnimePahe] Pahe extractor failed:', e.message);
     }
     return null;
 }

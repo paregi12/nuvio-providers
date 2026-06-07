@@ -87,8 +87,11 @@ async function getStreams(tmdbId, mediaType = "movie", season = null, episode = 
                 url: signedUrl,
                 quality: matchQuality(vid.server),
                 headers: {
-                    "User-Agent": "MovieBlast",
+                    "Accept-Encoding": "identity",
+                    "Connection": "Keep-Alive",
+                    "Icy-MetaData": "1",
                     "Referer": "MovieBlast",
+                    "User-Agent": "MovieBlast",
                     "x-request-x": "com.movieblast"
                 },
                 provider: "movieblast"

@@ -8,7 +8,7 @@ import { loadExtractor, getRedirectLinks } from './extractors.js';
 
 async function search(query) {
   const today = (new Date()).toISOString().split("T")[0];
-  const searchUrl = `https://search.pingora.fyi/collections/post/documents/search?q=${encodeURIComponent(query)}&query_by=post_title,category&query_by_weights=4,2&sort_by=sort_by_date:desc&limit=15&highlight_fields=none&use_cache=true&page=1&analytics_tag=${today}`;
+  const searchUrl = `https://search.hdhub4u.glass/collections/post/documents/search?q=${encodeURIComponent(query)}&query_by=post_title,category&query_by_weights=4,2&sort_by=sort_by_date:desc&limit=15&highlight_fields=none&use_cache=true&page=1&analytics_tag=${today}`;
   
   const response = await fetch(searchUrl, { headers: HEADERS });
   const data = await response.json();
@@ -35,6 +35,14 @@ async function search(query) {
 
 async function getDownloadLinks(mediaUrl) {
   const domain = await getCurrentDomain();
+  if (mediaUrl.includes("hdhub4u.")) {
+    try {
+      const urlObj = new URL(mediaUrl);
+      const domainObj = new URL(domain);
+      urlObj.hostname = domainObj.hostname;
+      mediaUrl = urlObj.toString();
+    } catch (e) {}
+  }
   const response = await fetch(mediaUrl, { headers: { ...HEADERS, Referer: `${domain}/` } });
   const data = await response.text();
   const $ = cheerio.load(data);
@@ -191,7 +199,7 @@ async function getStreams(tmdbId, mediaType = "movie", season = null, episode = 
         url: link.url,
         quality: qualityStr,
         size: formatBytes(link.size),
-        headers: HEADERS,
+        headers: link.headers || undefined,
         provider: "hdhub4u"
       };
     });
