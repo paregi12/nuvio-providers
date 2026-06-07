@@ -92,7 +92,7 @@ async function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null
                     mediaTitle = `${mediaInfo.title} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`;
                 }
 
-                const streamHeaders = needsHeaders(serverName, videoUrl) ? PLAYBACK_HEADERS : undefined;
+                const streamHeaders = PLAYBACK_HEADERS;
 
                 streams.push({
                     name: `Vidrock ${serverName}${languageInfo} - ${quality}`,

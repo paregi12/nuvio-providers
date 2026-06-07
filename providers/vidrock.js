@@ -1,6 +1,6 @@
 /**
  * vidrock - Built from src/vidrock/
- * Generated: 2026-06-07T20:30:30.641Z
+ * Generated: 2026-06-07T20:40:24.655Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -133,17 +133,6 @@ function extractQuality(url) {
     return "240p";
   return "Unknown";
 }
-function needsHeaders(serverName, url) {
-  if (serverName === "Astra")
-    return true;
-  if (serverName === "Atlas" && url.includes("hls1.vdrk.site"))
-    return true;
-  if (serverName === "Luna" && url.includes("cdn.niggaflix.xyz"))
-    return true;
-  if (url.includes("cdn.vidrock.store") || url.includes("proxy.vidrock.store"))
-    return true;
-  return false;
-}
 function parseAstraPlaylist(playlistUrl, serverName, mediaInfo, seasonNum, episodeNum) {
   return __async(this, null, function* () {
     try {
@@ -247,7 +236,7 @@ function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
           if (seasonNum && episodeNum) {
             mediaTitle = `${mediaInfo.title} S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`;
           }
-          const streamHeaders = needsHeaders(serverName, videoUrl) ? PLAYBACK_HEADERS : void 0;
+          const streamHeaders = PLAYBACK_HEADERS;
           streams.push({
             name: `Vidrock ${serverName}${languageInfo} - ${quality}`,
             title: mediaTitle,
