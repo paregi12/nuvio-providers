@@ -71,7 +71,16 @@ async function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null
                 const source = data[serverName];
                 if (!source || !source.url) continue;
 
-                const videoUrl = source.url;
+                let videoUrl = source.url;
+                
+                // Decode URL if it contains encoded characters
+                if (videoUrl.includes('%')) {
+                    try {
+                        videoUrl = decodeURIComponent(videoUrl);
+                    } catch (e) {
+                        // Ignore decode error
+                    }
+                }
 
                 // If Astra server, parse JSON playlist
                 if (serverName === 'Astra' && videoUrl.includes('/playlist/')) {
@@ -81,7 +90,7 @@ async function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null
 
                 // Normal stream extraction
                 let quality = extractQuality(videoUrl);
-                const languageInfo = source.language ? ` [${source.language}]` : '';
+                const languageInfo = source.language ? ` ${source.language}` : '';
 
                 // Build title
                 let mediaTitle = mediaInfo.title || 'Unknown';
@@ -95,7 +104,7 @@ async function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null
                 const streamHeaders = PLAYBACK_HEADERS;
 
                 streams.push({
-                    name: `Vidrock ${serverName}${languageInfo} - ${quality}`,
+                    name: `Vidrock [${serverName}]${languageInfo} - ${quality}`,
                     title: mediaTitle,
                     url: videoUrl,
                     quality: quality,

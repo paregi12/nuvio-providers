@@ -1,7 +1,7 @@
 // src/anichi/index.js
 import { API_URL, BASE_URL, HEADERS, SEARCH_HASH, DETAIL_HASH, SERVER_HASH } from './constants.js';
 import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality } from './utils.js';
-import { extractOkRu, extractMp4Upload, extractStreamWish, extractBysekoze, extractFilemoon, extractVidStack, extractStreamLare } from './extractors.js';
+import { extractOkRu, extractMp4Upload, extractStreamWish, extractSwiftplayers, extractBysekoze, extractFilemoon, extractVidStack, extractAllanimeups, extractStreamLare } from './extractors.js';
 
 async function fetchFromAnichi(url) {
     const res = await fetch(url, { headers: HEADERS });
@@ -149,12 +149,13 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                                     }
 
                                     // Use clean headers for external CDNs (like repackager.wixmp.com) if not explicitly provided
-                                    const defaultPlaybackHeaders = item.link.includes('wixmp.com') || item.link.includes('wixstatic.com') ? {
-                                        "Referer": "https://repackager.wixmp.com/",
-                                        "Origin": "https://repackager.wixmp.com",
-                                        "User-Agent": HEADERS["User-Agent"]
-                                    } : {
-                                        "User-Agent": HEADERS["User-Agent"]
+                                    const endpoint = `${API_URL}/player?uri=${encodeURIComponent(item.link)}`;
+                                    const isWix = item.link.includes('wixmp.com') || item.link.includes('wixstatic.com');
+                                    const isCrunchy = source.sourceName?.includes("Default") && (item.resolutionStr === "SUB" || item.resolutionStr === "Alt vo_SUB");
+                                    
+                                    const cleanPlayHeaders = {
+                                        "Referer": isWix || isCrunchy ? "https://static.crunchyroll.com/" : (item.headers?.Referer || item.headers?.referer || endpoint),
+                                        "User-Agent": item.headers?.["user-agent"] || item.headers?.["User-Agent"] || HEADERS["User-Agent"]
                                     };
 
                                     streams.push({
@@ -163,7 +164,7 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                                         url: item.link,
                                         quality: quality,
                                         size: "Unknown",
-                                        headers: item.headers || defaultPlaybackHeaders,
+                                        headers: cleanPlayHeaders,
                                         provider: "anichi"
                                     });
                                 }
@@ -183,7 +184,11 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
 
                     let extractedUrl = null;
                     let extractedQuality = quality;
-                    let isMirror = false;
+                    let playHeaders = cleanHeaders;
+                    
+                    // Determine if URL is a direct video link or an iframe/embed mirror
+                    const isDirect = streamUrl.split('?')[0].endsWith('.m3u8') || streamUrl.split('?')[0].endsWith('.mp4');
+                    let isMirror = !isDirect;
 
                     if (streamUrl.includes("ok.ru")) {
                         isMirror = true;
@@ -191,6 +196,10 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                             const res = await extractOkRu(streamUrl);
                             if (res && res.url) {
                                 extractedUrl = res.url;
+                                playHeaders = {
+                                    "Referer": "https://ok.ru/",
+                                    "User-Agent": cleanHeaders["User-Agent"]
+                                };
                                 if (res.quality) {
                                     extractedQuality = res.quality;
                                 }
@@ -202,13 +211,27 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                         isMirror = true;
                         try {
                             extractedUrl = await extractMp4Upload(streamUrl);
+                            if (extractedUrl) {
+                                playHeaders = {
+                                    "Referer": "https://www.mp4upload.com/",
+                                    "User-Agent": cleanHeaders["User-Agent"]
+                                };
+                            }
                         } catch (err) {
                             console.error(`[Anichi] Mp4Upload extraction failed: ${err.message}`);
                         }
                     } else if (streamUrl.includes("streamwish") || streamUrl.includes("swiftplayers")) {
                         isMirror = true;
                         try {
-                            extractedUrl = await extractStreamWish(streamUrl);
+                            extractedUrl = streamUrl.includes("swiftplayers") ? await extractSwiftplayers(streamUrl) : await extractStreamWish(streamUrl);
+                            if (extractedUrl) {
+                                const base = streamUrl.includes("swiftplayers") ? "https://swiftplayers.com" : "https://streamwish.to";
+                                playHeaders = {
+                                    "Referer": `${base}/`,
+                                    "Origin": `${base}/`,
+                                    "User-Agent": cleanHeaders["User-Agent"]
+                                };
+                            }
                         } catch (err) {
                             console.error(`[Anichi] Streamwish extraction failed: ${err.message}`);
                         }
@@ -216,6 +239,13 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                         isMirror = true;
                         try {
                             extractedUrl = await extractBysekoze(streamUrl);
+                            if (extractedUrl) {
+                                const base = streamUrl.includes("bysekoze.com") ? "https://bysekoze.com" : "https://byse.sx";
+                                playHeaders = {
+                                    "Referer": `${base}/`,
+                                    "User-Agent": cleanHeaders["User-Agent"]
+                                };
+                            }
                         } catch (err) {
                             console.error(`[Anichi] Bysekoze extraction failed: ${err.message}`);
                         }
@@ -223,13 +253,26 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                         isMirror = true;
                         try {
                             extractedUrl = await extractBysekoze(streamUrl) || await extractFilemoon(streamUrl);
+                            if (extractedUrl) {
+                                playHeaders = {
+                                    "Referer": streamUrl,
+                                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                                };
+                            }
                         } catch (err) {
                             console.error(`[Anichi] Filemoon extraction failed: ${err.message}`);
                         }
                     } else if (streamUrl.includes("allanime.uns.bio") || streamUrl.includes("uns.bio")) {
                         isMirror = true;
                         try {
-                            extractedUrl = await extractVidStack(streamUrl);
+                            extractedUrl = await extractAllanimeups(streamUrl);
+                            if (extractedUrl) {
+                                playHeaders = {
+                                    "Referer": streamUrl,
+                                    "Origin": "https://allanime.uns.bio",
+                                    "User-Agent": cleanHeaders["User-Agent"]
+                                };
+                            }
                         } catch (err) {
                             console.error(`[Anichi] Vidstack extraction failed: ${err.message}`);
                         }
@@ -237,6 +280,12 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                         isMirror = true;
                         try {
                             extractedUrl = await extractStreamLare(streamUrl);
+                            if (extractedUrl) {
+                                playHeaders = {
+                                    "Referer": "https://streamlare.com/",
+                                    "User-Agent": cleanHeaders["User-Agent"]
+                                };
+                            }
                         } catch (err) {
                             console.error(`[Anichi] Streamlare extraction failed: ${err.message}`);
                         }
@@ -251,7 +300,7 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                                 url: extractedUrl,
                                 quality: finalQuality,
                                 size: "Unknown",
-                                headers: cleanHeaders,
+                                headers: playHeaders,
                                 provider: "anichi"
                             });
                         }
@@ -274,8 +323,8 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
         const prioritySources = ["Default", "Luf-Mp4", "Ur-mp4", "Ak"];
         const qualityOrder = { "1080p": 4, "720p": 3, "480p": 2, "360p": 1, "Unknown": 0 };
         streams.sort((a, b) => {
-            const aPri = (prioritySources.some(src => a.name.includes(src)) || a.url.includes("wixmp.com") || a.url.includes("wixstatic.com")) ? 1 : 0;
-            const bPri = (prioritySources.some(src => b.name.includes(src)) || b.url.includes("wixmp.com") || b.url.includes("wixstatic.com")) ? 1 : 0;
+            const aPri = (prioritySources.some(src => a.name.includes(src)) || a.url.includes("wixmp.com") || a.url.includes("wixstatic.com") || (a.headers?.Referer || a.headers?.referer || "").includes("crunchyroll.com")) ? 1 : 0;
+            const bPri = (prioritySources.some(src => b.name.includes(src)) || b.url.includes("wixmp.com") || b.url.includes("wixstatic.com") || (b.headers?.Referer || b.headers?.referer || "").includes("crunchyroll.com")) ? 1 : 0;
             if (aPri !== bPri) {
                 return bPri - aPri; // Priority sources first
             }

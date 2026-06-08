@@ -1,6 +1,6 @@
 /**
  * vidrock - Built from src/vidrock/
- * Generated: 2026-06-07T20:40:24.655Z
+ * Generated: 2026-06-08T12:32:46.096Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -156,7 +156,7 @@ function parseAstraPlaylist(playlistUrl, serverName, mediaInfo, seasonNum, episo
               mediaTitle = `${mediaInfo.title} S${String(seasonNum).padStart(2, "0")}E${String(episodeNum).padStart(2, "0")}`;
             }
             streams.push({
-              name: `Vidrock ${serverName} - ${quality}`,
+              name: `Vidrock [${serverName}] - ${quality}`,
               title: mediaTitle,
               url: item.url,
               quality,
@@ -222,13 +222,19 @@ function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
           const source = data[serverName];
           if (!source || !source.url)
             continue;
-          const videoUrl = source.url;
+          let videoUrl = source.url;
+          if (videoUrl.includes("%")) {
+            try {
+              videoUrl = decodeURIComponent(videoUrl);
+            } catch (e) {
+            }
+          }
           if (serverName === "Astra" && videoUrl.includes("/playlist/")) {
             astraPromises.push(parseAstraPlaylist(videoUrl, serverName, mediaInfo, seasonNum, episodeNum));
             continue;
           }
           let quality = extractQuality(videoUrl);
-          const languageInfo = source.language ? ` [${source.language}]` : "";
+          const languageInfo = source.language ? ` ${source.language}` : "";
           let mediaTitle = mediaInfo.title || "Unknown";
           if (mediaInfo.year) {
             mediaTitle += ` (${mediaInfo.year})`;
@@ -238,7 +244,7 @@ function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
           }
           const streamHeaders = PLAYBACK_HEADERS;
           streams.push({
-            name: `Vidrock ${serverName}${languageInfo} - ${quality}`,
+            name: `Vidrock [${serverName}]${languageInfo} - ${quality}`,
             title: mediaTitle,
             url: videoUrl,
             quality,

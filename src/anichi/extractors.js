@@ -260,20 +260,23 @@ export async function extractStreamWish(url) {
                 const unpacked = unpack(script);
                 const fileMatch = unpacked.match(/file\s*:\s*["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.m3u8(?:\?[^"'\s]*)?)["']/);
                 if (fileMatch) {
-                    return fileMatch[1];
+                return fileMatch[1];
                 }
-            }
-        }
-        
-        // Fallback: search for direct m3u8 in html
-        const m3u8Match = html.match(/["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.m3u8(?:\?[^"'\s]*)?)["']/);
-        if (m3u8Match) return m3u8Match[1];
-    } catch (e) {
-        console.error(`[Anichi Extractor] Streamwish error: ${e.message}`);
-    }
-    return null;
-}
+                }
+                }
 
+                // Fallback: search for direct m3u8 in html
+                const m3u8Match = html.match(/["'](https?:\/\/[^"'\s]+\/[^"'\s/]+\.m3u8(?:\?[^"'\s]*)?)["']/);
+                if (m3u8Match) return m3u8Match[1];
+                } catch (e) {
+                console.error(`[Anichi Extractor] Streamwish error: ${e.message}`);
+                }
+                return null;
+                }
+
+                export async function extractSwiftplayers(url) {
+                return await extractStreamWish(url);
+                }
 export async function extractFilemoon(url) {
     try {
         const headers = {
@@ -422,6 +425,10 @@ export async function extractVidStack(url) {
         console.error(`[Anichi Extractor] Vidstack error: ${e.message}`);
     }
     return null;
+}
+
+export async function extractAllanimeups(url) {
+    return await extractVidStack(url);
 }
 
 export async function extractStreamLare(url) {

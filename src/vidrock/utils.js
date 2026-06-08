@@ -2,7 +2,7 @@
 import CryptoJS from 'crypto-js';
 import { TMDB_BASE_URL, TMDB_API_KEY, PASSPHRASE, PLAYBACK_HEADERS, USER_AGENT } from './constants.js';
 
-// Local AES-CBC Encryption matching Phisher98's Kotlin algorithm
+// Local AES-CBC Encryption
 export function encryptVidrock(text) {
     const key = CryptoJS.enc.Utf8.parse(PASSPHRASE);
     const iv = CryptoJS.enc.Utf8.parse(PASSPHRASE.substring(0, 16));
@@ -105,7 +105,7 @@ export async function parseAstraPlaylist(playlistUrl, serverName, mediaInfo, sea
                     }
 
                     streams.push({
-                        name: `Vidrock ${serverName} - ${quality}`,
+                        name: `Vidrock [${serverName}] - ${quality}`,
                         title: mediaTitle,
                         url: item.url,
                         quality: quality,
