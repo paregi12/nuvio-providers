@@ -1,6 +1,6 @@
 /**
  * anichi - Built from src/anichi/
- * Generated: 2026-06-07T21:42:10.426Z
+ * Generated: 2026-06-08T11:24:22.073Z
  */
 var __async = (__this, __arguments, generator) => {
   return new Promise((resolve, reject) => {
@@ -243,6 +243,44 @@ function decryptPlayback(playback) {
     return ((_b = (_a = data.sources) == null ? void 0 : _a[0]) == null ? void 0 : _b.url) || null;
   });
 }
+function decryptAesCbc(cipherHex, keyStr, ivStr) {
+  return __async(this, null, function* () {
+    const keyBytes = new TextEncoder().encode(keyStr);
+    const ivBytes = new TextEncoder().encode(ivStr);
+    const cipherBytes = new Uint8Array(cipherHex.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
+    let webCrypto;
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+      webCrypto = crypto.subtle;
+    } else {
+      try {
+        const nodeCrypto = require("crypto");
+        if (nodeCrypto.webcrypto) {
+          webCrypto = nodeCrypto.webcrypto.subtle;
+        }
+      } catch (e) {
+      }
+    }
+    if (!webCrypto) {
+      throw new Error("WebCrypto API is not available");
+    }
+    const cryptoKey = yield webCrypto.importKey(
+      "raw",
+      keyBytes,
+      { name: "AES-CBC" },
+      false,
+      ["decrypt"]
+    );
+    const plainBuffer = yield webCrypto.decrypt(
+      {
+        name: "AES-CBC",
+        iv: ivBytes
+      },
+      cryptoKey,
+      cipherBytes
+    );
+    return utf8Decode(new Uint8Array(plainBuffer));
+  });
+}
 function getBaseUrl(url) {
   const u = new URL(url);
   return `${u.protocol}//${u.host}`;
@@ -353,15 +391,27 @@ function extractStreamWish(url) {
 function extractFilemoon(url) {
   return __async(this, null, function* () {
     try {
-      const res = yield fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-          "Referer": url
-        }
-      });
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Referer": url
+      };
+      let res = yield fetch(url, { headers });
       if (!res.ok)
         return null;
-      const html = yield res.text();
+      let html = yield res.text();
+      const iframeMatch = html.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+      if (iframeMatch) {
+        const iframeUrl = iframeMatch[1];
+        const iframeHeaders = {
+          "User-Agent": headers["User-Agent"],
+          "Referer": url,
+          "Accept-Language": "en-US,en;q=0.5"
+        };
+        res = yield fetch(iframeUrl, { headers: iframeHeaders });
+        if (res.ok) {
+          html = yield res.text();
+        }
+      }
       const packedMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]*?\.split\(['"]\|['"]\)\)/g);
       if (packedMatch) {
         for (const script of packedMatch) {
@@ -435,6 +485,77 @@ function extractMp4Upload(url) {
         return mp4Match[1];
     } catch (e) {
       console.error(`[Anichi Extractor] Mp4Upload error: ${e.message}`);
+    }
+    return null;
+  });
+}
+function extractVidStack(url) {
+  return __async(this, null, function* () {
+    try {
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:134.0) Gecko/20100101 Firefox/134.0"
+      };
+      const hash = url.split("#").pop().split("/").pop();
+      const baseurl = getBaseUrl(url);
+      const res = yield fetch(`${baseurl}/api/v1/video?id=${hash}`, { headers });
+      if (!res.ok)
+        return null;
+      const encoded = (yield res.text()).trim();
+      const key = "kiemtienmua911ca";
+      const ivs = ["1234567890oiuytr", "0123456789abcdef"];
+      let decryptedText = null;
+      for (const iv of ivs) {
+        try {
+          decryptedText = yield decryptAesCbc(encoded, key, iv);
+          if (decryptedText)
+            break;
+        } catch (err) {
+        }
+      }
+      if (!decryptedText) {
+        console.error("[Anichi Extractor] Vidstack decryption failed with all IVs");
+        return null;
+      }
+      const sourceMatch = decryptedText.match(/"source"\s*:\s*"(.*?)"/);
+      if (sourceMatch) {
+        const m3u8 = sourceMatch[1].replace(/\\/g, "");
+        return m3u8;
+      }
+    } catch (e) {
+      console.error(`[Anichi Extractor] Vidstack error: ${e.message}`);
+    }
+    return null;
+  });
+}
+function extractStreamLare(url) {
+  return __async(this, null, function* () {
+    var _a;
+    try {
+      const id = url.split("/").pop();
+      const res = yield fetch("https://streamlare.com/api/video/get", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "Referer": url
+        },
+        body: JSON.stringify({ id })
+      });
+      if (!res.ok)
+        return null;
+      const data = yield res.json();
+      const result = data.result || {};
+      const qualities = Object.keys(result);
+      if (qualities.length > 0) {
+        const sorted = qualities.sort((a, b) => parseInt(b) - parseInt(a));
+        const bestQuality = sorted[0];
+        const file = (_a = result[bestQuality]) == null ? void 0 : _a.file;
+        if (file) {
+          return file;
+        }
+      }
+    } catch (e) {
+      console.error(`[Anichi Extractor] Streamlare error: ${e.message}`);
     }
     return null;
   });
@@ -638,6 +759,20 @@ function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                 extractedUrl = (yield extractBysekoze(streamUrl)) || (yield extractFilemoon(streamUrl));
               } catch (err) {
                 console.error(`[Anichi] Filemoon extraction failed: ${err.message}`);
+              }
+            } else if (streamUrl.includes("allanime.uns.bio") || streamUrl.includes("uns.bio")) {
+              isMirror = true;
+              try {
+                extractedUrl = yield extractVidStack(streamUrl);
+              } catch (err) {
+                console.error(`[Anichi] Vidstack extraction failed: ${err.message}`);
+              }
+            } else if (streamUrl.includes("streamlare.com")) {
+              isMirror = true;
+              try {
+                extractedUrl = yield extractStreamLare(streamUrl);
+              } catch (err) {
+                console.error(`[Anichi] Streamlare extraction failed: ${err.message}`);
               }
             }
             if (isMirror) {

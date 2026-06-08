@@ -1,7 +1,7 @@
 // src/anichi/index.js
 import { API_URL, BASE_URL, HEADERS, SEARCH_HASH, DETAIL_HASH, SERVER_HASH } from './constants.js';
 import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality } from './utils.js';
-import { extractOkRu, extractMp4Upload, extractStreamWish, extractBysekoze, extractFilemoon } from './extractors.js';
+import { extractOkRu, extractMp4Upload, extractStreamWish, extractBysekoze, extractFilemoon, extractVidStack, extractStreamLare } from './extractors.js';
 
 async function fetchFromAnichi(url) {
     const res = await fetch(url, { headers: HEADERS });
@@ -225,6 +225,20 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                             extractedUrl = await extractBysekoze(streamUrl) || await extractFilemoon(streamUrl);
                         } catch (err) {
                             console.error(`[Anichi] Filemoon extraction failed: ${err.message}`);
+                        }
+                    } else if (streamUrl.includes("allanime.uns.bio") || streamUrl.includes("uns.bio")) {
+                        isMirror = true;
+                        try {
+                            extractedUrl = await extractVidStack(streamUrl);
+                        } catch (err) {
+                            console.error(`[Anichi] Vidstack extraction failed: ${err.message}`);
+                        }
+                    } else if (streamUrl.includes("streamlare.com")) {
+                        isMirror = true;
+                        try {
+                            extractedUrl = await extractStreamLare(streamUrl);
+                        } catch (err) {
+                            console.error(`[Anichi] Streamlare extraction failed: ${err.message}`);
                         }
                     }
 
