@@ -5,7 +5,7 @@ import {
     fetchTmdbDetails, 
     extractQuality, 
     needsHeaders, 
-    parseAstraPlaylist 
+    parseAstraPlaylist
 } from './utils.js';
 
 async function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
@@ -119,7 +119,9 @@ async function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null
         if (astraPromises.length > 0) {
             const astraResults = await Promise.all(astraPromises);
             astraResults.forEach(subList => {
-                streams.push(...subList);
+                if (subList && Array.isArray(subList)) {
+                    streams.push(...subList);
+                }
             });
         }
 

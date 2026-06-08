@@ -122,3 +122,58 @@ export async function parseAstraPlaylist(playlistUrl, serverName, mediaInfo, sea
         return [];
     }
 }
+
+// Parse standard Master M3U8 playlists (similar to generateM3u8)
+export async function parseMasterM3u8(masterUrl, serverName, mediaInfo, seasonNum, episodeNum, language) {
+    try {
+        console.log(`[Vidrock] Parsing master M3U8: ${masterUrl}`);
+        const res = await fetch(masterUrl, {
+            headers: PLAYBACK_HEADERS
+        });
+        if (!res.ok) return null;
+        const text = await res.text();
+        
+        if (!text.includes('#EXT-X-STREAM-INF')) {
+            return null;
+        }
+        
+        const lines = text.split('\n');
+        const streams = [];
+        let currentQuality = 'Unknown';
+        
+        const languageInfo = language ? ` ${language}` : '';
+        let mediaTitle = mediaInfo.title || 'Unknown';
+        if (mediaInfo.year) {
+            mediaTitle += ` (${mediaInfo.year})`;
+        }
+        if (seasonNum && episodeNum) {
+            mediaTitle = `${mediaInfo.title} S${String(seasonNum).padStart(2, '0')}E${String(episodeNum).padStart(2, '0')}`;
+        }
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (line.startsWith('#EXT-X-STREAM-INF')) {
+                const resMatch = line.match(/RESOLUTION=\d+x(\d+)/);
+                if (resMatch) {
+                    currentQuality = resMatch[1] + 'p';
+                }
+            } else if (line && !line.startsWith('#')) {
+                const streamUrl = line.startsWith('http') ? line : new URL(line, masterUrl).href;
+                streams.push({
+                    name: `Vidrock [${serverName}]${languageInfo} - ${currentQuality}`,
+                    title: mediaTitle,
+                    url: streamUrl,
+                    quality: currentQuality,
+                    size: 'Unknown',
+                    headers: PLAYBACK_HEADERS,
+                    provider: 'vidrock'
+                });
+                currentQuality = 'Unknown';
+            }
+        }
+        return streams.length > 0 ? streams : null;
+    } catch (e) {
+        console.error(`[Vidrock] Master M3U8 parse error: ${e.message}`);
+        return null;
+    }
+}

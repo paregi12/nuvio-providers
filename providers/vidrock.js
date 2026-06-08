@@ -1,6 +1,6 @@
 /**
  * vidrock - Built from src/vidrock/
- * Generated: 2026-06-08T12:32:46.096Z
+ * Generated: 2026-06-08T13:51:02.912Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -257,7 +257,9 @@ function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
       if (astraPromises.length > 0) {
         const astraResults = yield Promise.all(astraPromises);
         astraResults.forEach((subList) => {
-          streams.push(...subList);
+          if (subList && Array.isArray(subList)) {
+            streams.push(...subList);
+          }
         });
       }
       const uniqueStreams = [];
