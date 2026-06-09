@@ -82,8 +82,8 @@ async function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null
                     }
                 }
 
-                // If Astra server, parse JSON playlist
-                if (serverName === 'Astra' && videoUrl.includes('/playlist/')) {
+                // If it's a JSON playlist (Astra, Atlas, etc.), parse it
+                if (videoUrl.includes('/playlist/')) {
                     astraPromises.push(parseAstraPlaylist(videoUrl, serverName, mediaInfo, seasonNum, episodeNum));
                     continue;
                 }

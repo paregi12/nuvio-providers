@@ -1,6 +1,6 @@
 /**
  * vidrock - Built from src/vidrock/
- * Generated: 2026-06-08T13:51:02.912Z
+ * Generated: 2026-06-09T09:59:10.427Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -229,7 +229,7 @@ function getStreams(tmdbId, mediaType, seasonNum = null, episodeNum = null) {
             } catch (e) {
             }
           }
-          if (serverName === "Astra" && videoUrl.includes("/playlist/")) {
+          if (videoUrl.includes("/playlist/")) {
             astraPromises.push(parseAstraPlaylist(videoUrl, serverName, mediaInfo, seasonNum, episodeNum));
             continue;
           }
