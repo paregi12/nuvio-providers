@@ -3,6 +3,28 @@
   "version": "1.0.0",
   "scrapers": [
     {
+      "id": "hindmoviez",
+      "name": "Hindmoviez",
+      "description": "Hindmoviez streaming with multiple quality options and signed HShare links",
+      "version": "1.0.0",
+      "author": "Nuvio Team",
+      "supportedTypes": [
+        "movie",
+        "tv"
+      ],
+      "filename": "providers/hindmoviez.js",
+      "enabled": true,
+      "formats": [
+        "mp4",
+        "mkv"
+      ],
+      "logo": "https://www.google.com/s2/favicons?domain=hindmoviez.cafe&sz=128",
+      "contentLanguage": [
+        "hi",
+        "en"
+      ]
+    },
+    {
       "id": "4khdhub",
       "name": "4KHDHub",
       "description": "4KHDHub direct links",
