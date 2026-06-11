@@ -19,11 +19,14 @@ export const atobPolyfill = (str) => {
 
 export async function fetchText(url, options = {}) {
     // Note: fetch is a global provided by the Nuvio sandbox
+    // cfKiller: true bypasses Cloudflare anti-bot challenges (same pattern as hindmoviez)
     const response = await fetch(url, {
         headers: options.headers || HEADERS,
         skipSizeCheck: true, // Critical for Nuvio not to block HTML/Metadata
+        cfKiller: true,
         ...options
     });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.text();
 }
 

@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-06-01T14:20:20.706Z
+ * Generated: 2026-06-11T07:32:11.035Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -94,8 +94,12 @@ function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
     const response = yield fetch(url, __spreadValues({
       headers: options.headers || HEADERS,
-      skipSizeCheck: true
+      skipSizeCheck: true,
+      // Critical for Nuvio not to block HTML/Metadata
+      cfKiller: true
     }, options));
+    if (!response.ok)
+      throw new Error(`HTTP ${response.status}`);
     return yield response.text();
   });
 }
