@@ -188,7 +188,8 @@ async function getDetails(mainUrl) {
         headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Referer": mainUrl
-        }
+        },
+        cfKiller: true
     });
     if (!res.ok) return null;
     return await res.json();
@@ -210,7 +211,7 @@ async function getPlayback(mainUrl) {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     };
 
-    let res = await fetch(playbackUrl, { headers });
+    let res = await fetch(playbackUrl, { headers, cfKiller: true });
     if (res.status === 200) {
         return await res.json();
     } else {
@@ -226,7 +227,8 @@ async function getPlayback(mainUrl) {
         res = await fetch(playbackUrl, {
             method: 'POST',
             headers: postHeaders,
-            body
+            body,
+            cfKiller: true
         });
         if (res.ok) {
             return await res.json();
@@ -249,7 +251,7 @@ export async function extractBysekoze(url) {
 export async function extractStreamWish(url) {
     try {
         const embedUrl = url.includes('/e/') ? url : url.replace('/f/', '/e/');
-        const res = await fetch(embedUrl);
+        const res = await fetch(embedUrl, { cfKiller: true });
         if (!res.ok) return null;
         const html = await res.text();
         
@@ -283,7 +285,7 @@ export async function extractFilemoon(url) {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Referer": url
         };
-        let res = await fetch(url, { headers });
+        let res = await fetch(url, { headers, cfKiller: true });
         if (!res.ok) return null;
         let html = await res.text();
         
@@ -296,7 +298,7 @@ export async function extractFilemoon(url) {
                 "Referer": url,
                 "Accept-Language": "en-US,en;q=0.5"
             };
-            res = await fetch(iframeUrl, { headers: iframeHeaders });
+            res = await fetch(iframeUrl, { headers: iframeHeaders, cfKiller: true });
             if (res.ok) {
                 html = await res.text();
             }
@@ -324,7 +326,7 @@ export async function extractFilemoon(url) {
 
 export async function extractOkRu(url) {
     try {
-        const res = await fetch(url);
+        const res = await fetch(url, { cfKiller: true });
         if (!res.ok) return null;
         const html = await res.text();
         
@@ -361,7 +363,7 @@ export async function extractOkRu(url) {
 
 export async function extractMp4Upload(url) {
     try {
-        const res = await fetch(url);
+        const res = await fetch(url, { cfKiller: true });
         if (!res.ok) return null;
         const html = await res.text();
         
@@ -394,7 +396,7 @@ export async function extractVidStack(url) {
         const hash = url.split('#').pop().split('/').pop();
         const baseurl = getBaseUrl(url);
 
-        const res = await fetch(`${baseurl}/api/v1/video?id=${hash}`, { headers });
+        const res = await fetch(`${baseurl}/api/v1/video?id=${hash}`, { headers, cfKiller: true });
         if (!res.ok) return null;
         const encoded = (await res.text()).trim();
 
@@ -441,7 +443,8 @@ export async function extractStreamLare(url) {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                 "Referer": url
             },
-            body: JSON.stringify({ id })
+            body: JSON.stringify({ id }),
+            cfKiller: true
         });
         if (!res.ok) return null;
         const data = await res.json();

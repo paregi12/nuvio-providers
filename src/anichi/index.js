@@ -1,10 +1,13 @@
 // src/anichi/index.js
 import { API_URL, BASE_URL, HEADERS, SEARCH_HASH, DETAIL_HASH, SERVER_HASH } from './constants.js';
-import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality } from './utils.js';
+import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality, decodeToBeParsed } from './utils.js';
 import { extractOkRu, extractMp4Upload, extractStreamWish, extractSwiftplayers, extractBysekoze, extractFilemoon, extractVidStack, extractAllanimeups, extractStreamLare } from './extractors.js';
 
 async function fetchFromAnichi(url) {
-    const res = await fetch(url, { headers: HEADERS });
+    const res = await fetch(url, { 
+        headers: HEADERS,
+        cfKiller: true
+    });
     if (!res.ok) throw new Error(`Anichi HTTP ${res.status}`);
     return await res.json();
 }
@@ -19,7 +22,19 @@ async function getEpisodeLinks(showId, translationType, episodeString) {
     
     try {
         const data = await fetchFromAnichi(url);
-        return data.data?.episode?.sourceUrls || [];
+        
+        // Check for encrypted response first
+        const encrypted = data.tobeparsed || data.data?.tobeparsed;
+        if (encrypted) {
+            const decryptedText = decodeToBeParsed(encrypted);
+            if (decryptedText) {
+                const decryptedObj = JSON.parse(decryptedText);
+                return decryptedObj.data?.episode?.sourceUrls || decryptedObj.episode?.sourceUrls || [];
+            }
+        }
+        
+        // Fallback to direct unencrypted response
+        return data.data?.episode?.sourceUrls || data.episode?.sourceUrls || [];
     } catch (e) {
         console.error(`[Anichi] Failed to fetch episode links: ${e.message}`);
         return [];
@@ -134,7 +149,10 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
                 if (rawUrl.includes("/apivtwo/clock")) {
                     const fixedLink = fixUrlPath(rawUrl);
                     try {
-                        const clockRes = await fetch(fixedLink, { headers: HEADERS });
+                        const clockRes = await fetch(fixedLink, { 
+                            headers: HEADERS,
+                            cfKiller: true
+                        });
                         if (clockRes.ok) {
                             const clockData = await clockRes.json();
                             const links = clockData.links || [];

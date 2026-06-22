@@ -1,4 +1,5 @@
 // src/anichi/utils.js
+import aesjs from 'aes-js';
 import { BASE_URL } from './constants.js';
 
 // Allanime hex decryption utility (XOR 56)
@@ -81,3 +82,55 @@ export function extractQuality(url) {
     if (url.includes('360')) return '360p';
     return 'Unknown';
 }
+
+// Safe base64 decoding helper
+function safeAtob(str) {
+    if (typeof atob === 'function') return atob(str);
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+    let output = '';
+    str = String(str).replace(/=+$/, '');
+    for (let bc = 0, bs, buffer, idx = 0; buffer = str.charAt(idx++);
+        ~buffer && (bs = bc % 4 ? bs * 64 + buffer : buffer,
+            bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0
+    ) {
+        buffer = chars.indexOf(buffer);
+    }
+    return output;
+}
+
+function base64ToBytes(value) {
+    const binary = safeAtob(String(value || "").replace(/\s+/g, ""));
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        out[i] = binary.charCodeAt(i) & 0xff;
+    }
+    return out;
+}
+
+// Pre-computed SHA256 of "Xot36i3lK3:v1"
+const KEY_BYTES = new Uint8Array([162, 84, 170, 39, 196, 16, 242, 151, 189, 4, 186, 51, 160, 192, 223, 127, 244, 231, 6, 191, 58, 226, 114, 113, 198, 112, 63, 132, 231, 80, 245, 82]);
+
+export function decodeToBeParsed(encoded) {
+    try {
+        const raw = base64ToBytes(encoded);
+        if (raw.length < 29) return null;
+
+        const ivBytes = raw.slice(1, 13);
+        const ctr = new Uint8Array(16);
+        ctr.set(ivBytes, 0);
+        ctr[15] = 0x02;
+
+        const ciphertextBytes = raw.slice(13, raw.length - 16);
+
+        // Decrypt with aes-js
+        const aesCtr = new aesjs.ModeOfOperation.ctr(KEY_BYTES, new aesjs.Counter(ctr));
+        const decryptedBytes = aesCtr.decrypt(ciphertextBytes);
+
+        // Convert decrypted bytes back to UTF-8 string
+        return aesjs.utils.utf8.fromBytes(decryptedBytes);
+    } catch (e) {
+        console.error("[Anichi] Decryption failed:", e.message);
+        return null;
+    }
+}
+
