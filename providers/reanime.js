@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-06-24T16:57:16.474Z
+ * Generated: 2026-06-24T17:35:03.572Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -482,6 +482,23 @@ function extractFlixCloud(embedUrl, referer) {
       throw new Error(`FlixCloud embed HTTP ${response.status}`);
     const html = yield response.text();
     const data = parseSsrData(html);
+    try {
+      console.log("[FlixCloud] Trying remote decryption priority...");
+      const remoteStream = yield decryptFlixCloudRemote(data, origin);
+      const cleanStreamUrl2 = remoteStream.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
+      return {
+        url: cleanStreamUrl2,
+        videoId: data.video_id,
+        title: data.video_title,
+        subtitles: data.subtitles || [],
+        headers: {
+          "Referer": "https://flixcloud.cc/",
+          "User-Agent": USER_AGENT
+        }
+      };
+    } catch (remoteError) {
+      console.warn(`[FlixCloud] Remote decryption failed: ${remoteError.message}. Falling back to local WASM...`);
+    }
     const seed = data.obfuscation_seed;
     const obfuscated = data.obfuscated_crypto_data;
     const wPayload = data.w_payload;
@@ -930,6 +947,59 @@ function sha256Hex(text) {
   return __async(this, null, function* () {
     const CryptoJS = require("crypto-js");
     return CryptoJS.SHA256(text).toString(CryptoJS.enc.Hex);
+  });
+}
+function decryptFlixCloudRemote(data, origin) {
+  return __async(this, null, function* () {
+    var _a, _b;
+    const resolveResponse = yield fetch("https://enc-dec.app/api/dec-flixcloud?type=token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT
+      },
+      body: JSON.stringify({ data })
+    });
+    if (!resolveResponse.ok)
+      throw new Error(`Resolve API HTTP ${resolveResponse.status}`);
+    const resolveJson = yield resolveResponse.json();
+    const result = resolveJson.result || resolveJson;
+    const token = result.token || result.context && result.context.token;
+    const context = result.context || result;
+    if (!token) {
+      throw new Error("Could not find token in resolve API response");
+    }
+    const tokenResponse = yield fetch(`${origin}/api/m3u8/${token}`, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Referer": "https://flixcloud.cc/"
+      }
+    });
+    if (!tokenResponse.ok)
+      throw new Error(`FlixCloud token authorization HTTP ${tokenResponse.status}`);
+    const tokenJson = yield tokenResponse.json();
+    const decryptResponse = yield fetch("https://enc-dec.app/api/dec-flixcloud?type=stream", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT
+      },
+      body: JSON.stringify({
+        data: {
+          context,
+          stream_response: tokenJson,
+          token_response: tokenJson
+        }
+      })
+    });
+    if (!decryptResponse.ok)
+      throw new Error(`Decrypt API HTTP ${decryptResponse.status}`);
+    const decryptJson = yield decryptResponse.json();
+    const stream = ((_a = decryptJson.result) == null ? void 0 : _a.stream) || ((_b = decryptJson.result) == null ? void 0 : _b.url) || decryptJson.result;
+    if (!stream || typeof stream !== "string") {
+      throw new Error("Decrypt API did not return a valid stream URL");
+    }
+    return stream;
   });
 }
 
