@@ -1,6 +1,6 @@
 /**
  * netmirror - Built from src/netmirror/
- * Generated: 2026-06-06T08:44:04.688Z
+ * Generated: 2026-06-24T16:34:01.902Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -157,6 +157,8 @@ function buildNewTvHeaders(ott, extra = {}) {
 function getStreams(tmdbId, mediaType, season, episode) {
   return __async(this, null, function* () {
     try {
+      const settings = globalThis.SCRAPER_SETTINGS || {};
+      const preferred = settings.preferredPlatform || "all";
       const tmdbType = mediaType === "tv" ? "tv" : "movie";
       const tmdbResp = yield fetch(`https://api.themoviedb.org/3/${tmdbType}/${tmdbId}?api_key=${TMDB_API_KEY}`, {
         headers: {
@@ -168,7 +170,10 @@ function getStreams(tmdbId, mediaType, season, episode) {
       const title = mediaType === "tv" ? tmdbData.name : tmdbData.title;
       if (!title)
         throw new Error("Could not fetch title from TMDB");
-      const platforms = ["netflix", "primevideo", "hotstar", "disney"];
+      let platforms = ["netflix", "primevideo", "hotstar", "disney"];
+      if (preferred !== "all") {
+        platforms = [preferred, ...platforms.filter((p) => p !== preferred)];
+      }
       for (const platformKey of platforms) {
         try {
           const streams = yield fetchFromPlatform(platformKey, title, mediaType, season, episode);
@@ -296,4 +301,32 @@ function fetchEpisodesPage(contentId, seasonId, page, seasonNumber, platform, ap
     return episodes;
   });
 }
-module.exports = { getStreams };
+function onSettings() {
+  return __async(this, null, function* () {
+    return [
+      { type: "header", label: "Source Selection" },
+      {
+        type: "select",
+        key: "preferredPlatform",
+        label: "Preferred Streaming Source",
+        description: "Select which platform to try first. If content isn't found, others will be searched as fallback.",
+        options: [
+          { label: "All Sources (Ordered)", value: "all" },
+          { label: "Netflix", value: "netflix" },
+          { label: "Prime Video", value: "primevideo" },
+          { label: "Hotstar / Disney+", value: "hotstar" }
+        ],
+        defaultValue: "all"
+      },
+      { type: "header", label: "Advanced" },
+      {
+        type: "toggle",
+        key: "forceHd",
+        label: "Force HD Quality",
+        description: "Attempts to force the player into HD mode when possible.",
+        defaultValue: true
+      }
+    ];
+  });
+}
+module.exports = { getStreams, onSettings };
