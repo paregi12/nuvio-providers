@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-06-01T14:20:20.960Z
+ * Generated: 2026-06-24T16:28:41.698Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -1000,7 +1000,8 @@ function getStreams(tmdbId, mediaType = "tv", season = null, episode = null) {
               quality: "Auto",
               headers: extracted.headers,
               provider: "reanime",
-              type: "m3u8"
+              type: "m3u8",
+              subtitles: extracted.subtitles
             });
           } catch (error) {
             console.warn(`[Reanime] Local extraction failed: ${error.message}`);

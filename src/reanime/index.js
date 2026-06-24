@@ -62,7 +62,8 @@ async function getStreams(tmdbId, mediaType = "tv", season = null, episode = nul
                         quality: "Auto",
                         headers: extracted.headers,
                         provider: "reanime",
-                        type: "m3u8"
+                        type: "m3u8",
+                        subtitles: extracted.subtitles
                     });
                 } catch (error) {
                     console.warn(`[Reanime] Local extraction failed: ${error.message}`);
