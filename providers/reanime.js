@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-06-24T16:28:41.698Z
+ * Generated: 2026-06-24T16:57:16.474Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -431,9 +431,6 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
 
 // src/reanime/flixcloud.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
-var SEC_CH_UA = '"Not-A.Brand";v="99", "Chromium";v="120", "Google Chrome";v="120"';
-var SEC_CH_UA_MOBILE = "?0";
-var SEC_CH_UA_PLATFORM = '"Windows"';
 function getUrlOrigin(url) {
   if (!url)
     return "";
@@ -478,10 +475,7 @@ function extractFlixCloud(embedUrl, referer) {
     const response = yield fetch(pageUrl, {
       headers: {
         "User-Agent": USER_AGENT,
-        "Referer": referer || "https://reanime.to/",
-        "sec-ch-ua": SEC_CH_UA,
-        "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
-        "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
+        "Referer": "https://flixcloud.cc/"
       }
     });
     if (!response.ok)
@@ -504,12 +498,7 @@ function extractFlixCloud(embedUrl, referer) {
     const tokenResponse = yield fetch(`${origin}/api/m3u8/${tokenRef}`, {
       headers: {
         "User-Agent": USER_AGENT,
-        "Accept": "application/json,*/*",
-        "Referer": pageUrl,
-        "Origin": origin,
-        "sec-ch-ua": SEC_CH_UA,
-        "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
-        "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
+        "Referer": "https://flixcloud.cc/"
       }
     });
     if (!tokenResponse.ok)
@@ -538,11 +527,7 @@ function extractFlixCloud(embedUrl, referer) {
       subtitles: data.subtitles || [],
       headers: {
         "Referer": "https://flixcloud.cc/",
-        "Origin": "https://flixcloud.cc",
-        "User-Agent": USER_AGENT,
-        "sec-ch-ua": SEC_CH_UA,
-        "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
-        "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
+        "User-Agent": USER_AGENT
       }
     };
   });

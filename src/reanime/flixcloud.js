@@ -55,10 +55,7 @@ export async function extractFlixCloud(embedUrl, referer) {
     const response = await fetch(pageUrl, {
         headers: {
             "User-Agent": USER_AGENT,
-            "Referer": referer || "https://reanime.to/",
-            "sec-ch-ua": SEC_CH_UA,
-            "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
-            "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
+            "Referer": "https://flixcloud.cc/"
         }
     });
 
@@ -89,12 +86,7 @@ export async function extractFlixCloud(embedUrl, referer) {
     const tokenResponse = await fetch(`${origin}/api/m3u8/${tokenRef}`, {
         headers: {
             "User-Agent": USER_AGENT,
-            "Accept": "application/json,*/*",
-            "Referer": pageUrl,
-            "Origin": origin,
-            "sec-ch-ua": SEC_CH_UA,
-            "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
-            "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
+            "Referer": "https://flixcloud.cc/"
         }
     });
 
@@ -131,11 +123,7 @@ export async function extractFlixCloud(embedUrl, referer) {
         subtitles: data.subtitles || [],
         headers: {
             "Referer": "https://flixcloud.cc/",
-            "Origin": "https://flixcloud.cc",
-            "User-Agent": USER_AGENT,
-            "sec-ch-ua": SEC_CH_UA,
-            "sec-ch-ua-mobile": SEC_CH_UA_MOBILE,
-            "sec-ch-ua-platform": SEC_CH_UA_PLATFORM
+            "User-Agent": USER_AGENT
         }
     };
 }
