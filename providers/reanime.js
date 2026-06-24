@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-06-24T17:35:03.572Z
+ * Generated: 2026-06-24T17:41:06.742Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -404,8 +404,7 @@ function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) {
         const json = yield fetchJson(endpoint);
         if (Array.isArray(json.servers)) {
           const urls2 = json.servers.filter((server) => !language || server.dataType === language).map((server) => server.dataLink).filter(Boolean);
-          if (urls2.length > 0)
-            return [...new Set(urls2)];
+          return [...new Set(urls2)];
         }
         const text = JSON.stringify(json);
         const urls = extractDirectFlixUrls(text);

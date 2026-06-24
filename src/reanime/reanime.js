@@ -344,7 +344,7 @@ async function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) 
                     .filter(server => !language || server.dataType === language)
                     .map(server => server.dataLink)
                     .filter(Boolean);
-                if (urls.length > 0) return [...new Set(urls)];
+                return [...new Set(urls)];
             }
 
             const text = JSON.stringify(json);
