@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-06-01T14:20:20.667Z
+ * Generated: 2026-06-27T16:47:24.278Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -89,11 +89,19 @@ var HEADERS = {
 // src/animepahe/utils.js
 function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
-    const _a = options, { useProxy = true } = _a, fetchOptions = __objRest(_a, ["useProxy"]);
-    const finalUrl = url.startsWith("http") ? url : `${MAIN_URL}${url}`;
+    const _a = options, { useProxy = false } = _a, fetchOptions = __objRest(_a, ["useProxy"]);
+    const settings = globalThis.SCRAPER_SETTINGS || {};
+    const domain = settings.domain || MAIN_URL;
+    const finalUrl = url.startsWith("http") ? url : `${domain}${url}`;
     const targetUrl = useProxy ? `${PROXY_URL}${encodeURIComponent(finalUrl)}` : finalUrl;
+    const isAnimePaheUrl = finalUrl.includes("animepahe.");
     const response = yield fetch(targetUrl, __spreadValues({
-      headers: HEADERS
+      headers: __spreadValues(__spreadProps(__spreadValues({}, HEADERS), {
+        "Referer": `${domain}/`
+      }), fetchOptions.headers),
+      cfKiller: isAnimePaheUrl,
+      // Only activate native bypass for AnimePahe domains
+      skipSizeCheck: true
     }, fetchOptions));
     if (!response.ok)
       throw new Error(`HTTP ${response.status} on ${finalUrl}`);

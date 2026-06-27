@@ -1,14 +1,24 @@
 import { MAIN_URL, PROXY_URL, HEADERS } from './constants.js';
 
 export async function fetchText(url, options = {}) {
-    const { useProxy = true, ...fetchOptions } = options;
-    const finalUrl = url.startsWith('http') ? url : `${MAIN_URL}${url}`;
+    const { useProxy = false, ...fetchOptions } = options;
     
-    // Use encodeURIComponent to ensure proper URL format
+    // Read preferred domain from user settings if available
+    const settings = globalThis.SCRAPER_SETTINGS || {};
+    const domain = settings.domain || MAIN_URL;
+    
+    const finalUrl = url.startsWith('http') ? url : `${domain}${url}`;
     const targetUrl = useProxy ? `${PROXY_URL}${encodeURIComponent(finalUrl)}` : finalUrl;
-    
+    const isAnimePaheUrl = finalUrl.includes('animepahe.');
+
     const response = await fetch(targetUrl, {
-        headers: HEADERS,
+        headers: {
+            ...HEADERS,
+            "Referer": `${domain}/`,
+            ...fetchOptions.headers
+        },
+        cfKiller: isAnimePaheUrl, // Only activate native bypass for AnimePahe domains
+        skipSizeCheck: true,      // Critical for Nuvio not to block large pages
         ...fetchOptions
     });
     if (!response.ok) throw new Error(`HTTP ${response.status} on ${finalUrl}`);
