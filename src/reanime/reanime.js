@@ -16,7 +16,9 @@ export async function fetchText(url, options = {}) {
         headers: {
             ...HEADERS,
             ...(options.headers || {})
-        }
+        },
+        cfKiller: true,
+        skipSizeCheck: true
     });
     if (!response.ok) {
         throw new Error(`Reanime HTTP ${response.status}: ${finalUrl}`);

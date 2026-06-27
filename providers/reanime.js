@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-06-24T17:41:06.742Z
+ * Generated: 2026-06-27T19:07:29.654Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -94,7 +94,9 @@ function fetchText(_0) {
     const finalUrl = absolutize(url);
     console.log(`[Reanime] Fetching: ${finalUrl}`);
     const response = yield fetch(finalUrl, __spreadProps(__spreadValues({}, options), {
-      headers: __spreadValues(__spreadValues({}, HEADERS), options.headers || {})
+      headers: __spreadValues(__spreadValues({}, HEADERS), options.headers || {}),
+      cfKiller: true,
+      skipSizeCheck: true
     }));
     if (!response.ok) {
       throw new Error(`Reanime HTTP ${response.status}: ${finalUrl}`);
@@ -475,7 +477,9 @@ function extractFlixCloud(embedUrl, referer) {
       headers: {
         "User-Agent": USER_AGENT,
         "Referer": "https://flixcloud.cc/"
-      }
+      },
+      cfKiller: true,
+      skipSizeCheck: true
     });
     if (!response.ok)
       throw new Error(`FlixCloud embed HTTP ${response.status}`);
@@ -515,7 +519,9 @@ function extractFlixCloud(embedUrl, referer) {
       headers: {
         "User-Agent": USER_AGENT,
         "Referer": "https://flixcloud.cc/"
-      }
+      },
+      cfKiller: true,
+      skipSizeCheck: true
     });
     if (!tokenResponse.ok)
       throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
@@ -972,7 +978,9 @@ function decryptFlixCloudRemote(data, origin) {
       headers: {
         "User-Agent": USER_AGENT,
         "Referer": "https://flixcloud.cc/"
-      }
+      },
+      cfKiller: true,
+      skipSizeCheck: true
     });
     if (!tokenResponse.ok)
       throw new Error(`FlixCloud token authorization HTTP ${tokenResponse.status}`);

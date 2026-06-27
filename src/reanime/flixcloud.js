@@ -56,7 +56,9 @@ export async function extractFlixCloud(embedUrl, referer) {
         headers: {
             "User-Agent": USER_AGENT,
             "Referer": "https://flixcloud.cc/"
-        }
+        },
+        cfKiller: true,
+        skipSizeCheck: true
     });
 
     if (!response.ok) throw new Error(`FlixCloud embed HTTP ${response.status}`);
@@ -106,7 +108,9 @@ export async function extractFlixCloud(embedUrl, referer) {
         headers: {
             "User-Agent": USER_AGENT,
             "Referer": "https://flixcloud.cc/"
-        }
+        },
+        cfKiller: true,
+        skipSizeCheck: true
     });
 
     if (!tokenResponse.ok) throw new Error(`FlixCloud token HTTP ${tokenResponse.status}`);
@@ -422,7 +426,9 @@ async function decryptFlixCloudRemote(data, origin) {
         headers: {
             "User-Agent": USER_AGENT,
             "Referer": "https://flixcloud.cc/"
-        }
+        },
+        cfKiller: true,
+        skipSizeCheck: true
     });
     if (!tokenResponse.ok) throw new Error(`FlixCloud token authorization HTTP ${tokenResponse.status}`);
     const tokenJson = await tokenResponse.json();
