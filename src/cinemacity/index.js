@@ -149,15 +149,28 @@ async function getStreams(tmdbId, mediaType, season, episode) {
             });
         };
 
-        const processStr = (str, title, subtitles) => {
+        const processStr = (str, title, subtitles, overrideQuality) => {
             if (str.includes('.urlset/master.m3u8')) {
-                addStream(str, title, "Auto", subtitles);
+                addStream(str, title, overrideQuality || "Auto", subtitles);
             } else {
                 const urls = str.includes('[') ? str.split(',') : [str];
                 urls.forEach(u => {
                     const m = u.match(/\[(.*?)\](.*)/);
-                    if (m) addStream(m[2], title, m[1], subtitles);
-                    else addStream(u, title, extractQuality(u), subtitles);
+                    if (m) {
+                        let streamUrl = m[2];
+                        if (streamUrl.includes(',')) {
+                            const parts = streamUrl.split(',');
+                            streamUrl = parts.find(p => !p.endsWith('.m4a')) || parts[0];
+                        }
+                        addStream(streamUrl, title, overrideQuality || m[1], subtitles);
+                    } else {
+                        let streamUrl = u;
+                        if (streamUrl.includes(',')) {
+                            const parts = streamUrl.split(',');
+                            streamUrl = parts.find(p => !p.endsWith('.m4a')) || parts[0];
+                        }
+                        addStream(streamUrl, title, overrideQuality || extractQuality(streamUrl), subtitles);
+                    }
                 });
             }
         };
@@ -180,9 +193,18 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                 if (sObj && sObj.folder) {
                     const eLabel = `Episode ${episode}`;
                     const eObj = sObj.folder.find(e => (e.title || "").includes(eLabel) || (e.title || "").includes(`E${episode}`));
-                    if (eObj && eObj.file) {
+                    if (eObj) {
                         const subs = parseSubtitles(eObj.subtitle || sObj.subtitle || globalSubtitleData);
-                        processStr(eObj.file, `${animeTitle} S${season}E${episode}`, subs);
+                        if (eObj.file) {
+                            processStr(eObj.file, `${animeTitle} S${season}E${episode}`, subs);
+                        } else if (Array.isArray(eObj.folder)) {
+                            eObj.folder.forEach(item => {
+                                if (item.file) {
+                                    const quality = item.title || extractQuality(item.file);
+                                    processStr(item.file, `${animeTitle} S${season}E${episode}`, subs, quality);
+                                }
+                            });
+                        }
                     }
                 }
             }
