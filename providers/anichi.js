@@ -1,6 +1,6 @@
 /**
  * anichi - Built from src/anichi/
- * Generated: 2026-06-22T15:35:30.868Z
+ * Generated: 2026-06-27T18:52:30.177Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -610,9 +610,6 @@ var API_URL = "https://api.allanime.day/api";
 var BASE_URL = "https://allanime.day";
 var HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-  "app-version": "android_c-247",
-  "from-app": "animechicken",
-  "platformstr": "android_c",
   "Referer": "https://allmanga.to"
 };
 var SEARCH_HASH = "a24c500a1b765c68ae1d8dd85174931f661c71369c89b92b88b75a725afc471c";

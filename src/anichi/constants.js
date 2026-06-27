@@ -4,9 +4,6 @@ export const BASE_URL = "https://allanime.day";
 
 export const HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "app-version": "android_c-247",
-    "from-app": "animechicken",
-    "platformstr": "android_c",
     "Referer": "https://allmanga.to"
 };
 
