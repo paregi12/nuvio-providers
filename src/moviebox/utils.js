@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import { KEY_B64_DEFAULT, KEY_B64_ALT, BRAND_MODELS, PACKAGE_INFO, TMDB_BASE_URL, TMDB_API_KEY } from './constants.js';
+import { API_BASE, KEY_B64_DEFAULT, KEY_B64_ALT, BRAND_MODELS, PACKAGE_INFO, TMDB_BASE_URL, TMDB_API_KEY } from './constants.js';
 
 const SECRET_KEY_DEFAULT = CryptoJS.enc.Base64.parse(
     CryptoJS.enc.Base64.parse(KEY_B64_DEFAULT).toString(CryptoJS.enc.Utf8)
@@ -11,6 +11,54 @@ const SECRET_KEY_ALT = CryptoJS.enc.Base64.parse(
 let deviceId = "";
 let selectedBrand = "";
 let selectedModel = "";
+
+let bearerToken = null;
+
+function decodeJwtExpiry(token) {
+    try {
+        const parts = token.split(".");
+        if (parts.length < 2) return 0;
+        let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) {
+            base64 += '=';
+        }
+        const parsed = CryptoJS.enc.Base64.parse(base64).toString(CryptoJS.enc.Utf8);
+        const json = JSON.parse(parsed);
+        return json.exp || 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+function isTokenValid(token) {
+    if (!token) return false;
+    const exp = decodeJwtExpiry(token);
+    return exp > Date.now() / 1000 + 3600;
+}
+
+export async function getCachedToken() {
+    if (isTokenValid(bearerToken)) return bearerToken;
+
+    console.log("[MovieBox] Fetching fresh anonymous token...");
+    const url = `${API_BASE}/wefeed-mobile-bff/tab/ranking-list?tabId=0&categoryType=4516404531735022304&page=1&perPage=1`;
+    const res = await movieBoxRequest("GET", url, null, {}, true);
+    if (res && res.headers) {
+        const xUser = res.headers.get("x-user");
+        if (xUser) {
+            try {
+                const xUserJson = JSON.parse(xUser);
+                const token = xUserJson.token;
+                if (token && isTokenValid(token)) {
+                    bearerToken = token;
+                    return token;
+                }
+            } catch (e) {
+                console.error("[MovieBox] Failed to parse x-user header for token", e);
+            }
+        }
+    }
+    return bearerToken || "";
+}
 
 export function initializeSession() {
     if (!deviceId) {
@@ -88,7 +136,7 @@ export function generateXTrSignature(method, accept, contentType, url, body, use
     return `${timestamp}|2|${signatureB64}`;
 }
 
-export async function movieBoxRequest(method, url, body = null, customHeaders = {}) {
+export async function movieBoxRequest(method, url, body = null, customHeaders = {}, isTokenFetch = false) {
     initializeSession();
     const timestamp = Date.now();
     const xClientToken = generateXClientToken(timestamp);
@@ -124,6 +172,13 @@ export async function movieBoxRequest(method, url, body = null, customHeaders = 
         ...customHeaders
     };
 
+    if (!isTokenFetch) {
+        const token = await getCachedToken();
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+        }
+    }
+
     const options = {
         method,
         headers
@@ -152,6 +207,19 @@ export async function movieBoxRequest(method, url, body = null, customHeaders = 
                 parsed = JSON.parse(text);
             } catch (e) {
                 parsed = text;
+            }
+
+            if (res.headers) {
+                const xUser = res.headers.get("x-user");
+                if (xUser) {
+                    try {
+                        const xUserJson = JSON.parse(xUser);
+                        const token = xUserJson.token;
+                        if (token && isTokenValid(token)) {
+                            bearerToken = token;
+                        }
+                    } catch (e) {}
+                }
             }
             
             return {

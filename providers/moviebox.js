@@ -1,6 +1,6 @@
 /**
  * moviebox - Built from src/moviebox/
- * Generated: 2026-06-01T21:56:44.519Z
+ * Generated: 2026-06-28T10:57:35.705Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -92,6 +92,54 @@ var SECRET_KEY_ALT = import_crypto_js.default.enc.Base64.parse(
 var deviceId = "";
 var selectedBrand = "";
 var selectedModel = "";
+var bearerToken = null;
+function decodeJwtExpiry(token) {
+  try {
+    const parts = token.split(".");
+    if (parts.length < 2)
+      return 0;
+    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const parsed = import_crypto_js.default.enc.Base64.parse(base64).toString(import_crypto_js.default.enc.Utf8);
+    const json = JSON.parse(parsed);
+    return json.exp || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+function isTokenValid(token) {
+  if (!token)
+    return false;
+  const exp = decodeJwtExpiry(token);
+  return exp > Date.now() / 1e3 + 3600;
+}
+function getCachedToken() {
+  return __async(this, null, function* () {
+    if (isTokenValid(bearerToken))
+      return bearerToken;
+    console.log("[MovieBox] Fetching fresh anonymous token...");
+    const url = `${API_BASE}/wefeed-mobile-bff/tab/ranking-list?tabId=0&categoryType=4516404531735022304&page=1&perPage=1`;
+    const res = yield movieBoxRequest("GET", url, null, {}, true);
+    if (res && res.headers) {
+      const xUser = res.headers.get("x-user");
+      if (xUser) {
+        try {
+          const xUserJson = JSON.parse(xUser);
+          const token = xUserJson.token;
+          if (token && isTokenValid(token)) {
+            bearerToken = token;
+            return token;
+          }
+        } catch (e) {
+          console.error("[MovieBox] Failed to parse x-user header for token", e);
+        }
+      }
+    }
+    return bearerToken || "";
+  });
+}
 function initializeSession() {
   if (!deviceId) {
     let chars = "0123456789abcdef";
@@ -164,7 +212,7 @@ function generateXTrSignature(method, accept, contentType, url, body, useAltKey 
   return `${timestamp}|2|${signatureB64}`;
 }
 function movieBoxRequest(_0, _1) {
-  return __async(this, arguments, function* (method, url, body = null, customHeaders = {}) {
+  return __async(this, arguments, function* (method, url, body = null, customHeaders = {}, isTokenFetch = false) {
     initializeSession();
     const timestamp = Date.now();
     const xClientToken = generateXClientToken(timestamp);
@@ -194,6 +242,12 @@ function movieBoxRequest(_0, _1) {
       "x-client-info": xClientInfo,
       "x-client-status": "0"
     }, customHeaders);
+    if (!isTokenFetch) {
+      const token = yield getCachedToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    }
     const options = {
       method,
       headers
@@ -219,6 +273,19 @@ function movieBoxRequest(_0, _1) {
           parsed = JSON.parse(text);
         } catch (e) {
           parsed = text;
+        }
+        if (res.headers) {
+          const xUser = res.headers.get("x-user");
+          if (xUser) {
+            try {
+              const xUserJson = JSON.parse(xUser);
+              const token = xUserJson.token;
+              if (token && isTokenValid(token)) {
+                bearerToken = token;
+              }
+            } catch (e) {
+            }
+          }
         }
         return {
           data: parsed,
@@ -355,15 +422,6 @@ function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "", med
     const detailRes = yield movieBoxRequest("GET", subjectUrl);
     if (!detailRes || !detailRes.data || !detailRes.data.data)
       return [];
-    const xUserHeader = detailRes.headers ? detailRes.headers.get("x-user") : null;
-    let token = null;
-    if (xUserHeader) {
-      try {
-        const xUserJson = JSON.parse(xUserHeader);
-        token = xUserJson.token;
-      } catch (e) {
-      }
-    }
     const subjectIds = [];
     let originalLang = "Original";
     const dubs = detailRes.data.data.dubs;
@@ -377,12 +435,11 @@ function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "", med
       });
     }
     subjectIds.unshift({ id: subjectId, lang: originalLang });
-    const authHeaders = token ? { "Authorization": `Bearer ${token}` } : {};
     const allStreams = [];
     for (const item of subjectIds) {
       try {
         const playUrl = `${API_BASE}/wefeed-mobile-bff/subject-api/play-info?subjectId=${item.id}&se=${season}&ep=${episode}`;
-        const playRes = yield movieBoxRequest("GET", playUrl, null, authHeaders);
+        const playRes = yield movieBoxRequest("GET", playUrl, null);
         if (playRes && playRes.data && playRes.data.data) {
           const playData = playRes.data.data;
           const streamsList = playData.streams;
@@ -395,7 +452,7 @@ function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "", med
               const qualNum = parseQualityNumber(qualLabel);
               const quality = qualNum ? `${qualNum}p` : "Auto";
               const streamId = stream.id || `${item.id}|${season}|${episode}`;
-              const subtitles = yield fetchSubtitles(item.id, streamId, authHeaders, item.lang);
+              const subtitles = yield fetchSubtitles(item.id, streamId, item.lang);
               allStreams.push({
                 name: "MovieBox",
                 title: `${mediaTitle}${season > 0 ? ` S${season}E${episode}` : ""} (${item.lang}) - ${quality} [${formatType}]`,
@@ -441,12 +498,12 @@ function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "", med
     return allStreams;
   });
 }
-function fetchSubtitles(subjectId, streamId, authHeaders, langLabel) {
+function fetchSubtitles(subjectId, streamId, langLabel) {
   return __async(this, null, function* () {
     const subtitles = [];
     try {
       const streamCapUrl = `${API_BASE}/wefeed-mobile-bff/subject-api/get-stream-captions?subjectId=${subjectId}&streamId=${streamId}`;
-      const capRes = yield movieBoxRequest("GET", streamCapUrl, null, authHeaders);
+      const capRes = yield movieBoxRequest("GET", streamCapUrl, null);
       if (capRes && capRes.data && capRes.data.data && Array.isArray(capRes.data.data.extCaptions)) {
         capRes.data.data.extCaptions.forEach((cap) => {
           if (cap.url) {
@@ -463,7 +520,7 @@ function fetchSubtitles(subjectId, streamId, authHeaders, langLabel) {
     }
     try {
       const extCapUrl = `${API_BASE}/wefeed-mobile-bff/subject-api/get-ext-captions?subjectId=${subjectId}&resourceId=${streamId}&episode=0`;
-      const extRes = yield movieBoxRequest("GET", extCapUrl, null, authHeaders);
+      const extRes = yield movieBoxRequest("GET", extCapUrl, null);
       if (extRes && extRes.data && extRes.data.data && Array.isArray(extRes.data.data.extCaptions)) {
         extRes.data.data.extCaptions.forEach((cap) => {
           if (cap.url) {

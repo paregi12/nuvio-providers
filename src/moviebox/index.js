@@ -79,15 +79,6 @@ async function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "
     
     if (!detailRes || !detailRes.data || !detailRes.data.data) return [];
 
-    const xUserHeader = detailRes.headers ? detailRes.headers.get('x-user') : null;
-    let token = null;
-    if (xUserHeader) {
-        try {
-            const xUserJson = JSON.parse(xUserHeader);
-            token = xUserJson.token;
-        } catch (e) {}
-    }
-
     const subjectIds = [];
     let originalLang = "Original";
     const dubs = detailRes.data.data.dubs;
@@ -103,13 +94,12 @@ async function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "
     // Always put requested ID first
     subjectIds.unshift({ id: subjectId, lang: originalLang });
 
-    const authHeaders = token ? { "Authorization": `Bearer ${token}` } : {};
     const allStreams = [];
 
     for (const item of subjectIds) {
         try {
             const playUrl = `${API_BASE}/wefeed-mobile-bff/subject-api/play-info?subjectId=${item.id}&se=${season}&ep=${episode}`;
-            const playRes = await movieBoxRequest("GET", playUrl, null, authHeaders);
+            const playRes = await movieBoxRequest("GET", playUrl, null);
 
             if (playRes && playRes.data && playRes.data.data) {
                 const playData = playRes.data.data;
@@ -126,7 +116,7 @@ async function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "
                         const quality = qualNum ? `${qualNum}p` : "Auto";
                         
                         const streamId = stream.id || `${item.id}|${season}|${episode}`;
-                        const subtitles = await fetchSubtitles(item.id, streamId, authHeaders, item.lang);
+                        const subtitles = await fetchSubtitles(item.id, streamId, item.lang);
 
                         allStreams.push({
                             name: "MovieBox",
@@ -178,13 +168,13 @@ async function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "
     return allStreams;
 }
 
-async function fetchSubtitles(subjectId, streamId, authHeaders, langLabel) {
+async function fetchSubtitles(subjectId, streamId, langLabel) {
     const subtitles = [];
     
     // Method 1: get-stream-captions
     try {
         const streamCapUrl = `${API_BASE}/wefeed-mobile-bff/subject-api/get-stream-captions?subjectId=${subjectId}&streamId=${streamId}`;
-        const capRes = await movieBoxRequest("GET", streamCapUrl, null, authHeaders);
+        const capRes = await movieBoxRequest("GET", streamCapUrl, null);
         if (capRes && capRes.data && capRes.data.data && Array.isArray(capRes.data.data.extCaptions)) {
             capRes.data.data.extCaptions.forEach(cap => {
                 if (cap.url) {
@@ -202,7 +192,7 @@ async function fetchSubtitles(subjectId, streamId, authHeaders, langLabel) {
     // Method 2: get-ext-captions
     try {
         const extCapUrl = `${API_BASE}/wefeed-mobile-bff/subject-api/get-ext-captions?subjectId=${subjectId}&resourceId=${streamId}&episode=0`;
-        const extRes = await movieBoxRequest("GET", extCapUrl, null, authHeaders);
+        const extRes = await movieBoxRequest("GET", extCapUrl, null);
         if (extRes && extRes.data && extRes.data.data && Array.isArray(extRes.data.data.extCaptions)) {
             extRes.data.data.extCaptions.forEach(cap => {
                 if (cap.url) {
