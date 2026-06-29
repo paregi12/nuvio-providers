@@ -87,7 +87,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         // Find the playerjs script URL path
         let playerjsPath = null;
         for (const ds of decodedScripts) {
-            const m = ds.match(/['"](.*?\/playerjs\.js\??\d*)['"]/);
+            const m = ds.match(/['"]([^'"]*?\/playerjs\.js\??\d*)['"]/);
             if (m) {
                 playerjsPath = m[1];
                 break;
