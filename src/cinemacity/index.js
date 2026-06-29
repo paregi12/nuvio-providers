@@ -1,6 +1,6 @@
 // src/cinemacity/index.js
 import cheerio from 'cheerio-without-node-native';
-import { atobPolyfill, fetchText, extractQuality, decodeStream } from './utils.js';
+import { atobPolyfill, fetchText, extractQuality, decodeStream, unpackPacker } from './utils.js';
 import { MAIN_URL, HEADERS, TMDB_API_KEY } from './constants.js';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
@@ -101,14 +101,17 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                     : `${MAIN_URL}${playerjsPath.startsWith('/') ? '' : '/'}${playerjsPath}`;
                 
                 console.log(`[CinemaCity] Loading dynamic player script: ${playerjsUrl}`);
-                const playerjsCode = await fetchText(playerjsUrl);
+                let playerjsCode = await fetchText(playerjsUrl);
                 
-                const uMatch = playerjsCode.match(/u\s*:\s*(['"])(#1.*?)\1/);
-                const yMatch = playerjsCode.match(/\by\s*:\s*(['"])(.*?)\1/);
+                // Unpack dynamic playerjs script if packed
+                playerjsCode = unpackPacker(playerjsCode);
+                
+                const uMatch = playerjsCode.match(/u\s*:\s*\\?['"](#1.*?)\\?['"]/);
+                const yMatch = playerjsCode.match(/\by\s*:\s*\\?['"](.*?)\\?['"]/);
                 
                 if (uMatch) {
-                    const encryptedU = uMatch[2];
-                    const yVal = yMatch ? yMatch[2] : '';
+                    const encryptedU = uMatch[1];
+                    const yVal = yMatch ? yMatch[1] : '';
                     const decrypted = decodeStream(encryptedU, yVal);
                     if (decrypted) {
                         try {

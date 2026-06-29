@@ -129,3 +129,35 @@ export function decodeStream(x, yVal) {
     }
 }
 
+export function unpackPacker(code) {
+    if (!code || !code.includes('eval(function(p,a,c,k,e,d)')) {
+        return code;
+    }
+    try {
+        const match = code.match(/}\s*\(\s*(['"])([\s\S]*?)\1\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(['"])([\s\S]*?)\5\s*\.split\s*\(\s*(['"])\|\7\s*\)/);
+        if (!match) return code;
+        
+        const p = match[2];
+        const a = parseInt(match[3], 10);
+        const c = parseInt(match[4], 10);
+        const k = match[6].split('|');
+        
+        const e = function(c) {
+            return (c < a ? '' : e(parseInt(c / a))) + ((c = c % a) > 35 ? String.fromCharCode(c + 29) : c.toString(36));
+        };
+        
+        const d = {};
+        let count = c;
+        while (count--) {
+            d[e(count)] = k[count] || e(count);
+        }
+        
+        return p.replace(/\b\w+\b/g, (word) => {
+            return d[word] !== undefined ? d[word] : word;
+        });
+    } catch (err) {
+        return code;
+    }
+}
+
+

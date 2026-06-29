@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-06-29T06:25:37.696Z
+ * Generated: 2026-06-29T06:34:57.382Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -200,6 +200,33 @@ function decodeStream(x, yVal) {
     return x;
   }
 }
+function unpackPacker(code) {
+  if (!code || !code.includes("eval(function(p,a,c,k,e,d)")) {
+    return code;
+  }
+  try {
+    const match = code.match(/}\s*\(\s*(['"])([\s\S]*?)\1\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(['"])([\s\S]*?)\5\s*\.split\s*\(\s*(['"])\|\7\s*\)/);
+    if (!match)
+      return code;
+    const p = match[2];
+    const a = parseInt(match[3], 10);
+    const c = parseInt(match[4], 10);
+    const k = match[6].split("|");
+    const e = function(c2) {
+      return (c2 < a ? "" : e(parseInt(c2 / a))) + ((c2 = c2 % a) > 35 ? String.fromCharCode(c2 + 29) : c2.toString(36));
+    };
+    const d = {};
+    let count = c;
+    while (count--) {
+      d[e(count)] = k[count] || e(count);
+    }
+    return p.replace(/\b\w+\b/g, (word) => {
+      return d[word] !== void 0 ? d[word] : word;
+    });
+  } catch (err) {
+    return code;
+  }
+}
 
 // src/cinemacity/index.js
 function getStreams(tmdbId, mediaType, season, episode) {
@@ -282,12 +309,13 @@ function getStreams(tmdbId, mediaType, season, episode) {
         try {
           const playerjsUrl = playerjsPath.startsWith("http") ? playerjsPath : `${MAIN_URL}${playerjsPath.startsWith("/") ? "" : "/"}${playerjsPath}`;
           console.log(`[CinemaCity] Loading dynamic player script: ${playerjsUrl}`);
-          const playerjsCode = yield fetchText(playerjsUrl);
-          const uMatch = playerjsCode.match(/u\s*:\s*(['"])(#1.*?)\1/);
-          const yMatch = playerjsCode.match(/\by\s*:\s*(['"])(.*?)\1/);
+          let playerjsCode = yield fetchText(playerjsUrl);
+          playerjsCode = unpackPacker(playerjsCode);
+          const uMatch = playerjsCode.match(/u\s*:\s*\\?['"](#1.*?)\\?['"]/);
+          const yMatch = playerjsCode.match(/\by\s*:\s*\\?['"](.*?)\\?['"]/);
           if (uMatch) {
-            const encryptedU = uMatch[2];
-            const yVal = yMatch ? yMatch[2] : "";
+            const encryptedU = uMatch[1];
+            const yVal = yMatch ? yMatch[1] : "";
             const decrypted = decodeStream(encryptedU, yVal);
             if (decrypted) {
               try {
