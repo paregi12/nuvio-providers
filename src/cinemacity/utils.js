@@ -39,3 +39,93 @@ export function extractQuality(url) {
     if (low.includes("360p")) return "360p";
     return "HD";
 }
+
+const abc = "ABCDEFGHIJKLMabcdefghijklmNOPQRSTUVWXYZnopqrstuvwxyz";
+const keyStr = abc + "0123456789+/=";
+
+const sugar = (x) => {
+    if (!x) return "";
+    const dechar = String.fromCharCode;
+    const parts = x.split(dechar(61)); // '='
+    let result = '';
+    const c1 = dechar(120); // 'x'
+    for (const part of parts) {
+        let encoded = '';
+        for (const char of part) {
+            encoded += (char === c1) ? dechar(49) : dechar(48); // '1' : '0'
+        }
+        if (encoded) {
+            const chr = parseInt(encoded, 2);
+            result += dechar(chr);
+        }
+    }
+    return result.substring(0, result.length - 1);
+};
+
+const pepper = (s, n, yVal) => {
+    s = s.replace(/\+/g, "#").replace(/#/g, "+");
+    let a = parseInt(sugar(yVal), 10) * n;
+    if (n < 0) a += abc.length / 2;
+    const r = abc.substring(a * 2) + abc.substring(0, a * 2);
+    return s.replace(/[A-Za-z]/g, (c) => {
+        return r.charAt(abc.indexOf(c));
+    });
+};
+
+const saltD = (e) => {
+    const dechar = String.fromCharCode;
+    let t = "";
+    let n, r, i;
+    let s, o, u, a;
+    let f = 0;
+    e = e.replace(/[^A-Za-z0-9\+\/\=]/g, "");
+    while (f < e.length) {
+        s = keyStr.indexOf(e.charAt(f++));
+        o = keyStr.indexOf(e.charAt(f++));
+        u = keyStr.indexOf(e.charAt(f++));
+        a = keyStr.indexOf(e.charAt(f++));
+        n = s << 2 | o >> 4;
+        r = (o & 15) << 4 | u >> 2;
+        i = (u & 3) << 6 | a;
+        t = t + dechar(n);
+        if (u !== 64) {
+            t = t + dechar(r);
+        }
+        if (a !== 64) {
+            t = t + dechar(i);
+        }
+    }
+    
+    // salt._ud implementation
+    let t2 = "";
+    let n2 = 0;
+    let r2 = 0, c2 = 0, c3 = 0;
+    while (n2 < t.length) {
+        r2 = t.charCodeAt(n2);
+        if (r2 < 128) {
+            t2 += dechar(r2);
+            n2++;
+        } else if (r2 > 191 && r2 < 224) {
+            c2 = t.charCodeAt(n2 + 1);
+            t2 += dechar((r2 & 31) << 6 | c2 & 63);
+            n2 += 2;
+        } else {
+            c2 = t.charCodeAt(n2 + 1);
+            c3 = t.charCodeAt(n2 + 2);
+            t2 += dechar((r2 & 15) << 12 | (c2 & 63) << 6 | c3 & 63);
+            n2 += 3;
+        }
+    }
+    return t2;
+};
+
+export function decodeStream(x, yVal) {
+    if (x.startsWith("#1")) {
+        return saltD(pepper(x.substring(2), -1, yVal));
+    } else if (x.startsWith("#0")) {
+        return saltD(x.substring(2));
+    } else {
+        return x;
+    }
+}
+

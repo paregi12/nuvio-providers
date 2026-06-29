@@ -1,6 +1,6 @@
 // src/cinemacity/index.js
 import cheerio from 'cheerio-without-node-native';
-import { atobPolyfill, fetchText, extractQuality } from './utils.js';
+import { atobPolyfill, fetchText, extractQuality, decodeStream } from './utils.js';
 import { MAIN_URL, HEADERS, TMDB_API_KEY } from './constants.js';
 
 async function getStreams(tmdbId, mediaType, season, episode) {
@@ -69,47 +69,94 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         let fileData = null;
         let globalSubtitleData = null;
 
+        // Collect all decoded atob strings from the page scripts
+        const decodedScripts = [];
         $page('script').each((i, el) => {
-            if (fileData) return;
             const html = $page(el).html();
             if (html && html.includes('atob')) {
                 const regex = /atob\s*\(\s*(['"])(.*?)\1\s*\)/g;
                 let match;
                 while ((match = regex.exec(html)) !== null) {
                     try {
-                        const decoded = atobPolyfill(match[2]);
-                        
-                        const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || 
-                                         decoded.match(/file\s*:\s*(\[.*?\])/s) ||
-                                         decoded.match(/file\s*:\s*(\{.*?\})/s);
-                        
-                        const subMatch = decoded.match(/subtitle\s*:\s*(['"])(.*?)\1/s);
-
-                        if (fileMatch) {
-                            let rawFile = fileMatch[2] || fileMatch[1];
-                            if (rawFile && rawFile.length > 5) {
-                                if (rawFile.startsWith('[') || rawFile.startsWith('{')) {
-                                    try {
-                                        const unescaped = rawFile.replace(/\\(.)/g, '$1');
-                                        fileData = JSON.parse(unescaped);
-                                    } catch (e) {
-                                        try { fileData = JSON.parse(rawFile); } catch (e2) { fileData = rawFile; }
-                                    }
-                                } else {
-                                    fileData = rawFile;
-                                }
-                            }
-                        }
-                        
-                        if (subMatch) {
-                            globalSubtitleData = subMatch[2];
-                        }
-                        
-                        if (fileData) break;
-                    } catch (err) { /* Skip */ }
+                        decodedScripts.push(atobPolyfill(match[2]));
+                    } catch (e) {}
                 }
             }
         });
+
+        // Find the playerjs script URL path
+        let playerjsPath = null;
+        for (const ds of decodedScripts) {
+            const m = ds.match(/['"](.*?\/playerjs\.js\??\d*)['"]/);
+            if (m) {
+                playerjsPath = m[1];
+                break;
+            }
+        }
+
+        if (playerjsPath) {
+            try {
+                const playerjsUrl = playerjsPath.startsWith('http') 
+                    ? playerjsPath 
+                    : `${MAIN_URL}${playerjsPath.startsWith('/') ? '' : '/'}${playerjsPath}`;
+                
+                console.log(`[CinemaCity] Loading dynamic player script: ${playerjsUrl}`);
+                const playerjsCode = await fetchText(playerjsUrl);
+                
+                const uMatch = playerjsCode.match(/u\s*:\s*(['"])(#1.*?)\1/);
+                const yMatch = playerjsCode.match(/\by\s*:\s*(['"])(.*?)\1/);
+                
+                if (uMatch) {
+                    const encryptedU = uMatch[2];
+                    const yVal = yMatch ? yMatch[2] : '';
+                    const decrypted = decodeStream(encryptedU, yVal);
+                    if (decrypted) {
+                        try {
+                            const parsed = JSON.parse(decrypted);
+                            fileData = parsed.file || decrypted;
+                            globalSubtitleData = parsed.subtitle;
+                        } catch (e) {
+                            fileData = decrypted;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`[CinemaCity] Error fetching/decrypting player script: ${err.message}`);
+            }
+        }
+
+        // Fallback to old extraction if dynamic script fetching failed
+        if (!fileData) {
+            for (const decoded of decodedScripts) {
+                const fileMatch = decoded.match(/file\s*:\s*(['"])(.*?)\1/s) || 
+                                 decoded.match(/file\s*:\s*(\[.*?\])/s) ||
+                                 decoded.match(/file\s*:\s*(\{.*?\})/s);
+                
+                const subMatch = decoded.match(/subtitle\s*:\s*(['"])(.*?)\1/s);
+
+                if (fileMatch) {
+                    let rawFile = fileMatch[2] || fileMatch[1];
+                    if (rawFile && rawFile.length > 5) {
+                        if (rawFile.startsWith('[') || rawFile.startsWith('{')) {
+                            try {
+                                const unescaped = rawFile.replace(/\\(.)/g, '$1');
+                                fileData = JSON.parse(unescaped);
+                            } catch (e) {
+                                try { fileData = JSON.parse(rawFile); } catch (e2) { fileData = rawFile; }
+                            }
+                        } else {
+                            fileData = rawFile;
+                        }
+                    }
+                }
+                
+                if (subMatch) {
+                    globalSubtitleData = subMatch[2];
+                }
+                
+                if (fileData) break;
+            }
+        }
 
         if (!fileData) {
             console.log(`[CinemaCity] Failed to extract player data`);
