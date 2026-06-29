@@ -252,23 +252,20 @@ async function getStreams(tmdbId, mediaType, season, episode) {
             }
         } else {
             if (Array.isArray(fileData)) {
-                const sLabel = `Season ${season}`;
-                const sObj = fileData.find(s => (s.title || "").includes(sLabel) || (s.title || "").includes(`S${season}`));
-                if (sObj && sObj.folder) {
-                    const eLabel = `Episode ${episode}`;
-                    const eObj = sObj.folder.find(e => (e.title || "").includes(eLabel) || (e.title || "").includes(`E${episode}`));
-                    if (eObj) {
-                        const subs = parseSubtitles(eObj.subtitle || sObj.subtitle || globalSubtitleData);
-                        if (eObj.file) {
-                            processStr(eObj.file, `${animeTitle} S${season}E${episode}`, subs);
-                        } else if (Array.isArray(eObj.folder)) {
-                            eObj.folder.forEach(item => {
-                                if (item.file) {
-                                    const quality = item.title || extractQuality(item.file);
-                                    processStr(item.file, `${animeTitle} S${season}E${episode}`, subs, quality);
-                                }
-                            });
-                        }
+                const sObj = findSeason(fileData, season);
+                const folderList = sObj && sObj.folder ? sObj.folder : fileData;
+                const eObj = findEpisode(folderList, episode);
+                if (eObj) {
+                    const subs = parseSubtitles(eObj.subtitle || (sObj ? sObj.subtitle : null) || globalSubtitleData);
+                    if (eObj.file) {
+                        processStr(eObj.file, `${animeTitle} S${season}E${episode}`, subs);
+                    } else if (Array.isArray(eObj.folder)) {
+                        eObj.folder.forEach(item => {
+                            if (item.file) {
+                                const quality = item.title || extractQuality(item.file);
+                                processStr(item.file, `${animeTitle} S${season}E${episode}`, subs, quality);
+                            }
+                        });
                     }
                 }
             }
@@ -280,6 +277,42 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         console.error(`[CinemaCity] Error in getStreams: ${error.message}`);
         return [];
     }
+}
+
+function findSeason(folders, season) {
+    if (!folders || !Array.isArray(folders)) return null;
+    const sStr = String(season);
+    const sStrPad = sStr.padStart(2, '0');
+    
+    // 1. Regex check supporting English (Season/S) and Russian (Сезон)
+    const regex = new RegExp(`\\b(сезон|season|s|seaz)\\b.*?\\b(${sStr}|${sStrPad})\\b|\\b(${sStr}|${sStrPad})\\b.*?(сезон|season|s|seaz)`, 'i');
+    let found = folders.find(f => regex.test(f.title || ''));
+    if (found) return found;
+    
+    // 2. Fallback to matching digits
+    found = folders.find(f => {
+        const title = (f.title || '').toLowerCase();
+        return title.includes(sStr) || title.includes(sStrPad);
+    });
+    return found || folders[0];
+}
+
+function findEpisode(folderList, episode) {
+    if (!folderList || !Array.isArray(folderList)) return null;
+    const eStr = String(episode);
+    const eStrPad = eStr.padStart(2, '0');
+    
+    // 1. Regex check supporting English (Episode/Ep/E) and Russian (Серия)
+    const regex = new RegExp(`\\b(серия|episode|ep|e|seria)\\b.*?\\b(${eStr}|${eStrPad})\\b|\\b(${eStr}|${eStrPad})\\b.*?(серия|episode|ep|e|seria)`, 'i');
+    let found = folderList.find(f => regex.test(f.title || ''));
+    if (found) return found;
+    
+    // 2. Fallback to matching digits
+    found = folderList.find(f => {
+        const title = (f.title || '').toLowerCase();
+        return title.includes(eStr) || title.includes(eStrPad);
+    });
+    return found || folderList[0];
 }
 
 module.exports = { getStreams };
