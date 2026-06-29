@@ -1,6 +1,6 @@
 /**
  * cinemacity - Built from src/cinemacity/
- * Generated: 2026-06-29T06:34:57.382Z
+ * Generated: 2026-06-29T06:37:29.574Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -320,7 +320,21 @@ function getStreams(tmdbId, mediaType, season, episode) {
             if (decrypted) {
               try {
                 const parsed = JSON.parse(decrypted);
-                fileData = parsed.file || decrypted;
+                let rawFile = parsed.file || decrypted;
+                if (typeof rawFile === "string") {
+                  rawFile = rawFile.replace(/pjs'qt/g, '"');
+                  if (rawFile.startsWith("[") || rawFile.startsWith("{")) {
+                    try {
+                      fileData = JSON.parse(rawFile);
+                    } catch (e) {
+                      fileData = rawFile;
+                    }
+                  } else {
+                    fileData = rawFile;
+                  }
+                } else {
+                  fileData = rawFile;
+                }
                 globalSubtitleData = parsed.subtitle;
               } catch (e) {
                 fileData = decrypted;
