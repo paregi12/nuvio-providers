@@ -1,6 +1,6 @@
 /**
  * vidking - Built from src/vidking/
- * Generated: 2026-07-06T08:29:44.621Z
+ * Generated: 2026-07-06T12:54:46.702Z
  */
 var __async = (__this, __arguments, generator) => {
   return new Promise((resolve, reject) => {
@@ -274,10 +274,16 @@ function formatStreamsForNuvio(decryptedData, serverName, mediaDetails) {
     const data = JSON.parse(decryptedData);
     if (!data || typeof data !== "object")
       return [];
+    const playbackHeaders = {
+      "Referer": "https://www.vidking.net/",
+      "Origin": "https://www.vidking.net",
+      "User-Agent": USER_AGENT
+    };
     const formattedSubtitles = (data.subtitles || []).map((sub) => ({
       url: sub.url,
       language: getLangCode(sub.language || sub.lang),
-      name: sub.language || sub.lang || "English"
+      name: sub.language || sub.lang || "English",
+      headers: playbackHeaders
     }));
     const streams = [];
     (data.sources || []).forEach((source) => {
@@ -288,6 +294,7 @@ function formatStreamsForNuvio(decryptedData, serverName, mediaDetails) {
         title: `${mediaDetails.title} (${mediaDetails.year})`,
         url: source.url,
         quality: source.quality || "1080p",
+        headers: playbackHeaders,
         subtitles: formattedSubtitles,
         provider: "vidking"
       });

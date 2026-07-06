@@ -1,5 +1,5 @@
 // src/vidking/utils.js
-import { TMDB_API_KEY, TMDB_BASE_URL, WINGS_API_BASE, REQUEST_HEADERS } from './constants.js';
+import { TMDB_API_KEY, TMDB_BASE_URL, WINGS_API_BASE, REQUEST_HEADERS, USER_AGENT } from './constants.js';
 
 // Decryption constants and helpers
 const jl = [1116352408, 1899447441, 3049323471, 3921009573, 961987163, 1508970993, 2453635748, 2870763221, 3624381080, 310598401, 607225278, 1426881987, 1925078388, 2162078206, 2614888103, 3248222580];
@@ -208,10 +208,17 @@ export function formatStreamsForNuvio(decryptedData, serverName, mediaDetails) {
     const data = JSON.parse(decryptedData);
     if (!data || typeof data !== 'object') return [];
 
+    const playbackHeaders = {
+      "Referer": "https://www.vidking.net/",
+      "Origin": "https://www.vidking.net",
+      "User-Agent": USER_AGENT
+    };
+
     const formattedSubtitles = (data.subtitles || []).map(sub => ({
       url: sub.url,
       language: getLangCode(sub.language || sub.lang),
-      name: sub.language || sub.lang || "English"
+      name: sub.language || sub.lang || "English",
+      headers: playbackHeaders
     }));
 
     const streams = [];
@@ -222,6 +229,7 @@ export function formatStreamsForNuvio(decryptedData, serverName, mediaDetails) {
         title: `${mediaDetails.title} (${mediaDetails.year})`,
         url: source.url,
         quality: source.quality || "1080p",
+        headers: playbackHeaders,
         subtitles: formattedSubtitles,
         provider: "vidking"
       });
