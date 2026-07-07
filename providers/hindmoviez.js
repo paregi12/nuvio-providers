@@ -1,6 +1,6 @@
 /**
  * hindmoviez - Built from src/hindmoviez/
- * Generated: 2026-06-10T12:32:12.384Z
+ * Generated: 2026-07-07T15:38:06.268Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -68,7 +68,7 @@ var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-n
 // src/hindmoviez/http.js
 var HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-  "Referer": "https://hindmoviez.cafe/"
+  "Referer": "https://hindmovie.icu/"
 };
 function fetchText(_0) {
   return __async(this, arguments, function* (url, options = {}) {
@@ -167,7 +167,7 @@ function getIndexQuality(str) {
 }
 
 // src/hindmoviez/extractor.js
-var MAIN_URL = "https://hindmoviez.cafe";
+var MAIN_URL = "https://hindmovie.icu";
 var TMDB_API_KEY = "1865f43a0549ca50d341dd9ab8b29f49";
 function extractGdshine(url) {
   return __async(this, null, function* () {
