@@ -25,7 +25,13 @@ async function getStreams(tmdbId, mediaType, season, episode) {
 
         for (const platformKey of platforms) {
             try {
-                const streams = await fetchFromPlatform(platformKey, title, mediaType, season, episode);
+                let streams = [];
+                if (platformKey === 'netflix') {
+                    streams = await fetchFromNetflixDirect(tmdbId, mediaType, season, episode, title);
+                }
+                if (!streams || streams.length === 0) {
+                    streams = await fetchFromPlatform(platformKey, title, mediaType, season, episode);
+                }
                 if (streams && streams.length > 0) return streams;
             } catch (e) {
                 // Try next platform
@@ -35,6 +41,74 @@ async function getStreams(tmdbId, mediaType, season, episode) {
         return [];
     } catch (error) {
         return [];
+    }
+}
+
+async function fetchFromNetflixDirect(tmdbId, mediaType, season, episode, title) {
+    try {
+        const apiUrl = mediaType === 'tv'
+            ? `https://net27.cc/api/embed-tmdb/${tmdbId}?type=tv&s=${season}&e=${episode}`
+            : `https://net27.cc/api/embed-tmdb/${tmdbId}`;
+
+        const response = await fetch(apiUrl, {
+            headers: {
+                "Accept": "application/json, text/plain, */*",
+                "Referer": "https://net27.cc/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+            }
+        });
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        if (data.ok !== true) return null;
+
+        const playbackHeaders = {
+            "Referer": "https://videodownloader.site/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+        };
+
+        const formattedSubtitles = (data.captions || []).map(caption => {
+            let url = caption.url;
+            if (url.startsWith('/')) {
+                url = `https://net27.cc${url}`;
+            }
+            return {
+                url: url,
+                language: caption.lang || 'en',
+                name: caption.name || 'English',
+                headers: playbackHeaders
+            };
+        });
+
+        const streams = [];
+        if (data.streams && data.streams.length > 0) {
+            data.streams.forEach(stream => {
+                streams.push({
+                    name: `NetMirror (Netflix) - ${stream.resolution}p`,
+                    title: `${title}`,
+                    url: stream.url,
+                    quality: `${stream.resolution}p`,
+                    headers: playbackHeaders,
+                    subtitles: formattedSubtitles,
+                    provider: "netmirror"
+                });
+            });
+        } else if (data.mp4) {
+            streams.push({
+                name: `NetMirror (Netflix) - Auto`,
+                title: `${title}`,
+                url: data.mp4,
+                quality: `Auto`,
+                headers: playbackHeaders,
+                subtitles: formattedSubtitles,
+                provider: "netmirror"
+            });
+        }
+
+        return streams;
+    } catch (e) {
+        console.error("[NetMirror] Direct API error:", e.message);
+        return null;
     }
 }
 
