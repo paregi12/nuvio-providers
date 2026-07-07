@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-06-27T16:47:24.278Z
+ * Generated: 2026-07-07T12:10:52.013Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -189,13 +189,14 @@ function extractKwik(url) {
     try {
       const settings = globalThis.SCRAPER_SETTINGS || {};
       const baseUrl = settings.domain || "https://animepahe.com";
-      const html = yield fetchText(url, {
+      const res = yield fetch(url, {
         headers: __spreadProps(__spreadValues({}, HEADERS), {
           "Referer": `${baseUrl}/`,
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }),
-        useProxy: false
+        })
       });
+      const finalUrl = res.url || url;
+      const html = yield res.text();
       const scripts = html.match(/<script.*?>([\s\S]*?)<\/script>/g) || [];
       const matches = [];
       for (const script of scripts) {
@@ -232,7 +233,7 @@ function extractKwik(url) {
             m3u8: m3u8Url,
             mp4: mp4Url,
             headers: {
-              "Referer": "https://kwik.cx/",
+              "Referer": finalUrl,
               "Origin": "https://kwik.cx",
               "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             }

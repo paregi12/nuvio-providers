@@ -36,14 +36,15 @@ export async function extractKwik(url) {
 
         // Fetch the kwik page directly (no proxy as it blocks kwik)
         // Referer must be the active AnimePahe server URL to prevent blocking
-        const html = await fetchText(url, { 
+        const res = await fetch(url, { 
             headers: { 
                 ...HEADERS, 
                 "Referer": `${baseUrl}/`,
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            },
-            useProxy: false 
+            }
         });
+        const finalUrl = res.url || url;
+        const html = await res.text();
         
         // Find all script tags
         const scripts = html.match(/<script.*?>([\s\S]*?)<\/script>/g) || [];
@@ -93,7 +94,7 @@ export async function extractKwik(url) {
                     m3u8: m3u8Url,
                     mp4: mp4Url,
                     headers: {
-                        "Referer": "https://kwik.cx/",
+                        "Referer": finalUrl,
                         "Origin": "https://kwik.cx",
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                     }
