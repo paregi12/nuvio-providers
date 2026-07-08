@@ -133,7 +133,7 @@ async function getStreamLinks(subjectId, season = 0, episode = 0, mediaTitle = "
                         });
                     }
                 } 
-                // CNCVerse "Ep Miss Match Fix" / Fallback: resourceDetectors
+                // Fallback: resourceDetectors
                 else if (Array.isArray(playData.resourceDetectors)) {
                     for (const detector of playData.resourceDetectors) {
                         if (Array.isArray(detector.resolutionList)) {

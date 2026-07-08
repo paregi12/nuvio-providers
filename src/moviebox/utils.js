@@ -118,7 +118,7 @@ export function buildCanonicalString(method, accept, contentType, url, body, tim
     if (body) {
         const bodyWords = CryptoJS.enc.Utf8.parse(body);
         const totalBytes = bodyWords.sigBytes;
-        // CNCVerse logic: if body > 102400 bytes, only hash first 102400
+        // Chunk hashing logic: if body > 102400 bytes, only hash first 102400
         // But CryptoJS words might be tricky to slice directly. 
         // We'll stick to full body for now as most requests are small.
         bodyHash = md5(bodyWords);

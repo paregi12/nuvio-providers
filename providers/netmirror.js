@@ -1,6 +1,6 @@
 /**
  * netmirror - Built from src/netmirror/
- * Generated: 2026-07-07T14:28:53.768Z
+ * Generated: 2026-07-08T18:40:52.123Z
  */
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
@@ -147,6 +147,103 @@ function resolveApiUrl() {
     throw new Error("Failed to resolve NewTV API base URL");
   });
 }
+var cookieValue = "";
+var cookieTimestamp = 0;
+function bypass(ott) {
+  return __async(this, null, function* () {
+    if (cookieValue && Date.now() - cookieTimestamp < 54e6) {
+      return cookieValue;
+    }
+    const newUrl = "https://net52.cc";
+    const userAgent = "Mozilla/5.0 (Linux; Android 12; RMX2117 Build/SP1A.210812.016; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/147.0.7727.55 Mobile Safari/537.36 /OS.Gatu v3.0";
+    try {
+      console.log("[NetMirror] Running NetMirror Mobile bypass...");
+      const homeResponse = yield fetch(`${newUrl}/mobile/home?app=1`, {
+        headers: {
+          "User-Agent": userAgent,
+          "X-Requested-With": "app.netmirror.netmirrornew"
+        }
+      });
+      const homeHtml = yield homeResponse.text();
+      const match = homeHtml.match(/<body[^>]*data-addhash=["']([^"']+)["']/i);
+      if (!match) {
+        console.error("[NetMirror] Failed to extract data-addhash from home page");
+        return "";
+      }
+      const addhash = match[1];
+      console.log("[NetMirror] Extracted addhash:", addhash);
+      const triggerUrl = `https://userver.net52.cc/?jjoii=${encodeURIComponent(addhash)}&a=y&t=${Math.floor(Date.now() / 1e3)}`;
+      yield fetch(triggerUrl, {
+        headers: {
+          "User-Agent": userAgent
+        }
+      });
+      const verifyUrl = `${newUrl}/mobile/verify2.php`;
+      for (let count = 1; count <= 7; count++) {
+        yield new Promise((resolve) => setTimeout(resolve, 1e4));
+        console.log(`[NetMirror] Polling verify2.php (attempt ${count}/7)...`);
+        const verifyResponse = yield fetch(verifyUrl, {
+          method: "POST",
+          headers: {
+            "User-Agent": userAgent,
+            "X-Requested-With": "XMLHttpRequest",
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: `verify=${encodeURIComponent(addhash)}`
+        });
+        const verifyText = yield verifyResponse.text();
+        console.log("[NetMirror] Poll response:", verifyText);
+        if (verifyText.includes('"statusup":"All Done"')) {
+          let newCookie = "";
+          const headers = verifyResponse.headers;
+          if (headers) {
+            let setCookie = headers.get("set-cookie") || headers.get("Set-Cookie") || headers.get("SET-COOKIE");
+            if (setCookie) {
+              const match2 = setCookie.match(/t_hash_t=([^;]+)/);
+              if (match2)
+                newCookie = match2[1];
+            }
+            if (!newCookie && headers.entries) {
+              try {
+                for (const [key, val] of headers.entries()) {
+                  if (key.toLowerCase() === "set-cookie") {
+                    const match2 = val.match(/t_hash_t=([^;]+)/);
+                    if (match2) {
+                      newCookie = match2[1];
+                      break;
+                    }
+                  }
+                }
+              } catch (e) {
+              }
+            }
+            if (!newCookie && headers.forEach) {
+              try {
+                headers.forEach((val, key) => {
+                  if (key.toLowerCase() === "set-cookie") {
+                    const match2 = val.match(/t_hash_t=([^;]+)/);
+                    if (match2)
+                      newCookie = match2[1];
+                  }
+                });
+              } catch (e) {
+              }
+            }
+          }
+          cookieValue = newCookie;
+          cookieTimestamp = Date.now();
+          console.log("[NetMirror] Verification completed successfully. Cookie:", cookieValue);
+          return cookieValue;
+        }
+      }
+      console.error("[NetMirror] Verification timed out");
+    } catch (e) {
+      cookieValue = "";
+      console.error("[NetMirror] Polling bypass failed:", e.message);
+    }
+    return "";
+  });
+}
 function buildNewTvHeaders(ott, extra = {}) {
   return __spreadValues(__spreadProps(__spreadValues({}, NEW_TV_BASE_HEADERS), {
     "Ott": ott
@@ -176,13 +273,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
       }
       for (const platformKey of platforms) {
         try {
-          let streams = [];
-          if (platformKey === "netflix") {
-            streams = yield fetchFromNetflixDirect(tmdbId, mediaType, season, episode, title);
-          }
-          if (!streams || streams.length === 0) {
-            streams = yield fetchFromPlatform(platformKey, title, mediaType, season, episode);
-          }
+          const streams = yield fetchFromPlatform(platformKey, title, mediaType, season, episode);
           if (streams && streams.length > 0)
             return streams;
         } catch (e) {
@@ -194,76 +285,23 @@ function getStreams(tmdbId, mediaType, season, episode) {
     }
   });
 }
-function fetchFromNetflixDirect(tmdbId, mediaType, season, episode, title) {
-  return __async(this, null, function* () {
-    try {
-      const apiUrl = mediaType === "tv" ? `https://net27.cc/api/embed-tmdb/${tmdbId}?type=tv&s=${season}&e=${episode}` : `https://net27.cc/api/embed-tmdb/${tmdbId}`;
-      const response = yield fetch(apiUrl, {
-        headers: {
-          "Accept": "application/json, text/plain, */*",
-          "Referer": "https://net27.cc/",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
-        }
-      });
-      if (!response.ok)
-        return null;
-      const data = yield response.json();
-      if (data.ok !== true)
-        return null;
-      const playbackHeaders = {
-        "Referer": "https://videodownloader.site/",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
-      };
-      const formattedSubtitles = (data.captions || []).map((caption) => {
-        let url = caption.url;
-        if (url.startsWith("/")) {
-          url = `https://net27.cc${url}`;
-        }
-        return {
-          url,
-          language: caption.lang || "en",
-          name: caption.name || "English",
-          headers: playbackHeaders
-        };
-      });
-      const streams = [];
-      if (data.streams && data.streams.length > 0) {
-        data.streams.forEach((stream) => {
-          streams.push({
-            name: `NetMirror (Netflix) - ${stream.resolution}p`,
-            title: `${title}`,
-            url: stream.url,
-            quality: `${stream.resolution}p`,
-            headers: playbackHeaders,
-            subtitles: formattedSubtitles,
-            provider: "netmirror"
-          });
-        });
-      } else if (data.mp4) {
-        streams.push({
-          name: `NetMirror (Netflix) - Auto`,
-          title: `${title}`,
-          url: data.mp4,
-          quality: `Auto`,
-          headers: playbackHeaders,
-          subtitles: formattedSubtitles,
-          provider: "netmirror"
-        });
-      }
-      return streams;
-    } catch (e) {
-      console.error("[NetMirror] Direct API error:", e.message);
-      return null;
-    }
-  });
-}
 function fetchFromPlatform(platformKey, title, mediaType, season, episode) {
   return __async(this, null, function* () {
     const platform = PLATFORM_MAP[platformKey];
     const apiBase = yield resolveApiUrl();
+    const cookie = yield bypass(platform.ott);
+    const reqCookies = [];
+    if (cookie) {
+      reqCookies.push(`t_hash_t=${cookie}`);
+    }
+    const settings = globalThis.SCRAPER_SETTINGS || {};
+    if (settings.forceHd !== false) {
+      reqCookies.push("hd=on");
+    }
+    const cookieHeader = reqCookies.length > 0 ? { "Cookie": reqCookies.join("; ") } : {};
     const searchUrl = `${apiBase}/newtv/search.php?s=${encodeURIComponent(title)}`;
     const searchResp = yield fetch(searchUrl, {
-      headers: buildNewTvHeaders(platform.ott)
+      headers: buildNewTvHeaders(platform.ott, cookieHeader)
     });
     const searchData = yield searchResp.json();
     if (!searchData.searchResult || searchData.searchResult.length === 0)
@@ -272,7 +310,7 @@ function fetchFromPlatform(platformKey, title, mediaType, season, episode) {
     const contentId = result.id;
     const postUrl = `${apiBase}/newtv/post.php?id=${contentId}`;
     const postResp = yield fetch(postUrl, {
-      headers: buildNewTvHeaders(platform.ott, { Lastep: "", Usertoken: "" })
+      headers: buildNewTvHeaders(platform.ott, __spreadValues({ Lastep: "", Usertoken: "" }, cookieHeader))
     });
     const postData = yield postResp.json();
     let targetId = contentId;
@@ -290,21 +328,38 @@ function fetchFromPlatform(platformKey, title, mediaType, season, episode) {
         return null;
       targetId = postData.main_id || contentId;
     }
-    const playerUrl = `${apiBase}/newtv/player.php?id=${targetId}`;
-    const playerResp = yield fetch(playerUrl, {
-      headers: buildNewTvHeaders(platform.ott, { "Usertoken": "" })
+    const playlistUrl = `https://net52.cc/mobile/playlist.php?id=${targetId}&t=${encodeURIComponent(title)}&tm=${Math.floor(Date.now() / 1e3)}`;
+    const playlistHeaders = {
+      "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 5 Build/TQ3A.230901.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/149.0.7827.91 Safari/537.36 /OS.Gatu v3.0",
+      "X-Requested-With": "app.netmirror.netmirrornew",
+      "Accept": "*/*"
+    };
+    if (cookie) {
+      playlistHeaders["Cookie"] = `t_hash_t=${decodeURIComponent(cookie)}; ott=${platform.ott}`;
+    }
+    const playlistResp = yield fetch(playlistUrl, {
+      headers: playlistHeaders
     });
-    const response = yield playerResp.json();
-    if (response.status === "ok" && response.video_link) {
-      return [{
-        name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
-        title: `${title}`,
-        url: response.video_link,
-        quality: "Auto",
-        headers: {
-          Referer: response.referer || apiBase
-        }
-      }];
+    const playlistData = yield playlistResp.json();
+    if (playlistData && playlistData.length > 0) {
+      const item = playlistData[0];
+      if (item.sources && item.sources.length > 0) {
+        return item.sources.map((source) => {
+          const streamUrl = source.file.startsWith("http") ? source.file : `${apiBase}${source.file}`;
+          const qMatch = source.file.match(/[?&]q=([^&]+)/);
+          const quality = qMatch ? qMatch[1] : source.label === "Auto" ? "Auto" : source.label;
+          return {
+            name: `NetMirror (${platformKey.charAt(0).toUpperCase() + platformKey.slice(1)})`,
+            title: `${title} - ${source.label}`,
+            url: streamUrl,
+            quality,
+            headers: {
+              "Referer": `${apiBase}/mobile/home?app=1`,
+              "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 5 Build/TQ3A.230901.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/149.0.7827.91 Safari/537.36 /OS.Gatu v3.0"
+            }
+          };
+        });
+      }
     }
     return null;
   });

@@ -1,4 +1,3 @@
-export const NETMIRROR_URL = 'https://net52.cc';
 export const TMDB_API_KEY = '1865f43a0549ca50d341dd9ab8b29f49';
 
 export const PLATFORM_MAP = {
