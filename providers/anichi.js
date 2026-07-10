@@ -1,6 +1,6 @@
 /**
  * anichi - Built from src/anichi/
- * Generated: 2026-06-27T18:52:30.177Z
+ * Generated: 2026-07-10T05:42:11.056Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -722,7 +722,41 @@ function base64ToBytes(value) {
   return out;
 }
 var KEY_BYTES = new Uint8Array([162, 84, 170, 39, 196, 16, 242, 151, 189, 4, 186, 51, 160, 192, 223, 127, 244, 231, 6, 191, 58, 226, 114, 113, 198, 112, 63, 132, 231, 80, 245, 82]);
-function decodeToBeParsed(encoded) {
+var KEY_B7 = new Uint8Array([
+  34,
+  25,
+  111,
+  166,
+  175,
+  202,
+  149,
+  48,
+  159,
+  218,
+  190,
+  154,
+  53,
+  52,
+  184,
+  124,
+  210,
+  69,
+  78,
+  80,
+  239,
+  234,
+  191,
+  203,
+  219,
+  223,
+  211,
+  222,
+  103,
+  139,
+  57,
+  130
+]);
+function decodeToBeParsed(encoded, mode) {
   try {
     const raw = base64ToBytes(encoded);
     if (raw.length < 29)
@@ -732,13 +766,32 @@ function decodeToBeParsed(encoded) {
     ctr.set(ivBytes, 0);
     ctr[15] = 2;
     const ciphertextBytes = raw.slice(13, raw.length - 16);
-    const aesCtr = new import_aes_js.default.ModeOfOperation.ctr(KEY_BYTES, new import_aes_js.default.Counter(ctr));
+    const keyBytes = mode === "b7" ? KEY_B7 : KEY_BYTES;
+    const aesCtr = new import_aes_js.default.ModeOfOperation.ctr(keyBytes, new import_aes_js.default.Counter(ctr));
     const decryptedBytes = aesCtr.decrypt(ciphertextBytes);
     return import_aes_js.default.utils.utf8.fromBytes(decryptedBytes);
   } catch (e) {
     console.error("[Anichi] Decryption failed:", e.message);
     return null;
   }
+}
+function fixSourceUrls(url, sourceName) {
+  if (!url)
+    return null;
+  if (sourceName === "Ak" || url.includes("/player/vitemb")) {
+    try {
+      const queryPart = url.substring(url.indexOf("=") + 1);
+      const decoded = safeAtob(queryPart);
+      const parsed = JSON.parse(decoded);
+      if (parsed && parsed.idUrl) {
+        return parsed.idUrl;
+      }
+    } catch (e) {
+      console.error("[Anichi] Failed to fix Ak source URL:", e.message);
+    }
+    return null;
+  }
+  return url.replace(/ /g, "%20");
 }
 
 // src/anichi/extractors.js
@@ -1206,7 +1259,7 @@ function fetchFromAnichi(url) {
 }
 function getEpisodeLinks(showId, translationType, episodeString) {
   return __async(this, null, function* () {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f;
     const variables = {
       showId,
       translationType,
@@ -1215,15 +1268,17 @@ function getEpisodeLinks(showId, translationType, episodeString) {
     const url = `${API_URL}?variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(JSON.stringify({ persistedQuery: { version: 1, sha256Hash: SERVER_HASH } }))}`;
     try {
       const data = yield fetchFromAnichi(url);
-      const encrypted = data.tobeparsed || ((_a = data.data) == null ? void 0 : _a.tobeparsed);
+      const encData = data.data || data;
+      const encrypted = encData == null ? void 0 : encData.tobeparsed;
+      const mode = encData == null ? void 0 : encData._m;
       if (encrypted) {
-        const decryptedText = decodeToBeParsed(encrypted);
+        const decryptedText = decodeToBeParsed(encrypted, mode);
         if (decryptedText) {
           const decryptedObj = JSON.parse(decryptedText);
-          return ((_c = (_b = decryptedObj.data) == null ? void 0 : _b.episode) == null ? void 0 : _c.sourceUrls) || ((_d = decryptedObj.episode) == null ? void 0 : _d.sourceUrls) || [];
+          return ((_b = (_a = decryptedObj.data) == null ? void 0 : _a.episode) == null ? void 0 : _b.sourceUrls) || ((_c = decryptedObj.episode) == null ? void 0 : _c.sourceUrls) || [];
         }
       }
-      return ((_f = (_e = data.data) == null ? void 0 : _e.episode) == null ? void 0 : _f.sourceUrls) || ((_g = data.episode) == null ? void 0 : _g.sourceUrls) || [];
+      return ((_e = (_d = data.data) == null ? void 0 : _d.episode) == null ? void 0 : _e.sourceUrls) || ((_f = data.episode) == null ? void 0 : _f.sourceUrls) || [];
     } catch (e) {
       console.error(`[Anichi] Failed to fetch episode links: ${e.message}`);
       return [];
@@ -1304,7 +1359,7 @@ function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
       const resolvedTypes = yield Promise.all(sourcePromises);
       for (const { type, sources } of resolvedTypes) {
         for (const source of sources) {
-          let rawUrl = source.sourceUrl;
+          let rawUrl = fixSourceUrls(source.sourceUrl, source.sourceName);
           if (!rawUrl)
             continue;
           if (rawUrl.startsWith("--")) {

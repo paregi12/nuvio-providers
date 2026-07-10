@@ -1,6 +1,6 @@
 // src/anichi/index.js
 import { API_URL, BASE_URL, HEADERS, SEARCH_HASH, DETAIL_HASH, SERVER_HASH } from './constants.js';
-import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality, decodeToBeParsed } from './utils.js';
+import { decrypthex, fixUrlPath, getImdbId, resolveMapping, getMalTitle, extractQuality, decodeToBeParsed, fixSourceUrls } from './utils.js';
 import { extractOkRu, extractMp4Upload, extractStreamWish, extractSwiftplayers, extractBysekoze, extractFilemoon, extractVidStack, extractAllanimeups, extractStreamLare } from './extractors.js';
 
 async function fetchFromAnichi(url) {
@@ -24,9 +24,11 @@ async function getEpisodeLinks(showId, translationType, episodeString) {
         const data = await fetchFromAnichi(url);
         
         // Check for encrypted response first
-        const encrypted = data.tobeparsed || data.data?.tobeparsed;
+        const encData = data.data || data;
+        const encrypted = encData?.tobeparsed;
+        const mode = encData?._m;
         if (encrypted) {
-            const decryptedText = decodeToBeParsed(encrypted);
+            const decryptedText = decodeToBeParsed(encrypted, mode);
             if (decryptedText) {
                 const decryptedObj = JSON.parse(decryptedText);
                 return decryptedObj.data?.episode?.sourceUrls || decryptedObj.episode?.sourceUrls || [];
@@ -137,7 +139,7 @@ async function getStreams(tmdbId, mediaType, seasonNum = 1, episodeNum = 1) {
 
         for (const { type, sources } of resolvedTypes) {
             for (const source of sources) {
-                let rawUrl = source.sourceUrl;
+                let rawUrl = fixSourceUrls(source.sourceUrl, source.sourceName);
                 if (!rawUrl) continue;
 
                 // Decrypt hex links

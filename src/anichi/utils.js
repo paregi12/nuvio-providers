@@ -110,7 +110,15 @@ function base64ToBytes(value) {
 // Pre-computed SHA256 of "Xot36i3lK3:v1"
 const KEY_BYTES = new Uint8Array([162, 84, 170, 39, 196, 16, 242, 151, 189, 4, 186, 51, 160, 192, 223, 127, 244, 231, 6, 191, 58, 226, 114, 113, 198, 112, 63, 132, 231, 80, 245, 82]);
 
-export function decodeToBeParsed(encoded) {
+// Decryption key for mode "b7"
+const KEY_B7 = new Uint8Array([
+    0x22, 0x19, 0x6f, 0xa6, 0xaf, 0xca, 0x95, 0x30,
+    0x9f, 0xda, 0xbe, 0x9a, 0x35, 0x34, 0xb8, 0x7c,
+    0xd2, 0x45, 0x4e, 0x50, 0xef, 0xea, 0xbf, 0xcb,
+    0xdb, 0xdf, 0xd3, 0xde, 0x67, 0x8b, 0x39, 0x82
+]);
+
+export function decodeToBeParsed(encoded, mode) {
     try {
         const raw = base64ToBytes(encoded);
         if (raw.length < 29) return null;
@@ -122,8 +130,10 @@ export function decodeToBeParsed(encoded) {
 
         const ciphertextBytes = raw.slice(13, raw.length - 16);
 
+        const keyBytes = mode === "b7" ? KEY_B7 : KEY_BYTES;
+
         // Decrypt with aes-js
-        const aesCtr = new aesjs.ModeOfOperation.ctr(KEY_BYTES, new aesjs.Counter(ctr));
+        const aesCtr = new aesjs.ModeOfOperation.ctr(keyBytes, new aesjs.Counter(ctr));
         const decryptedBytes = aesCtr.decrypt(ciphertextBytes);
 
         // Convert decrypted bytes back to UTF-8 string
@@ -133,4 +143,23 @@ export function decodeToBeParsed(encoded) {
         return null;
     }
 }
+
+export function fixSourceUrls(url, sourceName) {
+    if (!url) return null;
+    if (sourceName === "Ak" || url.includes("/player/vitemb")) {
+        try {
+            const queryPart = url.substring(url.indexOf("=") + 1);
+            const decoded = safeAtob(queryPart);
+            const parsed = JSON.parse(decoded);
+            if (parsed && parsed.idUrl) {
+                return parsed.idUrl;
+            }
+        } catch (e) {
+            console.error("[Anichi] Failed to fix Ak source URL:", e.message);
+        }
+        return null;
+    }
+    return url.replace(/ /g, "%20");
+}
+
 
