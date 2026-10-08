@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-10-08T17:55:06.268Z
+ * Generated: 2026-10-08T18:30:42.037Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -434,7 +434,9 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
         const kwikUrl = $btn.attr("data-src");
         const btnText = $btn.text();
         const quality = extractQuality(btnText);
-        const type = btnText.toLowerCase().includes("eng") ? "Dub" : "Sub";
+        const isDub = btnText.toLowerCase().includes("eng");
+        const type = isDub ? "Dub" : "Sub";
+        const format = isDub ? "dub" : "hardsub";
         if (kwikUrl && kwikUrl.includes("kwik")) {
           promises.push(
             extractKwik(kwikUrl).then((res) => {
@@ -446,6 +448,7 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
                     url: res.m3u8,
                     quality,
                     server: "Kwik",
+                    format,
                     headers: res.headers
                   });
                 }
@@ -456,6 +459,7 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
                     url: res.mp4,
                     quality,
                     server: "Kwik",
+                    format,
                     headers: __spreadProps(__spreadValues({}, res.headers), {
                       "Referer": kwikUrl
                     })
@@ -472,7 +476,9 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
         const paheUrl = $link.attr("href");
         const linkText = $link.text();
         const quality = extractQuality(linkText);
-        const type = $link.find("span").text().toLowerCase().includes("eng") ? "Dub" : "Sub";
+        const isDub = $link.find("span").text().toLowerCase().includes("eng");
+        const type = isDub ? "Dub" : "Sub";
+        const format = isDub ? "dub" : "hardsub";
         if (paheUrl && (paheUrl.includes("pahe.win") || paheUrl.includes("pahe.me") || paheUrl.includes("pahe.li") || paheUrl.includes("kwik"))) {
           promises.push(
             extractPahe(paheUrl).then((res) => {
@@ -483,6 +489,7 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
                   url: res.url,
                   quality,
                   server: "Pahe",
+                  format,
                   headers: res.headers
                 });
               }

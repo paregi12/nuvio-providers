@@ -101,7 +101,9 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
             const kwikUrl = $btn.attr('data-src');
             const btnText = $btn.text();
             const quality = extractQuality(btnText);
-            const type = btnText.toLowerCase().includes('eng') ? 'Dub' : 'Sub';
+            const isDub = btnText.toLowerCase().includes('eng');
+            const type = isDub ? 'Dub' : 'Sub';
+            const format = isDub ? 'dub' : 'hardsub';
 
             if (kwikUrl && kwikUrl.includes('kwik')) {
                 promises.push(
@@ -114,6 +116,7 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
                                     url: res.m3u8,
                                     quality: quality,
                                     server: "Kwik",
+                                    format: format,
                                     headers: res.headers
                                 });
                             }
@@ -124,6 +127,7 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
                                     url: res.mp4,
                                     quality: quality,
                                     server: "Kwik",
+                                    format: format,
                                     headers: {
                                         ...res.headers,
                                         "Referer": kwikUrl
@@ -142,7 +146,9 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
             const paheUrl = $link.attr('href');
             const linkText = $link.text();
             const quality = extractQuality(linkText);
-            const type = $link.find('span').text().toLowerCase().includes('eng') ? 'Dub' : 'Sub';
+            const isDub = $link.find('span').text().toLowerCase().includes('eng');
+            const type = isDub ? 'Dub' : 'Sub';
+            const format = isDub ? 'dub' : 'hardsub';
 
             if (paheUrl && (paheUrl.includes('pahe.win') || paheUrl.includes('pahe.me') || paheUrl.includes('pahe.li') || paheUrl.includes('kwik'))) {
                 promises.push(
@@ -154,6 +160,7 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
                                 url: res.url,
                                 quality: quality,
                                 server: "Pahe",
+                                format: format,
                                 headers: res.headers
                             });
                         }

@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-08T17:55:06.425Z
+ * Generated: 2026-10-08T18:30:42.209Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -1171,7 +1171,10 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
             if (extracted && extracted.url) {
               const lang = (server.dataType || "sub").toUpperCase();
               const sName = server.serverName || "HD-1";
-              const softsubStr = server.softsub ? " [Softsub]" : "";
+              const isDub = lang === "DUB";
+              const isSoft = Boolean(server.softsub);
+              const format = isDub ? "dub" : isSoft ? "softsub" : "hardsub";
+              const softsubStr = isSoft ? " [Softsub]" : "";
               const streamTitle = mediaType === "movie" ? `${searchTitle} (${lang})` : `${searchTitle} - Episode ${episodeNumber} (${lang})`;
               streams.push({
                 name: `Reanime [${lang}] ${sName}${softsubStr}`,
@@ -1179,6 +1182,7 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
                 url: extracted.url,
                 quality: "Auto",
                 server: `${sName}${softsubStr}`,
+                format,
                 headers: extracted.headers,
                 provider: "reanime",
                 type: "m3u8",
@@ -1198,12 +1202,16 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
               const extracted = yield extractFlixCloud(embeds[i], wUrl);
               if (extracted && extracted.url) {
                 const streamTitle = mediaType === "movie" ? `${searchTitle} (${language.toUpperCase()})` : `${searchTitle} - Episode ${episodeNumber} (${language.toUpperCase()})`;
+                const isDub = language === "dub";
+                const hasSubs = Array.isArray(extracted.subtitles) && extracted.subtitles.length > 0;
+                const format = isDub ? "dub" : hasSubs ? "softsub" : "hardsub";
                 streams.push({
                   name: `Reanime ${language.toUpperCase()} HD-${i + 1}`,
                   title: streamTitle,
                   url: extracted.url,
                   quality: "Auto",
                   server: `HD-${i + 1}`,
+                  format,
                   headers: extracted.headers,
                   provider: "reanime",
                   type: "m3u8",
