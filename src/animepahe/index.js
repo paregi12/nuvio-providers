@@ -110,6 +110,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                                     title: `${animeTitle} - Episode ${mappedEp}`,
                                     url: res.m3u8,
                                     quality: quality,
+                                    server: "Kwik",
                                     headers: res.headers
                                 });
                             }
@@ -119,6 +120,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                                     title: `${animeTitle} - Episode ${mappedEp}`,
                                     url: res.mp4,
                                     quality: quality,
+                                    server: "Kwik",
                                     headers: {
                                         ...res.headers,
                                         "Referer": kwikUrl
@@ -148,6 +150,7 @@ async function getStreams(tmdbId, mediaType, season, episode) {
                                 title: `${animeTitle} - Episode ${mappedEp}`,
                                 url: res.url,
                                 quality: quality,
+                                server: "Pahe",
                                 headers: res.headers
                             });
                         }

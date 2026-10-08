@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-10-08T14:05:50.428Z
+ * Generated: 2026-10-08T17:46:42.023Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -440,6 +440,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     title: `${animeTitle} - Episode ${mappedEp}`,
                     url: res.m3u8,
                     quality,
+                    server: "Kwik",
                     headers: res.headers
                   });
                 }
@@ -449,6 +450,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                     title: `${animeTitle} - Episode ${mappedEp}`,
                     url: res.mp4,
                     quality,
+                    server: "Kwik",
                     headers: __spreadProps(__spreadValues({}, res.headers), {
                       "Referer": kwikUrl
                     })
@@ -475,6 +477,7 @@ function getStreams(tmdbId, mediaType, season, episode) {
                   title: `${animeTitle} - Episode ${mappedEp}`,
                   url: res.url,
                   quality,
+                  server: "Pahe",
                   headers: res.headers
                 });
               }

@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-08T17:09:51.783Z
+ * Generated: 2026-10-08T17:46:42.195Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -1228,6 +1228,7 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
                 title: streamTitle,
                 url: extracted.url,
                 quality: "Auto",
+                server: `${sName}${softsubStr}`,
                 headers: extracted.headers,
                 provider: "reanime",
                 type: "m3u8",
@@ -1252,6 +1253,7 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
                   title: streamTitle,
                   url: extracted.url,
                   quality: "Auto",
+                  server: `HD-${i + 1}`,
                   headers: extracted.headers,
                   provider: "reanime",
                   type: "m3u8",
