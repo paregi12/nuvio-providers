@@ -1,23 +1,30 @@
 import cheerio from 'cheerio-without-node-native';
 import { HEADERS, REANIME_BASE, TMDB_API_KEY, ANILIST_URL, ARM_BASE, CINEMETA_URL } from './constants.js';
 
+export function getBaseUrl() {
+    const settings = (typeof globalThis !== 'undefined' && globalThis.SCRAPER_SETTINGS) || {};
+    return settings.domain || REANIME_BASE;
+}
+
 function absolutize(path) {
     if (!path) return "";
     if (path.startsWith("http")) return path;
     const cleanPath = path.startsWith("/") ? path : `/${path}`;
-    return `${REANIME_BASE}${cleanPath}`;
+    return `${getBaseUrl()}${cleanPath}`;
 }
 
 export async function fetchText(url, options = {}) {
     const finalUrl = absolutize(url);
-    console.log(`[Reanime] Fetching: ${finalUrl}`);
+    const domain = getBaseUrl();
+    const isReanime = finalUrl.includes('reanime.');
     const response = await fetch(finalUrl, {
         ...options,
         headers: {
             ...HEADERS,
+            ...(isReanime ? { "Referer": `${domain}/` } : {}),
             ...(options.headers || {})
         },
-        cfKiller: true,
+        cfKiller: isReanime,
         skipSizeCheck: true
     });
     if (!response.ok) {
@@ -26,15 +33,142 @@ export async function fetchText(url, options = {}) {
     return await response.text();
 }
 
-async function fetchJson(url, options = {}) {
+export async function fetchJson(url, options = {}) {
     const text = await fetchText(url, {
         ...options,
         headers: {
-            "Accept": "application/json",
+            "Accept": "application/json, text/plain, */*",
             ...(options.headers || {})
         }
     });
     return JSON.parse(text);
+}
+
+export function toHomeItem(item) {
+    if (!item) return null;
+    const id = item.anime_id || item.slug || item.id;
+    if (!id) return null;
+
+    let title = "";
+    if (typeof item.title === 'object' && item.title !== null) {
+        title = item.title.english || item.title.romaji || item.title.native || "";
+    } else if (typeof item.title === 'string') {
+        title = item.title;
+    } else if (item.name) {
+        title = item.name;
+    }
+    if (!title) title = String(id);
+
+    let poster = null;
+    if (item.cover_image) {
+        poster = item.cover_image.extra_large || item.cover_image.large || item.cover_image.medium || null;
+    } else if (item.image) {
+        poster = item.image;
+    } else if (item.poster) {
+        poster = item.poster;
+    }
+
+    const banner = item.banner_image || item.banner || null;
+    const description = item.description || null;
+    const rating = item.average_score ? (item.average_score / 10).toFixed(1) : (item.score ? String(item.score) : null);
+    const year = item.season_year ? String(item.season_year) : (item.year ? String(item.year) : null);
+    const episodes = item.episodes != null ? Number(item.episodes) : (item.totalEpisodes != null ? Number(item.totalEpisodes) : null);
+    const subEpisodes = item.subbed != null ? Number(item.subbed) : null;
+    const dubEpisodes = item.dubbed != null ? Number(item.dubbed) : null;
+
+    return {
+        id: String(id),
+        title,
+        poster,
+        banner,
+        description,
+        rating,
+        year,
+        episodes,
+        subEpisodes,
+        dubEpisodes
+    };
+}
+
+export async function fetchPopular(limit = 24, page = 1) {
+    const offset = (page - 1) * limit;
+    return await fetchJson(`/api/v1/search?sort=popularity_desc&limit=${limit}&offset=${offset}`);
+}
+
+export async function fetchLatestAired(limit = 24, lang = "sub") {
+    return await fetchJson(`/api/v1/home/latest-aired?limit=${limit}&lang=${lang}`);
+}
+
+export async function fetchTopRated(limit = 24, page = 1) {
+    const offset = (page - 1) * limit;
+    return await fetchJson(`/api/v1/search?sort=score_desc&limit=${limit}&offset=${offset}`);
+}
+
+export async function searchAnimeApi(query, page = 1, limit = 36) {
+    const offset = (page - 1) * limit;
+    return await fetchJson(`/api/v1/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}&sort=popularity_desc`);
+}
+
+export async function fetchAnimeDetails(slug) {
+    return await fetchJson(`/api/v1/anime/${slug}`);
+}
+
+export async function fetchAnimeEpisodes(slug, limit = 2000) {
+    return await fetchJson(`/api/v1/anime/${slug}/episodes?limit=${limit}`);
+}
+
+export async function fetchAnimeRecommendations(slug) {
+    try {
+        const data = await fetchJson(`/api/v1/anime/${slug}/recommendations`);
+        return data.recommendations || data.data || [];
+    } catch (_) {
+        return [];
+    }
+}
+
+export async function fetchThumbnails(anilistId) {
+    if (!anilistId) return null;
+    try {
+        const data = await fetchJson(`/api/thumbnails/${anilistId}`);
+        return data.thumbnails || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+export async function fetchFlixServers(anilistId, episodeNumber, slug) {
+    const referer = slug ? `${getBaseUrl()}/watch/${slug}?ep=${episodeNumber}` : `${getBaseUrl()}/home`;
+    try {
+        const json = await fetchJson(`/api/flix/${anilistId}/${episodeNumber}`, {
+            headers: {
+                "Referer": referer
+            }
+        });
+        if (json && json.success && Array.isArray(json.servers)) {
+            return json.servers;
+        }
+    } catch (_) {}
+    return [];
+}
+
+export async function getAnilistMediaInfo(alId) {
+    if (!alId) return { title: "", year: null };
+    const query = 'query($id:Int){Media(id:$id,type:ANIME){title{english romaji}startDate{year}}}';
+    try {
+        const json = await fetchJson(ANILIST_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, variables: { id: parseInt(alId, 10) } })
+        });
+        const media = json.data?.Media;
+        if (media) {
+            return {
+                title: media.title?.english || media.title?.romaji || "",
+                year: media.startDate?.year || null
+            };
+        }
+    } catch (_) {}
+    return { title: "", year: null };
 }
 
 export async function getTmdbInfo(tmdbId, mediaType) {
@@ -248,10 +382,9 @@ function collectSlugsFromHtml(html) {
 
 export async function searchReanimeAnime(query, year, targetAnilistId = null) {
     const endpoints = [
+        `/api/v1/search?q=${encodeURIComponent(query)}&limit=36&sort=popularity_desc`,
         `/api/search?q=${encodeURIComponent(query)}`,
         `/api/anime/search?q=${encodeURIComponent(query)}`,
-        `/api/search/anime?q=${encodeURIComponent(query)}`,
-        `/search?keyword=${encodeURIComponent(query)}`,
         `/search?q=${encodeURIComponent(query)}`
     ];
 
@@ -261,12 +394,12 @@ export async function searchReanimeAnime(query, year, targetAnilistId = null) {
             const text = await fetchText(endpoint);
             if (text.trim().startsWith("{") || text.trim().startsWith("[")) {
                 const json = JSON.parse(text);
-                const list = json.data || json.results || json.anime || json;
+                const list = json.results || json.data || json.anime || (Array.isArray(json) ? json : []);
                 if (Array.isArray(list)) {
                     list.forEach(item => {
                         const slug = item.anime_id || item.slug || item.id || item.url;
-                        const cleanSlug = String(slug).replace(/-[a-z0-9]{6}$/, '');
-                        if (cleanSlug) {
+                        if (slug) {
+                            const cleanSlug = String(slug);
                             const alId = extractAnilistId(item);
                             candidates.push({
                                 slug: cleanSlug,
@@ -340,13 +473,17 @@ async function fetchEpisodeSourcesApi(slug, episodeNumber, language, anilistId) 
 
     for (const endpoint of endpoints) {
         try {
-            const json = await fetchJson(endpoint);
+            const json = await fetchJson(endpoint, {
+                headers: {
+                    "Referer": `${getBaseUrl()}/watch/${slug}?ep=${episodeNumber}`
+                }
+            });
             if (Array.isArray(json.servers)) {
                 const urls = json.servers
                     .filter(server => !language || server.dataType === language)
                     .map(server => server.dataLink)
                     .filter(Boolean);
-                return [...new Set(urls)];
+                if (urls.length > 0) return [...new Set(urls)];
             }
 
             const text = JSON.stringify(json);

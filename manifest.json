@@ -28,7 +28,7 @@
       "id": "reanime",
       "name": "Reanime",
       "description": "Reanime anime streaming with automated AniList mapping and subtitle support",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -36,6 +36,7 @@
       ],
       "filename": "providers/reanime.js",
       "enabled": true,
+      "hasSettings": true,
       "formats": [
         "m3u8"
       ],
