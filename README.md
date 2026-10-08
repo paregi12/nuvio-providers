@@ -1,19 +1,150 @@
-# Nuvio Providers
+# Nuvio Anime Providers
 
-A collection of streaming providers for the Nuvio app. Providers are JavaScript modules that fetch streams from various sources.
+A collection of anime streaming providers for the Nuvio app. Providers are JavaScript modules executed in QuickJS/Hermes to fetch streams, episode catalogs, and metadata from anime source sites.
 
-📖 **[Read the Comprehensive Developer Guide](DOCUMENTATION.md)**
+📖 **[Read the Developer Guide](DOCUMENTATION.md)** | 🔄 **[Anime Sync & Mapping Guide](ANIME_SYNC_GUIDE.md)**
+
+---
+
+## Active Providers
+
+| Provider | Description | Formats | Languages |
+| :--- | :--- | :--- | :--- |
+| **AnimePahe** (`animepahe`) | Fast Sub and Dub anime streaming with multiple resolutions (1080p, 720p, 360p) | HLS (m3u8), MP4 | Sub, Dub |
+| **Reanime** (`reanime`) | High-definition anime streaming with automated AniList mapping and subtitle support | HLS (m3u8) | Sub, Dub |
+
+---
 
 ## Quick Start
 
 ### Using in Nuvio App
 
 1. Open **Nuvio** > **Settings** > **Plugins**
-2. Add this repository URL:
+2. Add this repository manifest URL:
    ```
-   https://raw.githubusercontent.com/tapframe/nuvio-providers/refs/heads/main
+   https://raw.githubusercontent.com/paregi12/nuvio-providers/refs/heads/main/manifest.json
    ```
-3. Refresh and enable the providers you want
+3. Refresh and enable **AnimePahe** and **Reanime**.
+
+---
+
+## Architecture & How It Works
+
+Nuvio operates as an anime-focused streaming client with support for **AniList Enrichment**:
+
+- **AniList Enrichment ON**: The app resolves anime titles, cast, voice actors, trailers, and studios from AniList, while querying active providers for playable video streams and episode lists.
+- **AniList Enrichment OFF**: The app queries the provider directly via `getAnimeInfo(contentId)` / `getDetails(contentId)` to fetch the title, synopsis, poster, age rating, episode lists (with sub/dub counts and filler badges), and related anime directly from the source site.
+
+---
+
+## Provider Methods
+
+Anime providers export standard asynchronous functions:
+
+### 1. `getStreams(contentId, mediaType, season, episode)`
+Fetches playable video streams for a specific episode or movie.
+- `contentId`: Anime ID (AniList ID or source anime identifier / slug).
+- `mediaType`: `"tv"` or `"movie"`.
+- `season`: Season number (or `null`).
+- `episode`: Episode number (or `1` for movies).
+
+**Return Format:**
+```javascript
+[
+  {
+    "name": "AnimePahe [HLS] (1080p Sub)",
+    "title": "Episode 1",
+    "url": "https://.../master.m3u8",
+    "quality": "1080p",
+    "headers": {
+      "Referer": "https://kwik.cx/",
+      "User-Agent": "Mozilla/5.0..."
+    },
+    "subtitles": [
+      {
+        "url": "https://.../sub.vtt",
+        "language": "en",
+        "name": "English"
+      }
+    ]
+  }
+]
+```
+
+### 2. `getAnimeInfo(contentId)` / `getDetails(contentId)` (Optional / Source Extraction)
+Provides full anime details and episode listings directly from the source site when AniList enrichment is turned off or for direct plugin browsing.
+
+**Return Format:**
+```javascript
+{
+  "id": "naruto-shippuden",
+  "title": "Naruto Shippuden",
+  "description": "Naruto Uzumaki returns to the Hidden Leaf Village...",
+  "poster": "https://.../poster.jpg",
+  "banner": "https://.../banner.jpg",
+  "status": "Completed",
+  "genres": ["Action", "Adventure", "Fantasy"],
+  "rating": 8.2,
+  "ageRating": "PG-13",
+  "totalEpisodes": 500,
+  "subEpisodes": 500,
+  "dubEpisodes": 500,
+  "episodes": [
+    {
+      "id": "naruto-shippuden-episode-1",
+      "number": 1,
+      "title": "Homecoming",
+      "thumbnail": "https://.../thumb1.jpg",
+      "isFiller": false,
+      "isSub": true,
+      "isDub": true
+    },
+    {
+      "id": "naruto-shippuden-episode-57",
+      "number": 57,
+      "title": "Mother Nature's Fury",
+      "thumbnail": "https://.../thumb57.jpg",
+      "isFiller": true,
+      "isSub": true,
+      "isDub": true
+    }
+  ],
+  "relations": [
+    {
+      "id": "naruto",
+      "title": "Naruto",
+      "type": "tv",
+      "poster": "https://.../naruto.jpg",
+      "relationType": "Prequel"
+    }
+  ]
+}
+```
+
+### 3. `getHome()` / `getMainPage()` (Optional / Home Feeds)
+Supplies catalogs to display on the Nuvio home screen.
+```javascript
+[
+  {
+    "title": "Latest Anime",
+    "items": [
+      {
+        "id": "frieren-s1",
+        "title": "Frieren: Beyond Journey's End",
+        "poster": "https://.../frieren.jpg",
+        "type": "tv",
+        "episodes": 28,
+        "subEpisodes": 28,
+        "dubEpisodes": 28,
+        "ageRating": "PG-13"
+      }
+    ]
+  }
+]
+```
+
+### 4. `onSettings()` (Optional / In-App Settings)
+Supplies a configuration layout for the provider settings modal in Nuvio.
 
 ---
 
@@ -21,246 +152,61 @@ A collection of streaming providers for the Nuvio app. Providers are JavaScript 
 
 ```
 nuvio-providers/
-├── src/                    # Source files (multi-file development)
-│   ├── vixsrc/
+├── src/                    # Source files (multi-file modular development)
+│   ├── animepahe/
 │   │   ├── index.js        # Main entry point
-│   │   ├── extractor.js    # Stream extraction
-│   │   ├── http.js         # HTTP utilities
-│   │   └── ...
-│   └── uhdmovies/
-│       └── ...
+│   │   ├── extractors.js   # Stream decoders (Kwik, Pahe)
+│   │   ├── utils.js        # Search and mapping utilities
+│   │   └── constants.js
+│   └── reanime/
+│       ├── index.js        # Entry point
+│       ├── reanime.js      # Embed resolver
+│       └── flixcloud.js    # Decryption
 │
-├── providers/              # Output directory (ready-to-use files)
-│   ├── vixsrc.js           # Bundled from src/vixsrc/
-│   ├── uhdmovies.js
-│   └── ...
+├── providers/              # Bundled output (generated by build.js)
+│   ├── animepahe.js
+│   └── reanime.js
 │
-├── manifest.json           # Provider registry
-├── build.js                # Build script
+├── manifest.json           # Plugin repository manifest
+├── build.js                # esbuild bundle script
 └── package.json
 ```
 
 ---
 
-## Development
+## Development & Building
 
-There are two ways to create providers:
-
-### Option 1: Single-File Provider
-
-For simple providers, you can create a single JavaScript file directly in the `providers/` directory.
-
-**Important:** The app's JavaScript engine (Hermes) has limitations with `async/await` in dynamic code.
-- **Recommended**: Use Promise chains (`.then()`).
-- **Alternative**: Use `async/await` and run the transpiler command (see below).
-
-**Example (Promise Chains):**
-```javascript
-// providers/myprovider.js
-
-function getStreams(tmdbId, mediaType, season, episode) {
-  console.log(`[MyProvider] Fetching ${mediaType} ${tmdbId}`);
-  
-  return fetch(`https://api.example.com/streams/${tmdbId}`)
-    .then(response => response.json())
-    .then(data => {
-      return data.streams.map(s => ({
-        name: "MyProvider",
-        title: s.title,
-        url: s.url,
-        quality: s.quality
-      }));
-    })
-    .catch(error => {
-      console.error('[MyProvider] Error:', error.message);
-      return [];
-    });
-}
-
-module.exports = { getStreams };
-```
-
-To register the provider, add it to `manifest.json`:
-```json
-{
-  "id": "myprovider",
-  "name": "My Provider",
-  "filename": "providers/myprovider.js",
-  "supportedTypes": ["movie", "tv"],
-  "enabled": true
-}
-```
-
-### Option 2: Multi-File Provider (Recommended)
-
-For complex providers, use the `src/` directory. This allows you to split code into multiple files. The build script automatically handles bundling and `async/await` transpilation.
-
-1. **Create source folder:**
+1. **Install dependencies:**
    ```bash
-   mkdir -p src/myprovider
+   npm install
    ```
 
-2. **Create entry point** (`src/myprovider/index.js`):
-   ```javascript
-   import { fetchPage } from './http.js';
-   import { extractStreams } from './extractor.js';
-
-   // async/await is fully supported here
-   async function getStreams(tmdbId, mediaType, season, episode) {
-     const page = await fetchPage(tmdbId, mediaType, season, episode);
-     return extractStreams(page);
-   }
-
-   module.exports = { getStreams };
-   ```
-
-3. **Build:**
+2. **Build providers:**
    ```bash
-   node build.js myprovider
+   # Build all providers
+   node build.js
+
+   # Build specific provider
+   node build.js animepahe
+   node build.js reanime
    ```
 
-This generates `providers/myprovider.js`.
-
----
-
-## Building
-
-### Build Source Providers
-Bundles files from `src/<provider>/` into `providers/<provider>.js`.
-
-```bash
-# Build specific provider
-node build.js vixsrc
-
-# Build multiple
-node build.js vixsrc uhdmovies
-
-# Build all source providers
-node build.js
-```
-
-### Transpile Single-File Providers
-If you wrote a single-file provider using `async/await`, you must transpile it for compatibility.
-
-```bash
-# Transpile specific file
-node build.js --transpile myprovider.js
-
-# Transpile all applicable files in providers/
-node build.js --transpile
-```
-
-### Watch Mode
-Automatically rebuilds when files change.
-```bash
-npm run build:watch
-```
-
----
-
-## Testing
-
-Create a test script to identify issues before loading into the app.
-
-```javascript
-// test-myprovider.js
-const { getStreams } = require('./providers/myprovider.js');
-
-async function test() {
-  console.log('Testing...');
-  const streams = await getStreams('872585', 'movie'); // Oppenheimer ID
-  console.log('Streams found:', streams.length);
-}
-
-test();
-```
-
-Run with Node.js:
-```bash
-node test-myprovider.js
-```
-
----
-
-## Stream Object Format
-
-Providers must return an array of stream objects:
-
-```javascript
-{
-  name: "Provider Name",           // Provider identifier
-  title: "1080p Stream",           // Stream description
-  url: "https://...",              // Direct stream URL (m3u8, mp4, mkv)
-  quality: "1080p",                // Quality label
-  size: "2.5 GB",                  // Optional file size
-  headers: {                       // Optional headers for playback
-    "Referer": "https://source.com",
-    "User-Agent": "Mozilla/5.0..."
-  }
-}
-```
+3. **Watch mode:**
+   ```bash
+   npm run build:watch
+   ```
 
 ---
 
 ## Available Modules
 
-Providers have access to these modules via `require()`:
-
-| Module | Usage |
-|--------|-------|
-| `cheerio-without-node-native` | HTML parsing |
-| `crypto-js` | Encryption/decryption |
-| `axios` | HTTP requests |
-
-Native `fetch` and `console` are also available globally.
-
----
-
-## Manifest Options
-
-The `manifest.json` file controls provider settings.
-
-```json
-{
-  "id": "unique-id",
-  "name": "Display Name",
-  "description": "Short description",
-  "version": "1.0.0",
-  "author": "Your Name",
-  "supportedTypes": ["movie", "tv"],
-  "filename": "providers/file.js",
-  "enabled": true,
-  "logo": "https://url/to/logo.png",
-  "contentLanguage": ["en", "hi"],
-  "formats": ["mkv", "mp4"],
-  "limited": false,
-  "disabledPlatforms": ["ios"],
-  "supportsExternalPlayer": true
-}
-```
-
----
-
-## Contributing
-
-1. **Fork the repository**
-2. **Create a branch**: `git checkout -b add-myprovider`
-3. **Develop and test**
-4. **Build**: `node build.js myprovider`
-5. **Commit**: `git commit -m "Add MyProvider"`
-6. **Push and PR**
+Providers run in QuickJS / Hermes with access to:
+- `cheerio-without-node-native` (HTML parsing)
+- `crypto-js` / `aes-js` (Decryption)
+- Native `fetch`, `setTimeout`, `btoa`, `atob`, and `URLSearchParams` polyfills.
 
 ---
 
 ## License
 
 This project is licensed under the **GNU General Public License v3.0**.
-
----
-
-## Disclaimer
-
-- **No content is hosted by this repository.**
-- Providers fetch publicly available content from third-party websites.
-- Users are responsible for compliance with local laws.
-- For DMCA concerns, contact the actual content hosts.

@@ -1,406 +1,285 @@
-# Nuvio Provider Development Guide
+# Nuvio Anime Provider Developer Guide
 
-This is a comprehensive guide to developing streaming providers for the Nuvio app. It covers everything from setting up your environment to publishing your first provider.
+This guide covers everything required to develop anime streaming providers for the Nuvio app.
+
+---
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
 2. [Prerequisites](#prerequisites)
-3. [Architecture Overview](#architecture-overview)
-4. [Setting Up Your Workspace](#setting-up-your-workspace)
-5. [Tutorial: Building a Provider from Scratch](#tutorial-building-a-provider-from-scratch)
-6. [The Provider API](#the-provider-api)
-   - [Input Parameters](#input-parameters)
-   - [Output Format](#output-format)
-   - [Subtitle Support](#subtitle-support)
-7. [Advanced Topics](#advanced-topics)
-   - [Async/Await & Transpilation](#asyncawait--transpilation)
-   - [HTML Parsing with Cheerio](#html-parsing-with-cheerio)
-   - [Handling Encryption](#handling-encryption)
-   - [Provider Settings](#provider-settings)
-8. [Testing & Debugging](#testing--debugging)
-9. [Publishing](#publishing)
+3. [Runtime Environment](#runtime-environment)
+4. [Provider API Specification](#provider-api-specification)
+   - [1. getStreams](#1-getstreams)
+   - [2. getAnimeInfo / getDetails](#2-getanimeinfo--getdetails)
+   - [3. getHome / getMainPage](#3-gethome--getmainpage)
+   - [4. onSettings](#4-onsettings)
+5. [AniList Enrichment Dual-Mode](#anilist-enrichment-dual-mode)
+6. [Filler Episodes & Episode Indicators](#filler-episodes--episode-indicators)
+7. [Subtitles & Playback Headers](#subtitles--playback-headers)
+8. [Tutorial: Creating an Anime Provider](#tutorial-creating-an-anime-provider)
+9. [Building & Testing](#building--testing)
 
 ---
 
 ## Introduction
 
-A **Provider** in Nuvio is a JavaScript module that finds video streams for movies and TV shows. When a user selects a title (e.g., "Inception"), the app calls your provider with the movie's TMDB ID. Your provider's job is to search the web (programmatically) and return a list of playable video URLs.
+A **Provider** in Nuvio is a JavaScript module that interfaces directly with anime streaming websites to locate playable video streams, episode catalogs, and metadata.
 
-Providers run locally on the user's device inside the Nuvio app's JavaScript engine (Hermes).
+Providers execute locally inside Nuvio's QuickJS runtime.
 
 ---
 
 ## Prerequisites
 
-To develop providers, you need:
-- **Node.js**: Version 16 or higher.
-- **Code Editor**: VS Code is recommended.
-- **Knowledge**: Basic JavaScript (ES6+), Promises, async/await, and HTTP requests.
+- **Node.js**: v18 or higher.
+- **npm**: Package manager for build tools.
+- **Knowledge**: JavaScript (ES6+), async/await, Cheerio (DOM parsing), and HTTP networking.
 
 ---
 
-## Architecture Overview
+## Runtime Environment
 
-Nuvio providers operate in a specific environment:
-- **Engine**: Hermes (React Native).
-- **Environment**: "Neutral" (neither distinct Browser nor Node.js, but supports common APIs like `fetch`).
-- **Restrictions**: 
-  - Cannot use native Node.js modules like `fs` or `path` inside the provider code.
-  - `async/await` has limited support in dynamically loaded code, so we use a build step to transpile it.
-
-### File Structure
-- **`src/`**: Where you write your code. One folder per provider (e.g., `src/vidlink/`).
-- **`providers/`**: Where the bundled code lives (e.g., `providers/vidlink.js`). **Do not edit these files manually.**
-- **`build.js`**: The script that converts your `src` code into the final `providers` file.
+Nuvio runs provider code inside a lightweight QuickJS JavaScript engine with built-in polyfills:
+- Global `fetch(url, options)` with automatic header and redirect support.
+- Global `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`.
+- Global `atob`, `btoa`, `URL`, and `URLSearchParams`.
+- `cheerio-without-node-native` (HTML selector engine).
+- `crypto-js` and `aes-js` (Encryption/decryption).
 
 ---
 
-## Setting Up Your Workspace
+## Provider API Specification
 
-1. **Clone the Repository**
-   ```bash
-   git clone https://github.com/tapframe/nuvio-providers.git
-   cd nuvio-providers
-   ```
+Every provider must export `getStreams`. To support full direct streaming when AniList enrichment is off, it should also export `getAnimeInfo` (or `getDetails`).
 
-2. **Install Tools**
-   Install the build dependencies (esbuild, etc.):
-   ```bash
-   npm install
-   ```
+### 1. `getStreams`
 
----
-
-## Tutorial: Building a Provider from Scratch
-
-Let's build a fictional provider called **"StreamFlix"**.
-
-### Step 1: Create the Source Directory
-
-Create a folder for your source code:
-```bash
-mkdir -p src/streamflix
-```
-
-### Step 2: Create Utility Modules
-
-It is best practice to split your code. Let's create `src/streamflix/http.js` to handle networking.
-
-**`src/streamflix/http.js`**
-```javascript
-export const HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36",
-    "Referer": "https://streamflix.example/"
-};
-
-export async function fetchText(url) {
-    console.log(`[StreamFlix] Fetching: ${url}`);
-    const response = await fetch(url, { headers: HEADERS });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.text();
-}
-```
-
-### Step 3: Implement Extraction Logic
-
-Now create `src/streamflix/extractor.js` to find the video.
-
-**`src/streamflix/extractor.js`**
-```javascript
-import { fetchText, HEADERS } from './http.js';
-import cheerio from 'cheerio-without-node-native';
-
-export async function getMovieStream(tmdbId) {
-    // 1. Search for the movie
-    const searchUrl = `https://streamflix.example/search?id=${tmdbId}`;
-    const html = await fetchText(searchUrl);
-    
-    // 2. Parse HTML
-    const $ = cheerio.load(html);
-    const videoUrl = $('video#player source').attr('src');
-    
-    if (!videoUrl) return [];
-
-    // 3. Return a stream object
-    return [{
-        name: "StreamFlix",
-        title: "1080p - Server 1",
-        url: videoUrl,
-        quality: "1080p",
-        headers: HEADERS
-    }];
-}
-```
-
-### Step 4: Create the Entry Point
-
-Every provider needs an `index.js`. This is what the app calls.
-
-**`src/streamflix/index.js`**
-```javascript
-import { getMovieStream } from './extractor.js';
-
-async function getStreams(tmdbId, mediaType, season, episode) {
-    try {
-        if (mediaType === 'movie') {
-            return await getMovieStream(tmdbId);
-        } else {
-            // TV logic would go here
-            return [];
-        }
-    } catch (error) {
-        console.error(`[StreamFlix] Error: ${error.message}`);
-        return [];
-    }
-}
-
-module.exports = { getStreams };
-```
-
-### Step 5: Register in Manifest
-
-Open `manifest.json` and add your provider:
-
-```json
-{
-  "id": "streamflix",
-  "name": "StreamFlix",
-  "filename": "providers/streamflix.js",
-  "supportedTypes": ["movie"],
-  "enabled": true
-}
-```
-
-### Step 6: Build
-
-Run the build script to bundle your files into `providers/streamflix.js`:
-
-```bash
-node build.js streamflix
-```
-
-You should see: `✅ streamflix.js (XX KB)`
-
----
-
-## The Provider API
-
-Your `index.js` must export a function named `getStreams`.
-
-### Input Parameters
+Fetches direct video URLs for playback.
 
 ```javascript
-async function getStreams(tmdbId, mediaType, season, episode)
+async function getStreams(contentId, mediaType, season, episode)
 ```
 
+**Parameters:**
 | Parameter | Type | Description |
-|-----------|------|-------------|
-| `tmdbId` | String | The ID from The Movie Database (e.g., "872585"). |
-| `mediaType`| String | Either `"movie"` or `"tv"`. |
-| `season` | Number | Season number (for TV shows, e.g., 1). `null` for movies. |
-| `episode` | Number | Episode number (for TV shows, e.g., 1). `null` for movies. |
+| :--- | :--- | :--- |
+| `contentId` | String | Anime identifier (AniList ID or source anime slug/ID). |
+| `mediaType` | String | `"tv"` or `"movie"`. |
+| `season` | Number \| null | Season number (typically `null` or `1` for anime). |
+| `episode` | Number \| null | Absolute episode number (e.g., `1`, `24`, `500`). |
 
-### Output Format
-
-Return an **Array** of objects. Each object represents one playable link.
-
+**Return Value:** Array of stream objects.
 ```javascript
 [
   {
-    "name": "StreamFlix",          // Provider Name
-    "title": "My Stream 1080p",    // Display Title
-    "url": "https://...",          // The actual video URL (.mp4, .m3u8)
-    "quality": "1080p",            // Label: "4K", "1080p", "720p", "CAM"
-    "size": 104857600,             // (Optional) Size in bytes
-    "headers": {                   // (Optional) Headers valid for playback
-      "User-Agent": "...",
-      "Referer": "..."
+    "name": "Server Alpha (1080p Sub)",
+    "title": "Episode 1",
+    "url": "https://stream.example/master.m3u8",
+    "quality": "1080p",
+    "headers": {
+      "Referer": "https://source.example/",
+      "User-Agent": "Mozilla/5.0..."
     },
-    "subtitles": [                 // (Optional) Array of subtitle objects
+    "subtitles": [
       {
-        "url": "https://...",      // Subtitle URL (supports all formats: .vtt, .srt, .ass, etc.)
-        "language": "en",          // Language code (ISO 639-1)
-        "name": "English",         // Display name
-        "headers": {               // (Optional) Headers to fetch the subtitle
-          "User-Agent": "..."
-        }
+        "url": "https://stream.example/sub.vtt",
+        "language": "en",
+        "name": "English"
       }
     ]
   }
 ]
 ```
 
-### Subtitle Support
-
-Nuvio supports external subtitles in all formats (including VTT, SRT, ASS, SSA, etc.). You can include an array of subtitle objects within each stream object.
-
-**Subtitle Object Properties:**
-- `url`: The absolute URL to the subtitle file.
-- `language`: The language of the subtitle (e.g., "en", "es", "hi").
-- `name`: The label shown to the user in the subtitle selector.
-- `headers`: (Optional) If the subtitle host requires specific headers (like a `Referer` or `User-Agent`), include them here.
-
 ---
 
-## Advanced Topics
+### 2. `getAnimeInfo` / `getDetails`
 
-### Async/Await & Transpilation
-
-**The Problem:** The Nuvio app loads plugins dynamically. The Hermes engine does not support `async` functions inside dynamically evaluated code.
-
-**The Solution:** The `build.js` script automatically solves this!
-- It converts your `async/await` code into Generator functions.
-- This allows you to write modern async code in `src/` without worrying about compatibility.
-- **Result:** Always use `src/` folders and the `build.js` script. Do not write complex single files manually in `providers/` unless you know what you are doing.
-
-### HTML Parsing with Cheerio
-
-We use `cheerio-without-node-native`. It implements a subset of jQuery core (like find, attr, text).
+Supplies anime metadata and the episode list directly from the source site.
 
 ```javascript
-import cheerio from 'cheerio-without-node-native';
-
-const $ = cheerio.load(htmlContent);
-const link = $('a.download-btn').attr('href');
-const title = $('.movie-title').text().trim();
+async function getAnimeInfo(contentId)
 ```
 
-### Handling Encryption
-
-Many streaming sites obfuscate their links. We include `crypto-js` to help.
-
+**Return Value:**
 ```javascript
-import CryptoJS from 'crypto-js';
-
-// Decrypt AES
-const bytes = CryptoJS.AES.decrypt(encryptedText, secretKey);
-const originalText = bytes.toString(CryptoJS.enc.Utf8);
-```
-
-### Provider Settings
-
-Nuvio allows you to create a custom settings screen for your provider. This is useful for API keys, server selection, or quality preferences.
-
-#### Step 1: Export `onSettings`
-In your `index.js`, export an `onSettings` function that returns a blueprint of your UI.
-
-```javascript
-// src/streamflix/index.js
-async function onSettings() {
-    return [
-        { type: "header", label: "Account Configuration" },
-        { 
-            type: "text", 
-            key: "apiKey", 
-            label: "API Key", 
-            placeholder: "Enter your key",
-            description: "Required for premium streams." 
-        },
-        { type: "header", label: "Preferences" },
-        { 
-            type: "select", 
-            key: "server", 
-            label: "Primary Server",
-            options: [
-                { label: "Auto", value: "auto" },
-                { label: "US East", value: "us" },
-                { label: "Europe", value: "eu" }
-            ],
-            defaultValue: "auto"
-        },
-        { 
-            type: "toggle", 
-            key: "useHq", 
-            label: "Force High Quality", 
-            defaultValue: true 
-        }
-    ];
-}
-
-module.exports = { getStreams, onSettings };
-```
-
-#### Step 2: Enable in Manifest
-Set `"hasSettings": true` in your `manifest.json`.
-
-```json
 {
-  "id": "streamflix",
-  "hasSettings": true,
-  ...
-}
-```
-
-#### Step 3: Use Settings in Scraper
-The user's choices are automatically injected into `globalThis.SCRAPER_SETTINGS`.
-
-```javascript
-async function getStreams(tmdbId, mediaType) {
-    const settings = globalThis.SCRAPER_SETTINGS || {};
-    const apiKey = settings.apiKey;
-    const preferredServer = settings.server || "auto";
-    
-    if (settings.useHq) {
-        // Logic to find 4K/HDR content...
+  "id": "jujutsu-kaisen",
+  "title": "Jujutsu Kaisen",
+  "description": "A boy fights curses...",
+  "poster": "https://.../poster.jpg",
+  "banner": "https://.../banner.jpg",
+  "status": "Completed",
+  "genres": ["Action", "Supernatural"],
+  "rating": 8.5,
+  "ageRating": "R - 17+",
+  "totalEpisodes": 24,
+  "subEpisodes": 24,
+  "dubEpisodes": 24,
+  "episodes": [
+    {
+      "id": "jujutsu-kaisen-ep-1",
+      "number": 1,
+      "title": "Ryomen Sukuna",
+      "thumbnail": "https://.../thumb1.jpg",
+      "isFiller": false,
+      "isSub": true,
+      "isDub": true
     }
+  ],
+  "relations": [
+    {
+      "id": "jujutsu-kaisen-0",
+      "title": "Jujutsu Kaisen 0",
+      "type": "movie",
+      "poster": "https://.../jk0.jpg",
+      "relationType": "Prequel"
+    }
+  ]
 }
 ```
 
-**Supported Component Types:**
-- `header`: Label only. Used for grouping.
-- `info`: Label only. Used for descriptions or notes.
-- `text`: String input. Supports `isPassword: true` for API keys.
-- `toggle`: Boolean (true/false) switch.
-- `select`: Dropdown list. Requires an `options` array of `{label, value}` objects.
-
 ---
 
-## Testing & Debugging
+### 3. `getHome` / `getMainPage`
 
-### Creating a Test Script
+Supplies home screen catalog sections.
 
-Never rely on the app alone for debugging. Create a local test script:
-
-**`test-streamflix.js`**
 ```javascript
-const { getStreams } = require('./providers/streamflix.js');
+async function getHome()
+```
 
-async function test() {
-    console.log("Testing StreamFlix...");
-    
-    // Movie Test (Oppenheimer)
-    const streams = await getStreams('872585', 'movie');
-    console.log(`Found ${streams.length} streams`);
-    streams.forEach(s => console.log(`- ${s.title} (${s.quality})`));
+**Return Value:**
+```javascript
+[
+  {
+    "title": "Top Airing Anime",
+    "items": [
+      {
+        "id": "bleach-tybw",
+        "title": "Bleach: Thousand-Year Blood War",
+        "poster": "https://.../bleach.jpg",
+        "type": "tv",
+        "episodes": 13,
+        "subEpisodes": 13,
+        "dubEpisodes": 13,
+        "ageRating": "TV-14"
+      }
+    ]
+  }
+]
+```
+
+---
+
+### 4. `onSettings`
+
+Defines custom configuration options for the provider settings dialog.
+
+```javascript
+async function onSettings() {
+  return [
+    { type: "header", label: "Server Options" },
+    {
+      type: "select",
+      key: "preferred_server",
+      label: "Default Server",
+      options: [
+        { label: "Fast HLS (Kwik)", value: "kwik" },
+        { label: "Direct MP4", value: "mp4" }
+      ],
+      defaultValue: "kwik"
+    }
+  ];
 }
-
-test();
 ```
-
-Run it:
-```bash
-node test-streamflix.js
-```
-
-### Debugging Tips
-- Use `console.log()` liberally. These logs appear in the terminal when running the test script, and in the Metro bundler output when running in the app.
-- Check headers. 90% of failures are due to missing `User-Agent` or `Referer` headers.
 
 ---
 
-## Publishing
+## AniList Enrichment Dual-Mode
 
-1. **Verify**: Ensure your test script passes for both Movies and TV shows.
-2. **Build**: Run `node build.js streamflix`.
-3. **Commit**:
-    ```bash
-    git add src/streamflix providers/streamflix.js manifest.json
-    git commit -m "Add StreamFlix provider"
-    ```
-4. **Push**: Push your changes to GitHub.
-5. **Update App**: Update the repository URL in the Nuvio app settings to point to your branch/repo.
+Nuvio includes native **AniList Enrichment**:
+
+1. **Enrichment ON (Default):**
+   - Nuvio queries the AniList GraphQL API for official English/Romaji titles, voice actors, character artwork, YouTube trailers, studios, and official synopses.
+   - The provider supplies the video streams and episode list. Episode counts and filler indicators from the provider enrich the AniList view.
+2. **Enrichment OFF:**
+   - Nuvio disables AniList network calls.
+   - The app relies 100% on the provider's `getAnimeInfo(contentId)` / `getDetails(contentId)` method for title, poster, episode count, sub/dub counts, age rating, episode lists, and relations.
 
 ---
 
-Have fun building!
+## Filler Episodes & Episode Indicators
+
+Nuvio displays an amber **FILLER** badge on episode cards when `isFiller: true`.
+- If an anime site marks an episode as filler (or your plugin checks an episode filler database), set `isFiller: true`.
+- Supply `isSub: true` and `isDub: true` flags on episode items so the app displays Sub/Dub availability badges.
+
+---
+
+## Subtitles & Playback Headers
+
+- **Subtitles:** You can provide multiple subtitle tracks per stream. Formats supported include `.vtt`, `.srt`, and `.ass`.
+- **Headers:** Some video CDNs enforce referer verification. Pass the required `Referer` and `User-Agent` inside the `headers` field of the stream object.
+
+---
+
+## Tutorial: Creating an Anime Provider
+
+1. **Create provider folder:**
+   ```bash
+   mkdir -p src/myanime
+   ```
+
+2. **Implement `src/myanime/index.js`:**
+   ```javascript
+   import cheerio from 'cheerio-without-node-native';
+
+   async function getStreams(contentId, mediaType, season, episode) {
+       const searchUrl = `https://source.example/search?q=${encodeURIComponent(contentId)}`;
+       const res = await fetch(searchUrl);
+       const html = await res.text();
+       const $ = cheerio.load(html);
+
+       // Parse episode stream
+       const videoUrl = $('iframe#player').attr('src');
+       if (!videoUrl) return [];
+
+       return [{
+           name: "MyAnime Server 1",
+           title: `Episode ${episode || 1}`,
+           url: videoUrl,
+           quality: "1080p",
+           headers: { "Referer": "https://source.example/" }
+       }];
+   }
+
+   module.exports = { getStreams };
+   ```
+
+3. **Register in `manifest.json`:**
+   ```json
+   {
+     "id": "myanime",
+     "name": "MyAnime",
+     "description": "Fast anime streaming",
+     "version": "1.0.0",
+     "supportedTypes": ["tv", "movie"],
+     "filename": "providers/myanime.js",
+     "enabled": true
+   }
+   ```
+
+4. **Build:**
+   ```bash
+   node build.js myanime
+   ```
+
+---
+
+## Building & Testing
+
+- **Build all:** `node build.js`
+- **Watch:** `npm run build:watch`
+- Bundled output is saved to `providers/<id>.js`.

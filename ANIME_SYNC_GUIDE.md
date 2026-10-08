@@ -1,42 +1,44 @@
-# Anime Synchronization Guide (ArmSync)
+# Anime Synchronization & Mapping Guide
 
-This document describes the high-fidelity synchronization logic used to match Anime content from TMDB/IMDb to AniList for precise scraping.
+This document describes how anime titles, seasonal structures, and episode numbering are mapped between **AniList** and third-party anime streaming sources in Nuvio.
 
-## Why this is necessary
-Anime seasonal structures vary wildly between platforms. A single "Season 3" on TMDB might be split into three different entries on AniList. Title-based mapping is unreliable without date verification.
+---
 
-## The "ArmSync" Workflow
+## The Challenge in Anime Streaming
 
-### Phase 1: Metadata Acquisition (The First Step)
-1. **IMDb Resolution**: The very first step is obtaining the **IMDb ID** (`tt...`). 
-   - The scraper queries TMDB for the `imdb_id`.
-   - **Fallback**: If TMDB lacks an IMDb ID, the **ARM API** (`/themoviedb?id={id}`) is queried to resolve the link.
-2. **Target Date & Title**: Using the IMDb ID, the scraper queries **Cinemata** (`https://v3-cinemeta.strem.io/meta/series/{imdbId}.json`) to get the exact `released` date and `name` (title) for the target `season` and `episode`.
-   - **Movie Logic**: For movies, the **TMDB Release Date** is prioritized over Cinemata to ensure matching against the original Japanese air date.
-3. **Day Index Calculation**: The scraper calculates the **Release Order** of the episode for that specific day (e.g., if two episodes aired on the same day, Episode 15 is index `1`, Episode 16 is index `2`).
+Anime releases often differ in structure across platforms:
+1. **Seasonal Splits vs Continuous Numbering**: AniList frequently lists seasons as separate entries (e.g., *Bleach: Thousand-Year Blood War - The Separation* as a distinct series), while streaming sites often list all episodes under a single continuous entry (*Bleach: TYBW* episodes 1–26).
+2. **Title Variations**: Titles may appear in Romaji (*Boku no Hero Academia*), English (*My Hero Academia*), or Native Japanese (*僕のヒーローアカデミア*).
+3. **Specials, OVAs & Movies**: Non-standard episodes and canon movies may be indexed separately from main TV runs.
+4. **Filler Episodes**: Long-running anime (such as *Naruto*, *One Piece*, *Bleach*) contain non-canon filler episodes that need clear visual labeling.
 
-### Phase 2: Candidate Resolution
-1. **AniList Title Search**: Query the **AniList GraphQL API** using the show's title from TMDB.
-2. **Bulk Discovery**: This returns all related AniList entries (TV, OVA, Special, Movie) in a single request.
+---
 
-### Phase 3: Date & Title Validation
-1. **Air Date Match**: Compare the episode's `releaseDate` against the `startDate` and `endDate` of every AniList candidate.
-   - **Tolerance**: A **2-day grace period** is allowed to account for timezone differences.
-2. **Title Tie-Breaker**: If multiple episodes match the same date, the scraper compares the **Cinemata Episode Title** against the **AniList Episode Titles** to pick the correct part.
-3. **Database Sync**: The scraper then queries the streaming backend using the verified **AniList ID**.
-   - **Token Selection**: Prioritizes the **Original Episode Number** for standard TV series to ensure consistency. For specials or multi-part releases, it uses the **Day Index** (numerical order) and **Title Match** as highly accurate fallbacks.
+## The Nuvio Sync Architecture
 
-## Required APIs
+### 1. AniList as the Central Source of Truth
+Nuvio uses **AniList** as its primary metadata provider when AniList Enrichment is enabled:
+- Each anime has a distinct integer `alId` (AniList ID).
+- The AniList GraphQL API provides Romaji, English, Native titles, synonyms, episode counts, air dates, studios, voice actors, and relation trees.
 
-| API | Purpose | Endpoint |
-| :--- | :--- | :--- |
-| **TMDB** | Metadata & IMDb ID | `/tv/{id}` |
-| **Cinemata** | Air Dates & Indexing | `/meta/series/{id}.json` |
-| **ARM** | IMDb ID Fallback | `/api/v2/themoviedb?id={id}` |
-| **AniList** | Discovery | `https://graphql.anilist.co` |
+### 2. Title & Synonym Resolution
+When a provider receives a search query or AniList ID:
+1. It retrieves the primary titles (English, Romaji, and synonyms).
+2. It queries the streaming site's search endpoint with normalized titles (stripping special characters, punctuation, and season tags).
+3. Candidate matches are verified by matching release year, format (TV / Movie / OVA), or cross-referencing external identifiers (e.g., MyAnimeList or AniList links embedded on the source page).
 
-## Benefits
-- **IMDb-First Foundation**: Ensures reliable air date data from the start.
-- **No Manual Mapping**: Bypasses mapping gaps in ARM/IMDb.
-- **Movies & Specials Support**: Correctly identifies regional movie releases and Season 0 content.
-- **Split Part Support**: Precise resolution via **Day Indexing** and **Title Matching**.
+### 3. Smart Episode Normalization
+To map episodes accurately:
+- Standard TV series with continuous numbering map directly to the target episode index.
+- Multi-cour or multi-season entries calculate the offset:
+  $$\text{SourceEpisode} = \text{SeasonEpisodeOffset} + \text{TargetEpisode}$$
+- For OVAs and specials, episode mapping falls back to title similarity matching and air date alignment.
+
+### 4. Filler Episode Detection (`isFiller`)
+Source sites often flag episodes as filler (non-manga content). When a provider parses episodes:
+- Set `isFiller: true` on filler episodes.
+- Nuvio displays an amber **FILLER** badge on the episode card in both grid and list views.
+
+### 5. Dual-Mode Independence
+- **Enrichment ON:** Nuvio matches the provider's streams to the active AniList entry.
+- **Enrichment OFF:** Nuvio loads all titles, episode lists, sub/dub counts, and artwork directly from the provider's `getAnimeInfo(contentId)` / `getDetails(contentId)` implementation, requiring zero external metadata calls.

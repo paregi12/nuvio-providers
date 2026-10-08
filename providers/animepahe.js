@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-07-07T12:10:52.013Z
+ * Generated: 2026-10-08T14:05:50.428Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
