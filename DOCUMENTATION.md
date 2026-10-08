@@ -14,6 +14,7 @@ This guide covers everything required to develop anime streaming providers for t
    - [2. getAnimeInfo / getDetails](#2-getanimeinfo--getdetails)
    - [3. getHome / getMainPage](#3-gethome--getmainpage)
    - [4. onSettings](#4-onsettings)
+   - [5. search / searchAnime](#5-search--searchanime)
 5. [AniList Enrichment Dual-Mode](#anilist-enrichment-dual-mode)
 6. [Filler Episodes & Episode Indicators](#filler-episodes--episode-indicators)
 7. [Subtitles & Playback Headers](#subtitles--playback-headers)
@@ -193,6 +194,39 @@ async function onSettings() {
     }
   ];
 }
+```
+
+### 5. `search` / `searchAnime`
+
+Enables in-app searching for anime directly from the provider.
+
+```javascript
+async function search(query, page = 1)
+```
+
+**Parameters:**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `query` | String | Search keyword or title query. |
+| `page` | Number | Page number (defaults to 1). |
+
+**Return Value:** Array of anime items (or `{ results: [...] }` / `{ data: [...] }`).
+```javascript
+[
+  {
+    "id": "jujutsu-kaisen",
+    "title": "Jujutsu Kaisen",
+    "poster": "https://.../poster.jpg",
+    "banner": "https://.../banner.jpg",
+    "description": "A boy fights curses...",
+    "rating": "8.5",
+    "year": "2020",
+    "episodes": 24,
+    "subEpisodes": 24,
+    "dubEpisodes": 24,
+    "ageRating": "R - 17+"
+  }
+]
 ```
 
 ---
