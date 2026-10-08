@@ -2,7 +2,7 @@
 
 A collection of anime streaming providers for the Nuvio app. Providers are JavaScript modules executed in QuickJS/Hermes to fetch streams, episode catalogs, and metadata from anime source sites.
 
-📖 **[Read the Developer Guide](DOCUMENTATION.md)** | 🔄 **[Anime Sync & Mapping Guide](ANIME_SYNC_GUIDE.md)**
+📖 **[Read the Developer Guide](DOCUMENTATION.md)**
 
 ---
 
