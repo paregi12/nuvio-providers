@@ -1,7 +1,6 @@
 import {
     getBaseUrl,
     getFlixEmbeds,
-    getTmdbInfo,
     searchReanimeAnime,
     getSyncInfo,
     resolveByDate,
@@ -31,8 +30,7 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
         const isDirectSlug = typeof contentId === 'string' &&
             !/^\d+$/.test(contentId) &&
             !contentId.startsWith('tt') &&
-            !contentId.startsWith('anilist:') &&
-            !contentId.startsWith('tmdb:');
+            !contentId.startsWith('anilist:');
 
         if (isDirectSlug) {
             const cleanSlug = contentId.replace(/^reanime:/, '');
@@ -51,9 +49,8 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
                 alId = contentId.split(':')[1];
                 const alInfo = await getAnilistMediaInfo(alId);
                 searchTitle = alInfo.title;
-            } else {
-                const tmdbId = String(contentId).replace(/^tmdb:/, '');
-                const syncInfo = await getSyncInfo(tmdbId, mediaType, season, episodeNumber);
+            } else if (typeof contentId === 'string' && contentId.startsWith('tt')) {
+                const syncInfo = await getSyncInfo(contentId, mediaType, season, episodeNumber);
                 searchTitle = syncInfo.title;
 
                 const syncResult = await resolveByDate(syncInfo.releaseDate, syncInfo.title, episodeNumber, syncInfo.episodeTitle, syncInfo.dayIndex);
@@ -61,10 +58,9 @@ async function getStreams(contentId, mediaType = "tv", season = null, episode = 
                     alId = String(syncResult.alId);
                     episodeNumber = syncResult.episode;
                     searchTitle = syncResult.title;
-                } else {
-                    const tmdb = await getTmdbInfo(tmdbId, mediaType);
-                    searchTitle = tmdb.title;
                 }
+            } else {
+                searchTitle = String(contentId || '');
             }
 
             const anime = await searchReanimeAnime(searchTitle, null, alId);
@@ -211,19 +207,10 @@ async function getAnimeInfo(contentId) {
         if (!contentId) return null;
         let slug = String(contentId).replace(/^reanime:/, '');
 
-        if (slug.startsWith('anilist:') || /^\d+$/.test(slug)) {
-            const isAl = slug.startsWith('anilist:');
-            const targetId = isAl ? slug.split(':')[1] : slug;
-            let title = "";
-            let alId = isAl ? targetId : null;
-            if (isAl) {
-                const alInfo = await getAnilistMediaInfo(targetId);
-                title = alInfo.title;
-            } else {
-                const tmdb = await getTmdbInfo(targetId, "tv");
-                title = tmdb.title;
-            }
-            const candidate = await searchReanimeAnime(title, null, alId);
+        if (slug.startsWith('anilist:')) {
+            const targetId = slug.split(':')[1];
+            const alInfo = await getAnilistMediaInfo(targetId);
+            const candidate = await searchReanimeAnime(alInfo.title, null, targetId);
             if (candidate && candidate.slug) {
                 slug = candidate.slug;
             } else {

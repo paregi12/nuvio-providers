@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-10-08T17:46:42.023Z
+ * Generated: 2026-10-08T17:55:06.268Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -114,14 +114,17 @@ function fetchJson(_0) {
     return JSON.parse(text);
   });
 }
-function getImdbId(tmdbId, mediaType) {
+function getCinemetaTitle(imdbId, mediaType) {
   return __async(this, null, function* () {
+    var _a;
     try {
-      const url = `https://api.themoviedb.org/3/${mediaType === "tv" ? "tv" : "movie"}/${tmdbId}/external_ids?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
-      const res = yield fetch(url);
+      const type = mediaType === "tv" ? "series" : "movie";
+      const res = yield fetch(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`);
+      if (!res.ok)
+        return null;
       const data = yield res.json();
-      return data.imdb_id;
-    } catch (e) {
+      return ((_a = data == null ? void 0 : data.meta) == null ? void 0 : _a.name) || null;
+    } catch (_) {
       return null;
     }
   });
@@ -348,15 +351,16 @@ function extractPahe(url) {
 }
 
 // src/animepahe/index.js
-function getStreams(tmdbId, mediaType, season, episode) {
+function getStreams(contentId, mediaType = "tv", season = null, episode = null) {
   return __async(this, null, function* () {
     try {
       let animeSession = null;
       let animeTitle = "";
       let mappedEp = episode;
       let targetMalId = null;
+      const isImdb = typeof contentId === "string" && contentId.startsWith("tt");
+      const imdbId = isImdb ? contentId : null;
       if (mediaType === "tv") {
-        const imdbId = yield getImdbId(tmdbId, mediaType);
         if (!imdbId)
           return [];
         const mapping = yield resolveMapping(imdbId, season, episode);
@@ -379,10 +383,11 @@ function getStreams(tmdbId, mediaType, season, episode) {
           }
         }
       } else {
-        const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
-        const tmdbRes = yield fetch(tmdbUrl);
-        const tmdbData = yield tmdbRes.json();
-        animeTitle = tmdbData.title || tmdbData.original_title;
+        if (imdbId) {
+          animeTitle = yield getCinemetaTitle(imdbId, "movie");
+        } else if (typeof contentId === "string") {
+          animeTitle = contentId;
+        }
         mappedEp = 1;
         if (!animeTitle)
           return [];

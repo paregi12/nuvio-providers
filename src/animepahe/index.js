@@ -1,18 +1,20 @@
 import cheerio from 'cheerio-without-node-native';
-import { fetchJson, fetchText, searchAnime, extractQuality, getImdbId, resolveMapping, getMalTitle } from './utils.js';
+import { fetchJson, fetchText, searchAnime, extractQuality, getCinemetaTitle, resolveMapping, getMalTitle } from './utils.js';
 import { extractKwik, extractPahe } from './extractors.js';
 import { MAIN_URL } from './constants.js';
 
-async function getStreams(tmdbId, mediaType, season, episode) {
+async function getStreams(contentId, mediaType = "tv", season = null, episode = null) {
     try {
         let animeSession = null;
         let animeTitle = "";
         let mappedEp = episode;
         let targetMalId = null;
 
+        const isImdb = typeof contentId === 'string' && contentId.startsWith('tt');
+        const imdbId = isImdb ? contentId : null;
+
         if (mediaType === 'tv') {
             // --- SERIES STRATEGY: ID-BASED WITH VERIFICATION ---
-            const imdbId = await getImdbId(tmdbId, mediaType);
             if (!imdbId) return [];
 
             const mapping = await resolveMapping(imdbId, season, episode);
@@ -39,10 +41,11 @@ async function getStreams(tmdbId, mediaType, season, episode) {
             }
         } else {
             // --- MOVIE STRATEGY: PERFECT TITLE MATCH ---
-            const tmdbUrl = `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
-            const tmdbRes = await fetch(tmdbUrl);
-            const tmdbData = await tmdbRes.json();
-            animeTitle = tmdbData.title || tmdbData.original_title;
+            if (imdbId) {
+                animeTitle = await getCinemetaTitle(imdbId, 'movie');
+            } else if (typeof contentId === 'string') {
+                animeTitle = contentId;
+            }
             mappedEp = 1;
 
             if (!animeTitle) return [];

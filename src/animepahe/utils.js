@@ -30,13 +30,14 @@ export async function fetchJson(url, options = {}) {
     return JSON.parse(text);
 }
 
-export async function getImdbId(tmdbId, mediaType) {
+export async function getCinemetaTitle(imdbId, mediaType) {
     try {
-        const url = `https://api.themoviedb.org/3/${mediaType === 'tv' ? 'tv' : 'movie'}/${tmdbId}/external_ids?api_key=1865f43a0549ca50d341dd9ab8b29f49`;
-        const res = await fetch(url);
+        const type = mediaType === 'tv' ? 'series' : 'movie';
+        const res = await fetch(`https://v3-cinemeta.strem.io/meta/${type}/${imdbId}.json`);
+        if (!res.ok) return null;
         const data = await res.json();
-        return data.imdb_id;
-    } catch (e) {
+        return data?.meta?.name || null;
+    } catch (_) {
         return null;
     }
 }

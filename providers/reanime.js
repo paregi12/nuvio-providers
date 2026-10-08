@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-08T17:46:42.195Z
+ * Generated: 2026-10-08T17:55:06.425Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -67,9 +67,7 @@ var import_cheerio_without_node_native = __toESM(require("cheerio-without-node-n
 
 // src/reanime/constants.js
 var REANIME_BASE = "https://reanime.to";
-var TMDB_API_KEY = "439c478a771f35c05022f9feabcca01c";
 var ANILIST_URL = "https://graphql.anilist.co";
-var ARM_BASE = "https://arm.haglund.dev/api/v2";
 var CINEMETA_URL = "https://v3-cinemeta.strem.io/meta";
 var HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -259,28 +257,12 @@ function getAnilistMediaInfo(alId) {
     return { title: "", year: null };
   });
 }
-function getTmdbInfo(tmdbId, mediaType) {
-  return __async(this, null, function* () {
-    const endpoint = mediaType === "tv" ? "tv" : "movie";
-    const url = `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`;
-    try {
-      const data = yield fetchJson(url);
-      return {
-        title: data.name || data.title || data.original_name || data.original_title || "",
-        year: ((data.first_air_date || data.release_date || "").match(/\d{4}/) || [null])[0],
-        imdbId: data.external_ids && data.external_ids.imdb_id
-      };
-    } catch (e) {
-      return { title: "", year: null, imdbId: null };
-    }
-  });
-}
 function getSyncInfo(id, mediaType, season, episode) {
   return __async(this, null, function* () {
     const isImdb = typeof id === "string" && id.indexOf("tt") === 0;
-    const getCinemetaInfo = (imdbId2) => __async(this, null, function* () {
+    const getCinemetaInfo = (imdbId) => __async(this, null, function* () {
       const type = mediaType === "movie" ? "movie" : "series";
-      const url = `${CINEMETA_URL}/${type}/${imdbId2}.json`;
+      const url = `${CINEMETA_URL}/${type}/${imdbId}.json`;
       try {
         const data = yield fetchJson(url);
         const meta = data.meta;
@@ -291,10 +273,10 @@ function getSyncInfo(id, mediaType, season, episode) {
         const videos = meta.videos || [];
         const target = videos.find((v) => v.season == season && v.episode == episode);
         if (!target || !target.released)
-          return { date: null, title: null, dayIndex: 1 };
+          return { date: null, title: meta.name, episodeTitle: null, dayIndex: 1 };
         const targetDate = target.released.split("T")[0];
         const dayIndex = videos.filter((v) => v.season == season && v.released && v.released.split("T")[0] === targetDate && parseInt(v.episode) < parseInt(episode)).length + 1;
-        return { date: targetDate, title: target.name || null, dayIndex };
+        return { date: targetDate, title: meta.name, episodeTitle: target.name || null, dayIndex };
       } catch (e) {
         return { date: null, title: null, dayIndex: 1 };
       }
@@ -302,40 +284,10 @@ function getSyncInfo(id, mediaType, season, episode) {
     if (isImdb) {
       const info = yield getCinemetaInfo(id);
       if (info.date)
-        return { imdbId: id, releaseDate: info.date, episodeTitle: info.title, dayIndex: info.dayIndex, episode };
-      throw new Error("Could not find release date on Cinemata");
+        return { imdbId: id, releaseDate: info.date, title: info.title, episodeTitle: info.episodeTitle, dayIndex: info.dayIndex, episode };
+      throw new Error("Could not find release date on Cinemeta");
     }
-    const tmdbBase = `https://api.themoviedb.org/3/${mediaType === "movie" ? "movie" : "tv"}/${id}`;
-    const [details, base] = yield Promise.all([
-      fetchJson(tmdbBase + (mediaType === "movie" ? "" : "/external_ids") + `?api_key=${TMDB_API_KEY}`),
-      fetchJson(tmdbBase + `?api_key=${TMDB_API_KEY}`)
-    ]);
-    let imdbId = details.imdb_id || null;
-    const title = base.name || base.title || null;
-    if (!imdbId) {
-      try {
-        const armData = yield fetchJson(`${ARM_BASE}/themoviedb?id=${id}`);
-        imdbId = Array.isArray(armData) && armData.length > 0 ? armData[0].imdb : null;
-      } catch (e) {
-      }
-    }
-    if (!imdbId)
-      throw new Error(`No IMDb ID found for TMDB ${id}`);
-    const cMeta = yield getCinemetaInfo(imdbId);
-    let finalDate = cMeta.date;
-    if (mediaType === "movie" && base.release_date)
-      finalDate = base.release_date;
-    if (!finalDate)
-      throw new Error(`Could not find release date for ID ${imdbId}`);
-    return {
-      imdbId,
-      tmdbId: id,
-      releaseDate: finalDate,
-      title,
-      episodeTitle: cMeta.title,
-      dayIndex: cMeta.dayIndex,
-      episode
-    };
+    throw new Error(`Unsupported ID format: ${id}`);
   });
 }
 function resolveByDate(releaseDateStr, showTitle, originalEpisode, episodeTitle, dayIndex) {
@@ -1170,7 +1122,7 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
       let episodeNumber = mediaType === "tv" ? Number(episode || 1) : 1;
       let searchTitle = "";
       let animeSlug = null;
-      const isDirectSlug = typeof contentId === "string" && !/^\d+$/.test(contentId) && !contentId.startsWith("tt") && !contentId.startsWith("anilist:") && !contentId.startsWith("tmdb:");
+      const isDirectSlug = typeof contentId === "string" && !/^\d+$/.test(contentId) && !contentId.startsWith("tt") && !contentId.startsWith("anilist:");
       if (isDirectSlug) {
         const cleanSlug = contentId.replace(/^reanime:/, "");
         try {
@@ -1188,19 +1140,17 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
           alId = contentId.split(":")[1];
           const alInfo = yield getAnilistMediaInfo(alId);
           searchTitle = alInfo.title;
-        } else {
-          const tmdbId = String(contentId).replace(/^tmdb:/, "");
-          const syncInfo = yield getSyncInfo(tmdbId, mediaType, season, episodeNumber);
+        } else if (typeof contentId === "string" && contentId.startsWith("tt")) {
+          const syncInfo = yield getSyncInfo(contentId, mediaType, season, episodeNumber);
           searchTitle = syncInfo.title;
           const syncResult = yield resolveByDate(syncInfo.releaseDate, syncInfo.title, episodeNumber, syncInfo.episodeTitle, syncInfo.dayIndex);
           if (syncResult && syncResult.alId) {
             alId = String(syncResult.alId);
             episodeNumber = syncResult.episode;
             searchTitle = syncResult.title;
-          } else {
-            const tmdb = yield getTmdbInfo(tmdbId, mediaType);
-            searchTitle = tmdb.title;
           }
+        } else {
+          searchTitle = String(contentId || "");
         }
         const anime = yield searchReanimeAnime(searchTitle, null, alId);
         if (!anime || !anime.slug)
@@ -1342,19 +1292,10 @@ function getAnimeInfo(contentId) {
       if (!contentId)
         return null;
       let slug = String(contentId).replace(/^reanime:/, "");
-      if (slug.startsWith("anilist:") || /^\d+$/.test(slug)) {
-        const isAl = slug.startsWith("anilist:");
-        const targetId = isAl ? slug.split(":")[1] : slug;
-        let title = "";
-        let alId = isAl ? targetId : null;
-        if (isAl) {
-          const alInfo = yield getAnilistMediaInfo(targetId);
-          title = alInfo.title;
-        } else {
-          const tmdb = yield getTmdbInfo(targetId, "tv");
-          title = tmdb.title;
-        }
-        const candidate = yield searchReanimeAnime(title, null, alId);
+      if (slug.startsWith("anilist:")) {
+        const targetId = slug.split(":")[1];
+        const alInfo = yield getAnilistMediaInfo(targetId);
+        const candidate = yield searchReanimeAnime(alInfo.title, null, targetId);
         if (candidate && candidate.slug) {
           slug = candidate.slug;
         } else {

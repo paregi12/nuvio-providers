@@ -1,5 +1,5 @@
 import cheerio from 'cheerio-without-node-native';
-import { HEADERS, REANIME_BASE, TMDB_API_KEY, ANILIST_URL, ARM_BASE, CINEMETA_URL } from './constants.js';
+import { HEADERS, REANIME_BASE, ANILIST_URL, ARM_BASE, CINEMETA_URL } from './constants.js';
 
 export function getBaseUrl() {
     const settings = (typeof globalThis !== 'undefined' && globalThis.SCRAPER_SETTINGS) || {};
@@ -171,21 +171,6 @@ export async function getAnilistMediaInfo(alId) {
     return { title: "", year: null };
 }
 
-export async function getTmdbInfo(tmdbId, mediaType) {
-    const endpoint = mediaType === "tv" ? "tv" : "movie";
-    const url = `https://api.themoviedb.org/3/${endpoint}/${tmdbId}?api_key=${TMDB_API_KEY}&append_to_response=external_ids`;
-    try {
-        const data = await fetchJson(url);
-        return {
-            title: data.name || data.title || data.original_name || data.original_title || "",
-            year: ((data.first_air_date || data.release_date || "").match(/\d{4}/) || [null])[0],
-            imdbId: data.external_ids && data.external_ids.imdb_id
-        };
-    } catch (e) {
-        return { title: "", year: null, imdbId: null };
-    }
-}
-
 // --- AnimeKai Search Logic Port ---
 
 export async function getSyncInfo(id, mediaType, season, episode) {
@@ -202,12 +187,12 @@ export async function getSyncInfo(id, mediaType, season, episode) {
             
             const videos = meta.videos || [];
             const target = videos.find(v => v.season == season && v.episode == episode);
-            if (!target || !target.released) return { date: null, title: null, dayIndex: 1 };
+            if (!target || !target.released) return { date: null, title: meta.name, episodeTitle: null, dayIndex: 1 };
 
             const targetDate = target.released.split('T')[0];
             const dayIndex = videos.filter(v => v.season == season && v.released && v.released.split('T')[0] === targetDate && parseInt(v.episode) < parseInt(episode)).length + 1;
 
-            return { date: targetDate, title: target.name || null, dayIndex };
+            return { date: targetDate, title: meta.name, episodeTitle: target.name || null, dayIndex };
         } catch (e) {
             return { date: null, title: null, dayIndex: 1 };
         }
@@ -215,43 +200,11 @@ export async function getSyncInfo(id, mediaType, season, episode) {
 
     if (isImdb) {
         const info = await getCinemetaInfo(id);
-        if (info.date) return { imdbId: id, releaseDate: info.date, episodeTitle: info.title, dayIndex: info.dayIndex, episode };
-        throw new Error('Could not find release date on Cinemata');
+        if (info.date) return { imdbId: id, releaseDate: info.date, title: info.title, episodeTitle: info.episodeTitle, dayIndex: info.dayIndex, episode };
+        throw new Error('Could not find release date on Cinemeta');
     }
 
-    const tmdbBase = `https://api.themoviedb.org/3/${mediaType === 'movie' ? 'movie' : 'tv'}/${id}`;
-    const [details, base] = await Promise.all([
-        fetchJson(tmdbBase + (mediaType === 'movie' ? '' : '/external_ids') + `?api_key=${TMDB_API_KEY}`),
-        fetchJson(tmdbBase + `?api_key=${TMDB_API_KEY}`)
-    ]);
-
-    let imdbId = details.imdb_id || null;
-    const title = base.name || base.title || null;
-
-    if (!imdbId) {
-        try {
-            const armData = await fetchJson(`${ARM_BASE}/themoviedb?id=${id}`);
-            imdbId = (Array.isArray(armData) && armData.length > 0) ? armData[0].imdb : null;
-        } catch (e) {}
-    }
-
-    if (!imdbId) throw new Error(`No IMDb ID found for TMDB ${id}`);
-    
-    const cMeta = await getCinemetaInfo(imdbId);
-    let finalDate = cMeta.date;
-    if (mediaType === 'movie' && base.release_date) finalDate = base.release_date;
-
-    if (!finalDate) throw new Error(`Could not find release date for ID ${imdbId}`);
-
-    return {
-        imdbId,
-        tmdbId: id,
-        releaseDate: finalDate,
-        title,
-        episodeTitle: cMeta.title,
-        dayIndex: cMeta.dayIndex,
-        episode
-    };
+    throw new Error(`Unsupported ID format: ${id}`);
 }
 
 export async function resolveByDate(releaseDateStr, showTitle, originalEpisode, episodeTitle, dayIndex) {
