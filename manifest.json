@@ -6,11 +6,15 @@
       "id": "animepahe",
       "name": "AnimePahe",
       "description": "AnimePahe anime streaming with Sub and Dub support",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
-        "tv"
+        "tv",
+        "series",
+        "ova",
+        "ona",
+        "special"
       ],
       "filename": "providers/animepahe.js",
       "enabled": true,
@@ -28,11 +32,15 @@
       "id": "reanime",
       "name": "Reanime",
       "description": "Reanime anime streaming with automated AniList mapping and subtitle support",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
-        "tv"
+        "tv",
+        "series",
+        "ova",
+        "ona",
+        "special"
       ],
       "filename": "providers/reanime.js",
       "enabled": true,
