@@ -32,7 +32,7 @@
       "id": "reanime",
       "name": "Reanime",
       "description": "Reanime anime streaming with automated AniList mapping and subtitle support",
-      "version": "1.2.1",
+      "version": "1.2.2",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",

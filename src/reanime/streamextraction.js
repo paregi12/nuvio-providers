@@ -2,6 +2,7 @@ import { getBaseUrl, absolutize, fetchText, fetchJson } from './client.js';
 import { fetchAnimeDetails } from './metadata.js';
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const FLIX_SEGMENT_MASK_FALLBACK = [157, 42, 241, 71, 179, 142, 92, 112, 166, 25, 228, 59, 216, 98, 15, 197];
 
 function getUrlOrigin(url) {
     if (!url) return "";
@@ -14,6 +15,48 @@ function normalizeFlixEmbedUrl(url) {
     finalUrl = finalUrl.replace(/[?&]v=[^&]+/, "").replace(/[?&]kuudere_ts=[^&]+/, "");
     const separator = finalUrl.includes("?") ? "&" : "?";
     return `${finalUrl}${separator}v=1&autoPlay=true&skI=false&skO=false&kuudere_ts=${Date.now()}`;
+}
+
+async function extractFlixSegmentMask(html, embedOrigin) {
+    const scriptPath = html.match(/href=["']([^"']*hls\.js[^"']*)/i)?.[1];
+    if (!scriptPath) return null;
+
+    try {
+        const scriptUrl = new URL(scriptPath, `${embedOrigin}/`).toString();
+        const script = await fetchText(scriptUrl, {
+            headers: { "Referer": `${embedOrigin}/` }
+        });
+        const values = script.match(/for\(var f=\[(\d{1,3}(?:,\d{1,3}){15})\]/)?.[1];
+        if (!values) return null;
+        const mask = values.split(",").map(Number);
+        return mask.length === 16 && mask.every(value => value >= 0 && value <= 255) ? mask : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function createNuvioFlixProxyUrl(streamUrl, wPayload, segmentMask, origin) {
+    const profile = {
+        version: 1,
+        mode: "hls",
+        url: streamUrl,
+        origin,
+        headers: { "Referer": `${origin}/`, "User-Agent": USER_AGENT },
+        resolverHeaders: {
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+            "Origin": "https://enc-dec.app",
+            "Referer": "https://enc-dec.app/"
+        },
+        manifest: {
+            resolverUrl: "https://enc-dec.app/api/parse-flixcloud?url={url}&w_payload={w_payload}",
+            resolverInitialOnly: true,
+            inheritQueryParameter: "token"
+        },
+        templateValues: { w_payload: wPayload },
+        segment: { stripImageHeader: true, xorMask: segmentMask }
+    };
+    return `nuvio-proxy://play?config=${encodeURIComponent(JSON.stringify(profile))}`;
 }
 
 function extractBalancedObject(source, startIdx) {
@@ -88,6 +131,7 @@ export async function extractFlixCloud(embedUrl) {
 
     const html = await response.text();
     const data = parseSsrData(html);
+    const segmentMask = (await extractFlixSegmentMask(html, origin)) || FLIX_SEGMENT_MASK_FALLBACK;
 
     // Strip auxiliary fields so decryption server receives clean payload
     const cleanedData = { ...data };
@@ -160,8 +204,10 @@ export async function extractFlixCloud(embedUrl) {
     }
 
     let cleanStreamUrl = stream.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
-    if (wPayload) {
-        cleanStreamUrl = `https://enc-dec.app/api/parse-flixcloud?url=${encodeURIComponent(cleanStreamUrl)}&w_payload=${encodeURIComponent(wPayload)}`;
+    if (wPayload && segmentMask) {
+        cleanStreamUrl = createNuvioFlixProxyUrl(cleanStreamUrl, wPayload, segmentMask, origin);
+    } else if (wPayload) {
+        throw new Error("Could not find FlixCloud segment key");
     }
 
     const subtitles = (data.subtitles || []).map(s => {
@@ -170,7 +216,11 @@ export async function extractFlixCloud(embedUrl) {
             url: s.url || s.file || "",
             language,
             name: s.name || s.label || language,
-            kind: "subtitles"
+            kind: "subtitles",
+            headers: {
+                "Referer": `${origin}/`,
+                "User-Agent": USER_AGENT
+            }
         };
     }).filter(s => Boolean(s.url));
 

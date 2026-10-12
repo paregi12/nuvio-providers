@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-12T09:39:22.302Z
+ * Generated: 2026-10-12T14:32:14.973Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -500,6 +500,7 @@ function getAnimeInfo(contentId) {
 
 // src/reanime/streamextraction.js
 var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+var FLIX_SEGMENT_MASK_FALLBACK = [157, 42, 241, 71, 179, 142, 92, 112, 166, 25, 228, 59, 216, 98, 15, 197];
 function getUrlOrigin(url) {
   if (!url)
     return "";
@@ -511,6 +512,50 @@ function normalizeFlixEmbedUrl(url) {
   finalUrl = finalUrl.replace(/[?&]v=[^&]+/, "").replace(/[?&]kuudere_ts=[^&]+/, "");
   const separator = finalUrl.includes("?") ? "&" : "?";
   return `${finalUrl}${separator}v=1&autoPlay=true&skI=false&skO=false&kuudere_ts=${Date.now()}`;
+}
+function extractFlixSegmentMask(html, embedOrigin) {
+  return __async(this, null, function* () {
+    var _a, _b;
+    const scriptPath = (_a = html.match(/href=["']([^"']*hls\.js[^"']*)/i)) == null ? void 0 : _a[1];
+    if (!scriptPath)
+      return null;
+    try {
+      const scriptUrl = new URL(scriptPath, `${embedOrigin}/`).toString();
+      const script = yield fetchText(scriptUrl, {
+        headers: { "Referer": `${embedOrigin}/` }
+      });
+      const values = (_b = script.match(/for\(var f=\[(\d{1,3}(?:,\d{1,3}){15})\]/)) == null ? void 0 : _b[1];
+      if (!values)
+        return null;
+      const mask = values.split(",").map(Number);
+      return mask.length === 16 && mask.every((value) => value >= 0 && value <= 255) ? mask : null;
+    } catch (_) {
+      return null;
+    }
+  });
+}
+function createNuvioFlixProxyUrl(streamUrl, wPayload, segmentMask, origin) {
+  const profile = {
+    version: 1,
+    mode: "hls",
+    url: streamUrl,
+    origin,
+    headers: { "Referer": `${origin}/`, "User-Agent": USER_AGENT },
+    resolverHeaders: {
+      "Content-Type": "application/json",
+      "User-Agent": USER_AGENT,
+      "Origin": "https://enc-dec.app",
+      "Referer": "https://enc-dec.app/"
+    },
+    manifest: {
+      resolverUrl: "https://enc-dec.app/api/parse-flixcloud?url={url}&w_payload={w_payload}",
+      resolverInitialOnly: true,
+      inheritQueryParameter: "token"
+    },
+    templateValues: { w_payload: wPayload },
+    segment: { stripImageHeader: true, xorMask: segmentMask }
+  };
+  return `nuvio-proxy://play?config=${encodeURIComponent(JSON.stringify(profile))}`;
 }
 function extractBalancedObject(source, startIdx) {
   const start = source.indexOf("{", startIdx);
@@ -585,6 +630,7 @@ function extractFlixCloud(embedUrl) {
     }
     const html = yield response.text();
     const data = parseSsrData(html);
+    const segmentMask = (yield extractFlixSegmentMask(html, origin)) || FLIX_SEGMENT_MASK_FALLBACK;
     const cleanedData = __spreadValues({}, data);
     delete cleanedData.subtitles;
     delete cleanedData.intro_chapter;
@@ -643,8 +689,10 @@ function extractFlixCloud(embedUrl) {
       throw new Error("Decrypt API did not return a valid stream URL");
     }
     let cleanStreamUrl = stream.replace(/\\\//g, "/").replace(/&amp;/g, "&").trim();
-    if (wPayload) {
-      cleanStreamUrl = `https://enc-dec.app/api/parse-flixcloud?url=${encodeURIComponent(cleanStreamUrl)}&w_payload=${encodeURIComponent(wPayload)}`;
+    if (wPayload && segmentMask) {
+      cleanStreamUrl = createNuvioFlixProxyUrl(cleanStreamUrl, wPayload, segmentMask, origin);
+    } else if (wPayload) {
+      throw new Error("Could not find FlixCloud segment key");
     }
     const subtitles = (data.subtitles || []).map((s) => {
       const language = s.language || s.lang || s.label || "Unknown";
@@ -652,7 +700,11 @@ function extractFlixCloud(embedUrl) {
         url: s.url || s.file || "",
         language,
         name: s.name || s.label || language,
-        kind: "subtitles"
+        kind: "subtitles",
+        headers: {
+          "Referer": `${origin}/`,
+          "User-Agent": USER_AGENT
+        }
       };
     }).filter((s) => Boolean(s.url));
     return {

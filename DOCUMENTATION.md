@@ -255,7 +255,27 @@ Nuvio displays an amber **FILLER** badge on episode cards when `isFiller: true`.
 ## Subtitles & Playback Headers
 
 - **Subtitles:** You can provide multiple subtitle tracks per stream. Use `url`, `language`, and `name` for each track; `language` should identify the track language (for example, `en`). Formats supported include `.vtt`, `.srt`, and `.ass`.
-- **Reanime:** Reanime returns each server and audio/subtitle option as its own stream. Its `server` field identifies the server, `format` identifies `sub`, `dub`, `softsub`, or `hardsub`, and HLS sources use `quality: "Auto"` so the player can select an available rendition. External subtitle tracks use the normalized `url`, `language`, and `name` fields above.
+- **Proxy playback:** When a plugin needs app-side HLS proxying, put a version 1 proxy profile in the stream URL as `nuvio-proxy://play?config=${encodeURIComponent(JSON.stringify(profile))}`. Nuvio Android runs the local HTTP server and supports upstream URL and headers, HLS playlist rewriting, optional manifest URL templates (`{url}` plus `templateValues`), query-parameter inheritance, and optional segment XOR/image-header transforms. The profile shape is:
+
+```javascript
+{
+  version: 1,
+  mode: "hls",
+  url: "https://media.example/master.m3u8",
+  origin: "https://media.example", // optional; inferred from url
+  headers: { Referer: "https://media.example/", "User-Agent": "..." },
+  resolverHeaders: { "User-Agent": "..." }, // optional headers for resolver requests
+  manifest: {
+    resolverUrl: "https://resolver.example/parse?url={url}&key={key}",
+    resolverInitialOnly: true, // optional; default false
+    inheritQueryParameter: "token" // optional
+  },
+  templateValues: { key: "resolver-key" },
+  segment: { xorMask: [1, 2, 3], stripImageHeader: true, contentType: "video/mp2t" }
+}
+```
+
+The plugin can use the supported profile directly; it does not need a provider-specific Kotlin adapter. For example, Reanime describes FlixCloud’s manifest resolver and segment transform using this profile. External subtitle tracks use the normalized `url`, `language`, and `name` fields above.
 - **Headers:** Some video CDNs enforce referer verification. Pass the required `Referer` and `User-Agent` inside the `headers` field of the stream object.
 
 ```javascript
