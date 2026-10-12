@@ -59,7 +59,7 @@ Every provider must export `getStreams`. To support full direct streaming when A
 Fetches direct video URLs for playback.
 
 ```javascript
-async function getStreams(contentId, mediaType, season, episode)
+async function getStreams(contentId, mediaType, season, episode, context)
 ```
 
 **Parameters:**
@@ -69,6 +69,9 @@ async function getStreams(contentId, mediaType, season, episode)
 | `mediaType` | String | `"tv"` or `"movie"`. |
 | `season` | Number \| null | Season number (typically `null` or `1` for anime). |
 | `episode` | Number \| null | Absolute episode number (e.g., `1`, `24`, `500`). |
+| `context` | Object | Stream request metadata, including `episodeId`, `videoId`, and `sourceId`. If this provider supplied the episode list with an `episodeUrl`, that URL is available as `context.episodeUrl`; the positional season/episode values and episode IDs are `null` for that request. |
+
+Use `context.episodeUrl` when the episode list provides a direct watch URL. The app passes it only to the provider that supplied the episode list. When no direct episode URL is available, the app continues to pass the season, episode, and episode ID values for providers that resolve by episode number.
 
 **Return Value:** Array of stream objects.
 ```javascript
@@ -283,14 +286,13 @@ Nuvio displays an amber **FILLER** badge on episode cards when `isFiller: true`.
    ```javascript
    import cheerio from 'cheerio-without-node-native';
 
-   async function getStreams(contentId, mediaType, season, episode) {
-       const searchUrl = `https://source.example/search?q=${encodeURIComponent(contentId)}`;
-       const res = await fetch(searchUrl);
-       const html = await res.text();
-       const $ = cheerio.load(html);
-
-       // Parse episode stream
-       const videoUrl = $('iframe#player').attr('src');
+   async function getStreams(contentId, mediaType, season, episode, context) {
+       // Use the source's episode URL when getAnimeInfo returned one.
+       const episodeUrl = context?.episodeUrl ||
+           `https://source.example/watch/${contentId}/${episode || 1}`;
+       const episodeResponse = await fetch(episodeUrl);
+       const episodeHtml = await episodeResponse.text();
+       const videoUrl = cheerio.load(episodeHtml)('iframe#player').attr('src');
        if (!videoUrl) return [];
 
        return [{

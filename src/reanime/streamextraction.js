@@ -267,13 +267,24 @@ export async function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
     return { watchUrl: absolutize(watchPath), embeds: apiUrls };
 }
 
-export async function getStreams(contentId, mediaType = "tv", season = null, episode = null) {
+export async function getStreams(contentId, mediaType = "tv", season = null, episode = null, context = {}) {
     try {
         const isMovie = mediaType === "movie";
         let episodeNumber = isMovie ? 1 : Number(episode || 1);
         let alId = null;
         let searchTitle = "";
         let animeSlug = null;
+
+        if (context?.episodeUrl) {
+            try {
+                const episodeUrl = new URL(context.episodeUrl, `${getBaseUrl()}/`);
+                const episodePath = episodeUrl.pathname.match(/\/watch\/([^/]+)/);
+                if (episodePath) {
+                    contentId = decodeURIComponent(episodePath[1]);
+                    episodeNumber = episodeUrl.searchParams.get("ep") || episodeNumber;
+                }
+            } catch (_) {}
+        }
 
         const isDirectSlug = typeof contentId === 'string' &&
             !/^\d+$/.test(contentId) &&

@@ -1,6 +1,6 @@
 import cheerio from 'cheerio-without-node-native';
 import { ANILIST_URL, CINEMETA_URL } from './constants.js';
-import { fetchJson, fetchText } from './client.js';
+import { absolutize, fetchJson, fetchText } from './client.js';
 import { toHomeItem } from './home.js';
 
 export async function searchAnimeApi(query, page = 1, limit = 36) {
@@ -320,12 +320,15 @@ export async function getAnimeInfo(contentId) {
         const episodes = rawEpisodes.map(ep => {
             const epNum = Math.floor(ep.episode_number || 1);
             const epNumStr = String(epNum);
+            const episodeId = ep.episodeId || `ep-${epNum}`;
+            const episodeKey = String(episodeId).replace(/^ep-/, '');
             const titleStr = ep.title || (ep.title_romanji || `Episode ${epNum}`);
             const hasSub = (subCount == null) || (epNum <= subCount);
             const hasDub = dubCount != null ? (epNum <= dubCount) : false;
 
             return {
-                id: ep.episodeId || `ep-${epNum}`,
+                id: episodeId,
+                episodeUrl: absolutize(`/watch/${slug}?ep=${encodeURIComponent(episodeKey)}`),
                 episode: epNum,
                 season: 1,
                 title: ep.is_recap ? `${titleStr} [Recap]` : titleStr,

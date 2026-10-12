@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-12T07:11:11.618Z
+ * Generated: 2026-10-12T08:07:36.176Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -551,11 +551,14 @@ function getAnimeInfo(contentId) {
       const episodes = rawEpisodes.map((ep) => {
         const epNum = Math.floor(ep.episode_number || 1);
         const epNumStr = String(epNum);
+        const episodeId = ep.episodeId || `ep-${epNum}`;
+        const episodeKey = String(episodeId).replace(/^ep-/, "");
         const titleStr = ep.title || (ep.title_romanji || `Episode ${epNum}`);
         const hasSub = subCount == null || epNum <= subCount;
         const hasDub = dubCount != null ? epNum <= dubCount : false;
         return {
-          id: ep.episodeId || `ep-${epNum}`,
+          id: episodeId,
+          episodeUrl: absolutize(`/watch/${slug}?ep=${encodeURIComponent(episodeKey)}`),
           episode: epNum,
           season: 1,
           title: ep.is_recap ? `${titleStr} [Recap]` : titleStr,
@@ -838,8 +841,8 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
     return { watchUrl: absolutize(watchPath), embeds: apiUrls };
   });
 }
-function getStreams(contentId, mediaType = "tv", season = null, episode = null) {
-  return __async(this, null, function* () {
+function getStreams(_0) {
+  return __async(this, arguments, function* (contentId, mediaType = "tv", season = null, episode = null, context = {}) {
     var _a, _b;
     try {
       const isMovie = mediaType === "movie";
@@ -847,6 +850,17 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
       let alId = null;
       let searchTitle = "";
       let animeSlug = null;
+      if (context == null ? void 0 : context.episodeUrl) {
+        try {
+          const episodeUrl = new URL(context.episodeUrl, `${getBaseUrl()}/`);
+          const episodePath = episodeUrl.pathname.match(/\/watch\/([^/]+)/);
+          if (episodePath) {
+            contentId = decodeURIComponent(episodePath[1]);
+            episodeNumber = episodeUrl.searchParams.get("ep") || episodeNumber;
+          }
+        } catch (_) {
+        }
+      }
       const isDirectSlug = typeof contentId === "string" && !/^\d+$/.test(contentId) && !contentId.startsWith("tt") && !contentId.startsWith("anilist:");
       if (isDirectSlug) {
         const cleanSlug = contentId.replace(/^reanime:/, "");
