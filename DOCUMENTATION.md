@@ -254,8 +254,21 @@ Nuvio displays an amber **FILLER** badge on episode cards when `isFiller: true`.
 
 ## Subtitles & Playback Headers
 
-- **Subtitles:** You can provide multiple subtitle tracks per stream. Formats supported include `.vtt`, `.srt`, and `.ass`.
+- **Subtitles:** You can provide multiple subtitle tracks per stream. Use `url`, `language`, and `name` for each track; `language` should identify the track language (for example, `en`). Formats supported include `.vtt`, `.srt`, and `.ass`.
+- **Reanime:** Reanime returns each server and audio/subtitle option as its own stream. Its `server` field identifies the server, `format` identifies `sub`, `dub`, `softsub`, or `hardsub`, and HLS sources use `quality: "Auto"` so the player can select an available rendition. External subtitle tracks use the normalized `url`, `language`, and `name` fields above.
 - **Headers:** Some video CDNs enforce referer verification. Pass the required `Referer` and `User-Agent` inside the `headers` field of the stream object.
+
+```javascript
+{
+  "subtitles": [
+    {
+      "url": "https://stream.example/sub.vtt",
+      "language": "en",
+      "name": "English"
+    }
+  ]
+}
+```
 
 ---
 
