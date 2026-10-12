@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-11T20:14:01.681Z
+ * Generated: 2026-10-12T07:11:11.618Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -741,11 +741,15 @@ function extractFlixCloud(embedUrl) {
     if (wPayload) {
       cleanStreamUrl = `https://enc-dec.app/api/parse-flixcloud?url=${encodeURIComponent(cleanStreamUrl)}&w_payload=${encodeURIComponent(wPayload)}`;
     }
-    const subtitles = (data.subtitles || []).map((s) => ({
-      label: s.language || s.label || s.lang || "Subtitles",
-      file: s.url || s.file || "",
-      kind: "subtitles"
-    })).filter((s) => Boolean(s.file));
+    const subtitles = (data.subtitles || []).map((s) => {
+      const language = s.language || s.lang || s.label || "Unknown";
+      return {
+        url: s.url || s.file || "",
+        language,
+        name: s.name || s.label || language,
+        kind: "subtitles"
+      };
+    }).filter((s) => Boolean(s.url));
     return {
       url: cleanStreamUrl,
       videoId: data.video_id,

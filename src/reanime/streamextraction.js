@@ -170,11 +170,15 @@ export async function extractFlixCloud(embedUrl) {
         cleanStreamUrl = `https://enc-dec.app/api/parse-flixcloud?url=${encodeURIComponent(cleanStreamUrl)}&w_payload=${encodeURIComponent(wPayload)}`;
     }
 
-    const subtitles = (data.subtitles || []).map(s => ({
-        label: s.language || s.label || s.lang || "Subtitles",
-        file: s.url || s.file || "",
-        kind: "subtitles"
-    })).filter(s => Boolean(s.file));
+    const subtitles = (data.subtitles || []).map(s => {
+        const language = s.language || s.lang || s.label || "Unknown";
+        return {
+            url: s.url || s.file || "",
+            language,
+            name: s.name || s.label || language,
+            kind: "subtitles"
+        };
+    }).filter(s => Boolean(s.url));
 
     return {
         url: cleanStreamUrl,
