@@ -41,12 +41,8 @@ Nuvio operates as an anime-focused streaming client with support for **AniList E
 
 Anime providers export standard asynchronous functions:
 
-### 1. `getStreams(contentId, mediaType, season, episode)`
-Fetches playable video streams for a specific episode or movie.
-- `contentId`: Anime ID (AniList ID or source anime identifier / slug).
-- `mediaType`: `"tv"` or `"movie"`.
-- `season`: Season number (or `null`).
-- `episode`: Episode number (or `1` for movies).
+### 1. `getStreams(episodeUrl)`
+Fetches playable video streams for the selected episode using its source watch URL. The provider's `getAnimeInfo` / `getDetails` method must include an `episodeUrl` for every episode. Nuvio calls only the provider that supplied that URL; no anime ID, media type, season, or episode number is passed to `getStreams`.
 
 **Return Format:**
 ```javascript

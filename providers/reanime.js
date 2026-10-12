@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-12T08:07:36.176Z
+ * Generated: 2026-10-12T09:39:22.302Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -65,7 +65,6 @@ var __async = (__this, __arguments, generator) => {
 // src/reanime/constants.js
 var REANIME_BASE = "https://reanime.to";
 var ANILIST_URL = "https://graphql.anilist.co";
-var CINEMETA_URL = "https://v3-cinemeta.strem.io/meta";
 var HEADERS = {
   "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,application/json;q=0.8,*/*;q=0.7",
@@ -291,103 +290,6 @@ function getAnilistMediaInfo(alId) {
     } catch (_) {
     }
     return { title: "", year: null };
-  });
-}
-function getSyncInfo(id, mediaType, season, episode) {
-  return __async(this, null, function* () {
-    const isImdb = typeof id === "string" && id.indexOf("tt") === 0;
-    const getCinemetaInfo = (imdbId) => __async(this, null, function* () {
-      const type = mediaType === "movie" ? "movie" : "series";
-      const url = `${CINEMETA_URL}/${type}/${imdbId}.json`;
-      try {
-        const data = yield fetchJson(url);
-        const meta = data.meta;
-        if (!meta)
-          throw new Error("No Cinemeta metadata");
-        if (mediaType === "movie")
-          return { date: meta.released ? meta.released.split("T")[0] : null, title: meta.name, dayIndex: 1 };
-        const videos = meta.videos || [];
-        const target = videos.find((v) => v.season == season && v.episode == episode);
-        if (!target || !target.released)
-          return { date: null, title: meta.name, episodeTitle: null, dayIndex: 1 };
-        const targetDate = target.released.split("T")[0];
-        const dayIndex = videos.filter((v) => v.season == season && v.released && v.released.split("T")[0] === targetDate && parseInt(v.episode) < parseInt(episode)).length + 1;
-        return { date: targetDate, title: meta.name, episodeTitle: target.name || null, dayIndex };
-      } catch (e) {
-        return { date: null, title: null, dayIndex: 1 };
-      }
-    });
-    if (isImdb) {
-      const info = yield getCinemetaInfo(id);
-      if (info.date)
-        return { imdbId: id, releaseDate: info.date, title: info.title, episodeTitle: info.episodeTitle, dayIndex: info.dayIndex, episode };
-      throw new Error("Could not find release date on Cinemeta");
-    }
-    throw new Error(`Unsupported ID format: ${id}`);
-  });
-}
-function resolveByDate(releaseDateStr, showTitle, originalEpisode, episodeTitle, dayIndex) {
-  return __async(this, null, function* () {
-    var _a, _b;
-    if (!releaseDateStr || !/^\d{4}-\d{2}-\d{2}/.test(releaseDateStr))
-      return null;
-    const query = "query($search:String){Page(perPage:20){media(search:$search,type:ANIME){id type format title{romaji english}startDate{year month day}endDate{year month day}episodes streamingEpisodes{title}}}}";
-    try {
-      const json = yield fetchJson(ANILIST_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, variables: { search: showTitle } })
-      });
-      const candidates = ((_b = (_a = json.data) == null ? void 0 : _a.Page) == null ? void 0 : _b.media) || [];
-      if (candidates.length === 0)
-        return null;
-      const targetDate = new Date(releaseDateStr);
-      for (const anime of candidates) {
-        const s = anime.startDate;
-        const startStr = s.year && s.month && s.day ? `${s.year}-${String(s.month).padStart(2, "0")}-${String(s.day).padStart(2, "0")}` : null;
-        if (!startStr)
-          continue;
-        const startDate = new Date(startStr);
-        const diffDays = Math.ceil(Math.abs(targetDate.getTime() - startDate.getTime()) / (1e3 * 60 * 60 * 24));
-        let isMatch = false;
-        if (anime.format === "MOVIE" || anime.format === "SPECIAL" || anime.episodes === 1) {
-          if (diffDays <= 2)
-            isMatch = true;
-        } else {
-          const startLimit = new Date(startDate);
-          startLimit.setDate(startLimit.getDate() - 2);
-          if (targetDate >= startLimit) {
-            if (anime.endDate && anime.endDate.year) {
-              const endDate = new Date(anime.endDate.year, (anime.endDate.month || 12) - 1, anime.endDate.day || 31);
-              endDate.setDate(endDate.getDate() + 2);
-              if (targetDate <= endDate)
-                isMatch = true;
-            } else {
-              isMatch = true;
-            }
-          }
-        }
-        if (isMatch) {
-          const isTV = anime.format !== "MOVIE" && anime.format !== "SPECIAL" && anime.episodes !== 1;
-          let episodeNum = isTV && originalEpisode ? originalEpisode : dayIndex || 1;
-          const episodes = anime.streamingEpisodes || [];
-          if (episodes.length > 1 && episodeTitle) {
-            const cleanTarget = episodeTitle.toLowerCase().replace(/[^a-z0-9]/g, "");
-            for (let j = 0; j < episodes.length; j++) {
-              const cleanAl = (episodes[j].title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-              if (cleanAl && (cleanAl.indexOf(cleanTarget) !== -1 || cleanTarget.indexOf(cleanAl) !== -1)) {
-                episodeNum = j + 1;
-                break;
-              }
-            }
-          }
-          return { alId: anime.id, episode: episodeNum, title: anime.title.english || anime.title.romaji };
-        }
-      }
-    } catch (e) {
-      console.error(`[AniList] Search error: ${e.message}`);
-    }
-    return null;
   });
 }
 function normalizeTitle(value) {
@@ -841,63 +743,24 @@ function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
     return { watchUrl: absolutize(watchPath), embeds: apiUrls };
   });
 }
-function getStreams(_0) {
-  return __async(this, arguments, function* (contentId, mediaType = "tv", season = null, episode = null, context = {}) {
-    var _a, _b;
+function getStreams(episodeUrl) {
+  return __async(this, null, function* () {
+    var _a, _b, _c;
     try {
-      const isMovie = mediaType === "movie";
-      let episodeNumber = isMovie ? 1 : Number(episode || 1);
-      let alId = null;
-      let searchTitle = "";
-      let animeSlug = null;
-      if (context == null ? void 0 : context.episodeUrl) {
-        try {
-          const episodeUrl = new URL(context.episodeUrl, `${getBaseUrl()}/`);
-          const episodePath = episodeUrl.pathname.match(/\/watch\/([^/]+)/);
-          if (episodePath) {
-            contentId = decodeURIComponent(episodePath[1]);
-            episodeNumber = episodeUrl.searchParams.get("ep") || episodeNumber;
-          }
-        } catch (_) {
-        }
-      }
-      const isDirectSlug = typeof contentId === "string" && !/^\d+$/.test(contentId) && !contentId.startsWith("tt") && !contentId.startsWith("anilist:");
-      if (isDirectSlug) {
-        const cleanSlug = contentId.replace(/^reanime:/, "");
-        try {
-          const details = yield fetchAnimeDetails(cleanSlug);
-          if (details && details.anime_id) {
-            animeSlug = details.anime_id;
-            alId = details.anilist_id ? String(details.anilist_id) : null;
-            searchTitle = ((_a = details.title) == null ? void 0 : _a.english) || ((_b = details.title) == null ? void 0 : _b.romaji) || animeSlug;
-          }
-        } catch (_) {
-        }
-      }
-      if (!animeSlug) {
-        if (typeof contentId === "string" && contentId.startsWith("anilist:")) {
-          alId = contentId.split(":")[1];
-          const alInfo = yield getAnilistMediaInfo(alId);
-          searchTitle = alInfo.title;
-        } else if (typeof contentId === "string" && contentId.startsWith("tt")) {
-          const syncInfo = yield getSyncInfo(contentId, isMovie ? "movie" : "series", season, episodeNumber);
-          searchTitle = syncInfo.title;
-          const syncResult = yield resolveByDate(syncInfo.releaseDate, syncInfo.title, episodeNumber, syncInfo.episodeTitle, syncInfo.dayIndex);
-          if (syncResult && syncResult.alId) {
-            alId = String(syncResult.alId);
-            episodeNumber = syncResult.episode;
-            searchTitle = syncResult.title;
-          }
-        } else {
-          searchTitle = String(contentId || "");
-        }
-        const anime = yield searchReanimeAnime(searchTitle, null, alId);
-        if (!anime || !anime.slug)
-          return [];
-        animeSlug = anime.slug;
-        if (!alId && anime.anilistId)
-          alId = String(anime.anilistId);
-      }
+      if (typeof episodeUrl !== "string" || !episodeUrl.trim())
+        return [];
+      const parsedUrl = new URL(episodeUrl, `${getBaseUrl()}/`);
+      const episodePath = parsedUrl.pathname.match(/\/watch\/([^/]+)/);
+      const animeSlug = episodePath ? decodeURIComponent(episodePath[1]) : null;
+      const episodeNumber = parsedUrl.searchParams.get("ep");
+      if (!animeSlug || !episodeNumber)
+        return [];
+      const details = yield fetchAnimeDetails(animeSlug);
+      if (!details || !details.anime_id)
+        return [];
+      const alId = details.anilist_id ? String(details.anilist_id) : null;
+      const searchTitle = ((_a = details.title) == null ? void 0 : _a.english) || ((_b = details.title) == null ? void 0 : _b.romaji) || ((_c = details.title) == null ? void 0 : _c.native) || animeSlug;
+      const isMovie = /movie|film/i.test(String(details.format || details.type || ""));
       const streams = [];
       if (alId) {
         const servers = yield fetchFlixServers(alId, episodeNumber, animeSlug);

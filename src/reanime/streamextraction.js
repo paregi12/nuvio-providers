@@ -1,11 +1,5 @@
 import { getBaseUrl, absolutize, fetchText, fetchJson } from './client.js';
-import {
-    fetchAnimeDetails,
-    getAnilistMediaInfo,
-    getSyncInfo,
-    resolveByDate,
-    searchReanimeAnime
-} from './metadata.js';
+import { fetchAnimeDetails } from './metadata.js';
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -267,66 +261,20 @@ export async function getFlixEmbeds(slug, episodeNumber, language, anilistId) {
     return { watchUrl: absolutize(watchPath), embeds: apiUrls };
 }
 
-export async function getStreams(contentId, mediaType = "tv", season = null, episode = null, context = {}) {
+export async function getStreams(episodeUrl) {
     try {
-        const isMovie = mediaType === "movie";
-        let episodeNumber = isMovie ? 1 : Number(episode || 1);
-        let alId = null;
-        let searchTitle = "";
-        let animeSlug = null;
+        if (typeof episodeUrl !== 'string' || !episodeUrl.trim()) return [];
+        const parsedUrl = new URL(episodeUrl, `${getBaseUrl()}/`);
+        const episodePath = parsedUrl.pathname.match(/\/watch\/([^/]+)/);
+        const animeSlug = episodePath ? decodeURIComponent(episodePath[1]) : null;
+        const episodeNumber = parsedUrl.searchParams.get("ep");
+        if (!animeSlug || !episodeNumber) return [];
 
-        if (context?.episodeUrl) {
-            try {
-                const episodeUrl = new URL(context.episodeUrl, `${getBaseUrl()}/`);
-                const episodePath = episodeUrl.pathname.match(/\/watch\/([^/]+)/);
-                if (episodePath) {
-                    contentId = decodeURIComponent(episodePath[1]);
-                    episodeNumber = episodeUrl.searchParams.get("ep") || episodeNumber;
-                }
-            } catch (_) {}
-        }
-
-        const isDirectSlug = typeof contentId === 'string' &&
-            !/^\d+$/.test(contentId) &&
-            !contentId.startsWith('tt') &&
-            !contentId.startsWith('anilist:');
-
-        if (isDirectSlug) {
-            const cleanSlug = contentId.replace(/^reanime:/, '');
-            try {
-                const details = await fetchAnimeDetails(cleanSlug);
-                if (details && details.anime_id) {
-                    animeSlug = details.anime_id;
-                    alId = details.anilist_id ? String(details.anilist_id) : null;
-                    searchTitle = details.title?.english || details.title?.romaji || animeSlug;
-                }
-            } catch (_) {}
-        }
-
-        if (!animeSlug) {
-            if (typeof contentId === 'string' && contentId.startsWith('anilist:')) {
-                alId = contentId.split(':')[1];
-                const alInfo = await getAnilistMediaInfo(alId);
-                searchTitle = alInfo.title;
-            } else if (typeof contentId === 'string' && contentId.startsWith('tt')) {
-                const syncInfo = await getSyncInfo(contentId, isMovie ? "movie" : "series", season, episodeNumber);
-                searchTitle = syncInfo.title;
-
-                const syncResult = await resolveByDate(syncInfo.releaseDate, syncInfo.title, episodeNumber, syncInfo.episodeTitle, syncInfo.dayIndex);
-                if (syncResult && syncResult.alId) {
-                    alId = String(syncResult.alId);
-                    episodeNumber = syncResult.episode;
-                    searchTitle = syncResult.title;
-                }
-            } else {
-                searchTitle = String(contentId || '');
-            }
-
-            const anime = await searchReanimeAnime(searchTitle, null, alId);
-            if (!anime || !anime.slug) return [];
-            animeSlug = anime.slug;
-            if (!alId && anime.anilistId) alId = String(anime.anilistId);
-        }
+        const details = await fetchAnimeDetails(animeSlug);
+        if (!details || !details.anime_id) return [];
+        const alId = details.anilist_id ? String(details.anilist_id) : null;
+        const searchTitle = details.title?.english || details.title?.romaji || details.title?.native || animeSlug;
+        const isMovie = /movie|film/i.test(String(details.format || details.type || ""));
 
         const streams = [];
 

@@ -59,19 +59,15 @@ Every provider must export `getStreams`. To support full direct streaming when A
 Fetches direct video URLs for playback.
 
 ```javascript
-async function getStreams(contentId, mediaType, season, episode, context)
+async function getStreams(episodeUrl)
 ```
 
 **Parameters:**
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
-| `contentId` | String | Anime identifier (AniList ID or source anime slug/ID). |
-| `mediaType` | String | `"tv"` or `"movie"`. |
-| `season` | Number \| null | Season number (typically `null` or `1` for anime). |
-| `episode` | Number \| null | Absolute episode number (e.g., `1`, `24`, `500`). |
-| `context` | Object | Stream request metadata, including `episodeId`, `videoId`, and `sourceId`. If this provider supplied the episode list with an `episodeUrl`, that URL is available as `context.episodeUrl`; the positional season/episode values and episode IDs are `null` for that request. |
+| `episodeUrl` | String | This provider's direct watch URL for the selected episode. |
 
-Use `context.episodeUrl` when the episode list provides a direct watch URL. The app passes it only to the provider that supplied the episode list. When no direct episode URL is available, the app continues to pass the season, episode, and episode ID values for providers that resolve by episode number.
+The app invokes only the provider that supplied the selected episode URL. `getAnimeInfo` / `getDetails` must include an `episodeUrl` on every episode returned. `getStreams` must use that URL to identify and resolve the episode; it does not receive an anime ID, media type, season, or episode number.
 
 **Return Value:** Array of stream objects.
 ```javascript
@@ -124,6 +120,7 @@ async function getAnimeInfo(contentId)
   "episodes": [
     {
       "id": "jujutsu-kaisen-ep-1",
+      "episodeUrl": "https://source.example/watch/jujutsu-kaisen?ep=episode-key-1",
       "number": 1,
       "title": "Ryomen Sukuna",
       "thumbnail": "https://.../thumb1.jpg",
@@ -286,10 +283,8 @@ Nuvio displays an amber **FILLER** badge on episode cards when `isFiller: true`.
    ```javascript
    import cheerio from 'cheerio-without-node-native';
 
-   async function getStreams(contentId, mediaType, season, episode, context) {
-       // Use the source's episode URL when getAnimeInfo returned one.
-       const episodeUrl = context?.episodeUrl ||
-           `https://source.example/watch/${contentId}/${episode || 1}`;
+   async function getStreams(episodeUrl) {
+       if (!episodeUrl) return [];
        const episodeResponse = await fetch(episodeUrl);
        const episodeHtml = await episodeResponse.text();
        const videoUrl = cheerio.load(episodeHtml)('iframe#player').attr('src');
@@ -297,7 +292,7 @@ Nuvio displays an amber **FILLER** badge on episode cards when `isFiller: true`.
 
        return [{
            name: "MyAnime Server 1",
-           title: `Episode ${episode || 1}`,
+           title: "Episode",
            url: videoUrl,
            quality: "1080p",
            headers: { "Referer": "https://source.example/" }

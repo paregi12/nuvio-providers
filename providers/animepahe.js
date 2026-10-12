@@ -1,6 +1,6 @@
 /**
  * animepahe - Built from src/animepahe/
- * Generated: 2026-10-11T20:14:01.633Z
+ * Generated: 2026-10-12T09:39:22.256Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -351,82 +351,22 @@ function extractPahe(url) {
 }
 
 // src/animepahe/index.js
-function getStreams(contentId, mediaType = "tv", season = null, episode = null) {
+function getStreams(episodeUrl) {
   return __async(this, null, function* () {
     try {
-      let animeSession = null;
-      let animeTitle = "";
-      let mappedEp = episode;
-      let targetMalId = null;
-      const isImdb = typeof contentId === "string" && contentId.startsWith("tt");
-      const imdbId = isImdb ? contentId : null;
-      if (mediaType === "tv") {
-        if (!imdbId)
-          return [];
-        const mapping = yield resolveMapping(imdbId, season, episode);
-        if (!mapping || !mapping.mal_id)
-          return [];
-        targetMalId = mapping.mal_id;
-        mappedEp = mapping.mal_episode || episode;
-        animeTitle = yield getMalTitle(targetMalId);
-        if (!animeTitle)
-          return [];
-        const searchResults = yield searchAnime(animeTitle);
-        if (searchResults.data && searchResults.data.length > 0) {
-          for (let i = 0; i < Math.min(searchResults.data.length, 3); i++) {
-            const item = searchResults.data[i];
-            const pageHtml = yield fetchText(`/anime/${item.session}`);
-            if (pageHtml.includes(`myanimelist.net/anime/${targetMalId}`)) {
-              animeSession = item.session;
-              break;
-            }
-          }
-        }
-      } else {
-        if (imdbId) {
-          animeTitle = yield getCinemetaTitle(imdbId, "movie");
-        } else if (typeof contentId === "string") {
-          animeTitle = contentId;
-        }
-        mappedEp = 1;
-        if (!animeTitle)
-          return [];
-        const searchResults = yield searchAnime(animeTitle);
-        if (searchResults.data && searchResults.data.length > 0) {
-          const firstResult = searchResults.data[0];
-          if (firstResult.title.toLowerCase() === animeTitle.toLowerCase()) {
-            animeSession = firstResult.session;
-          }
-        }
-      }
-      if (!animeSession)
+      if (typeof episodeUrl !== "string" || !episodeUrl.trim())
         return [];
-      const firstPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=1`;
-      const firstPageData = yield fetchJson(firstPageUrl);
-      if (!firstPageData.data || firstPageData.data.length === 0)
+      const parsedUrl = new URL(episodeUrl, MAIN_URL);
+      const playPath = parsedUrl.pathname.match(/\/play\/([^/]+)\/([^/]+)/);
+      if (!playPath)
         return [];
-      const paheEpStart = Math.floor(firstPageData.data[0].episode);
-      const perPage = firstPageData.per_page || 30;
-      const targetPaheEp = paheEpStart - 1 + mappedEp;
-      const targetPage = Math.ceil(mappedEp / perPage) || 1;
-      const targetPageUrl = `/api?m=release&id=${animeSession}&sort=episode_asc&page=${targetPage}`;
-      const targetPageData = yield fetchJson(targetPageUrl);
-      let episodeSession = null;
-      if (targetPageData && targetPageData.data) {
-        const foundEp = targetPageData.data.find((e) => Math.floor(e.episode) == targetPaheEp);
-        if (foundEp)
-          episodeSession = foundEp.session;
-      }
-      if (!episodeSession && targetPage !== 1) {
-        const fallbackEp = firstPageData.data.find((e) => Math.floor(e.episode) == targetPaheEp);
-        if (fallbackEp)
-          episodeSession = fallbackEp.session;
-      }
-      if (!episodeSession)
-        return [];
-      const playUrl = `/play/${animeSession}/${episodeSession}`;
+      const animeSession = playPath[1];
+      const episodeSession = playPath[2];
+      const playUrl = `${parsedUrl.pathname}${parsedUrl.search}`;
       const playHtml = yield fetchText(playUrl);
       const $ = import_cheerio_without_node_native.default.load(playHtml);
+      const animeTitle = $("title").first().text().replace(/\s*[-|].*$/, "").trim() || "AnimePahe";
+      const mappedEp = Number(parsedUrl.searchParams.get("ep")) || 1;
       const streams = [];
       const promises = [];
       $("#resolutionMenu button").each((i, el) => {
@@ -506,6 +446,109 @@ function getStreams(contentId, mediaType = "tv", season = null, episode = null) 
     }
   });
 }
+function getAnimeInfo(contentId) {
+  return __async(this, null, function* () {
+    var _a, _b, _c, _d, _e;
+    try {
+      let queryTitle = "";
+      let targetMalId = null;
+      const id = String(contentId || "").trim();
+      if (/^tt\d+$/.test(id)) {
+        queryTitle = (yield getCinemetaTitle(id, "tv")) || "";
+        const mapping = yield resolveMapping(id, 1, 1);
+        targetMalId = (mapping == null ? void 0 : mapping.mal_id) || null;
+        if (!queryTitle && targetMalId)
+          queryTitle = (yield getMalTitle(targetMalId)) || "";
+      } else if (/^(?:anilist:)?\d+$/.test(id)) {
+        const anilistId = Number(id.replace(/^anilist:/, ""));
+        const response = yield fetch("https://graphql.anilist.co", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: "query($id:Int){Media(id:$id,type:ANIME){idMal title{english romaji native} format episodes description coverImage{large} bannerImage genres status{description}}}",
+            variables: { id: anilistId }
+          })
+        });
+        if (!response.ok)
+          return null;
+        const media = (_b = (_a = yield response.json()) == null ? void 0 : _a.data) == null ? void 0 : _b.Media;
+        if (!media)
+          return null;
+        targetMalId = media.idMal || null;
+        queryTitle = ((_c = media.title) == null ? void 0 : _c.english) || ((_d = media.title) == null ? void 0 : _d.romaji) || ((_e = media.title) == null ? void 0 : _e.native) || "";
+      } else if (/^(?:mal:)?\d+$/.test(id)) {
+        targetMalId = id.replace(/^mal:/, "");
+        queryTitle = (yield getMalTitle(targetMalId)) || "";
+      } else {
+        queryTitle = id;
+      }
+      if (!queryTitle)
+        return null;
+      const searchResult = yield searchAnime(queryTitle);
+      const candidates = (searchResult == null ? void 0 : searchResult.data) || [];
+      if (candidates.length === 0)
+        return null;
+      let selected = null;
+      const normalizedQuery = queryTitle.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      for (const candidate of candidates.slice(0, 5)) {
+        const pageHtml = yield fetchText(`/anime/${candidate.session}`);
+        const matchesMalId = targetMalId && pageHtml.includes(`myanimelist.net/anime/${targetMalId}`);
+        const normalizedTitle = String(candidate.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (matchesMalId || !targetMalId && normalizedTitle === normalizedQuery) {
+          selected = __spreadProps(__spreadValues({}, candidate), { pageHtml });
+          break;
+        }
+      }
+      if (!selected && targetMalId)
+        return null;
+      if (!selected) {
+        const first = candidates[0];
+        selected = __spreadProps(__spreadValues({}, first), { pageHtml: yield fetchText(`/anime/${first.session}`) });
+      }
+      const $ = import_cheerio_without_node_native.default.load(selected.pageHtml);
+      const firstPage = yield fetchJson(`/api?m=release&id=${selected.session}&sort=episode_asc&page=1`);
+      const lastPage = Math.min(Number(firstPage.last_page) || 1, 30);
+      const pages = yield Promise.all(Array.from(
+        { length: lastPage },
+        (_, index) => index === 0 ? Promise.resolve(firstPage) : fetchJson(`/api?m=release&id=${selected.session}&sort=episode_asc&page=${index + 1}`).catch(() => null)
+      ));
+      const releases = pages.flatMap((page) => (page == null ? void 0 : page.data) || []);
+      const episodes = releases.map((release) => {
+        var _a2;
+        const number = Math.floor(Number(release.episode) || 1);
+        return {
+          id: `${selected.session}:${release.session}`,
+          episodeUrl: `${((_a2 = globalThis.SCRAPER_SETTINGS) == null ? void 0 : _a2.domain) || MAIN_URL}/play/${selected.session}/${release.session}`,
+          episode: number,
+          season: 1,
+          title: release.title || `Episode ${number}`,
+          thumbnail: release.snapshot || null,
+          isSub: true,
+          isDub: false
+        };
+      });
+      if (episodes.length === 0)
+        return null;
+      const image = $('[property="og:image"]').attr("content") || $(".anime-poster img").attr("src") || null;
+      const description = $('[property="og:description"]').attr("content") || $(".anime-synopsis").text().trim() || null;
+      const title = selected.title || queryTitle;
+      return {
+        id: String(selected.session),
+        title,
+        poster: image,
+        description,
+        type: episodes.length === 1 ? "movie" : "tv",
+        format: episodes.length === 1 ? "movie" : "tv",
+        totalEpisodes: episodes.length || null,
+        subEpisodes: episodes.length || null,
+        dubEpisodes: 0,
+        episodes
+      };
+    } catch (_) {
+      return null;
+    }
+  });
+}
 function onSettings() {
   return __async(this, null, function* () {
     return [
@@ -526,8 +569,10 @@ function onSettings() {
   });
 }
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { getStreams, onSettings };
+  module.exports = { getStreams, getAnimeInfo, getDetails: getAnimeInfo, onSettings };
 } else {
   global.getStreams = getStreams;
+  global.getAnimeInfo = getAnimeInfo;
+  global.getDetails = getAnimeInfo;
   global.onSettings = onSettings;
 }
