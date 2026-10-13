@@ -262,10 +262,17 @@ export async function extractFlixCloud(embedUrl) {
     };
 }
 
-export async function fetchFlixServers(anilistId, episodeNumber, slug) {
+export async function fetchFlixServers(anilistId, episodeNumber, slug, malId = null, tmdbId = null, tmdbSeason = 1) {
     const referer = slug ? `${getBaseUrl()}/watch/${slug}?ep=${episodeNumber}` : `${getBaseUrl()}/home`;
+    const params = new URLSearchParams();
+    if (malId) params.set("mal", String(malId));
+    if (!anilistId && tmdbId) {
+        params.set("tmdb", String(tmdbId));
+        params.set("season", String(tmdbSeason || 1));
+    }
+    const query = params.toString() ? `?${params.toString()}` : "";
     try {
-        const json = await fetchJson(`/api/flix/${anilistId}/${episodeNumber}`, {
+        const json = await fetchJson(`/api/flix/${anilistId || 0}/${episodeNumber}${query}`, {
             headers: {
                 "Referer": referer
             }
@@ -354,8 +361,8 @@ export async function getStreams(episodeUrl) {
 
         const streams = [];
 
-        if (alId) {
-            const servers = await fetchFlixServers(alId, episodeNumber, animeSlug);
+        if (alId || details.mal_id || details.themoviedb_id) {
+            const servers = await fetchFlixServers(alId, episodeNumber, animeSlug, details.mal_id, details.themoviedb_id);
             for (const server of servers) {
                 if (!server.dataLink) continue;
                 try {
