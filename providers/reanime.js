@@ -1,6 +1,6 @@
 /**
  * reanime - Built from src/reanime/
- * Generated: 2026-10-13T06:13:50.186Z
+ * Generated: 2026-10-13T06:36:41.804Z
  */
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -746,17 +746,10 @@ function extractFlixCloud(embedUrl) {
     };
   });
 }
-function fetchFlixServers(anilistId, episodeNumber, slug, malId = null, tmdbId = null, tmdbSeason = 1) {
+function fetchFlixServers(anilistId, episodeNumber, slug, malId = null) {
   return __async(this, null, function* () {
     const referer = slug ? `${getBaseUrl()}/watch/${slug}?ep=${episodeNumber}` : `${getBaseUrl()}/home`;
-    const params = new URLSearchParams();
-    if (malId)
-      params.set("mal", String(malId));
-    if (!anilistId && tmdbId) {
-      params.set("tmdb", String(tmdbId));
-      params.set("season", String(tmdbSeason || 1));
-    }
-    const query = params.toString() ? `?${params.toString()}` : "";
+    const query = malId ? `?mal=${malId}` : "";
     try {
       const json = yield fetchJson(`/api/flix/${anilistId || 0}/${episodeNumber}${query}`, {
         headers: {
@@ -849,8 +842,8 @@ function getStreams(episodeUrl) {
       const searchTitle = ((_a = details.title) == null ? void 0 : _a.english) || ((_b = details.title) == null ? void 0 : _b.romaji) || ((_c = details.title) == null ? void 0 : _c.native) || animeSlug;
       const isMovie = /movie|film/i.test(String(details.format || details.type || ""));
       const streams = [];
-      if (alId || details.mal_id || details.themoviedb_id) {
-        const servers = yield fetchFlixServers(alId, episodeNumber, animeSlug, details.mal_id, details.themoviedb_id);
+      if (alId || details.mal_id) {
+        const servers = yield fetchFlixServers(alId, episodeNumber, animeSlug, details.mal_id);
         for (const server of servers) {
           if (!server.dataLink)
             continue;
