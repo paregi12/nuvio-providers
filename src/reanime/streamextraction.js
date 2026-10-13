@@ -210,7 +210,12 @@ export async function extractFlixCloud(embedUrl) {
         throw new Error("Could not find FlixCloud segment key");
     }
 
-    const subtitles = (data.subtitles || []).map(s => {
+    let thumbnailsUrl = null;
+    const subtitles = (data.subtitles || data.tracks || []).map(s => {
+        if (s.kind === "thumbnails" || s.kind === "thumbnail") {
+            thumbnailsUrl = s.url || s.file || "";
+            return null;
+        }
         const language = s.language || s.lang || s.label || "Unknown";
         return {
             url: s.url || s.file || "",
@@ -222,13 +227,34 @@ export async function extractFlixCloud(embedUrl) {
                 "User-Agent": USER_AGENT
             }
         };
-    }).filter(s => Boolean(s.url));
+    }).filter(Boolean).filter(s => Boolean(s.url));
+
+    const parseChapter = (chapter) => {
+        if (!chapter) return null;
+        if (Array.isArray(chapter) && chapter.length >= 2) {
+            const start = Number(chapter[0]);
+            const end = Number(chapter[1]);
+            return (!isNaN(start) && !isNaN(end) && end > 0) ? { start, end } : null;
+        }
+        if (typeof chapter === 'object') {
+            const start = Number(chapter.start !== undefined ? chapter.start : chapter[0]);
+            const end = Number(chapter.end !== undefined ? chapter.end : chapter[1]);
+            return (!isNaN(start) && !isNaN(end) && end > 0) ? { start, end } : null;
+        }
+        return null;
+    };
+    const intro = parseChapter(data.intro_chapter || data.intro || (data.skip && data.skip.intro));
+    const outro = parseChapter(data.outro_chapter || data.outro || (data.skip && data.skip.outro));
+    const thumbnails = thumbnailsUrl || data.thumbnails || data.thumbnail || undefined;
 
     return {
         url: cleanStreamUrl,
         videoId: data.video_id,
         title: data.video_title,
         subtitles,
+        intro: intro || undefined,
+        outro: outro || undefined,
+        thumbnails: thumbnails,
         headers: {
             "Referer": "https://flixcloud.cc/",
             "User-Agent": USER_AGENT
@@ -355,7 +381,10 @@ export async function getStreams(episodeUrl) {
                             headers: extracted.headers,
                             provider: "reanime",
                             type: "m3u8",
-                            subtitles: extracted.subtitles
+                            subtitles: extracted.subtitles,
+                            intro: extracted.intro,
+                            outro: extracted.outro,
+                            thumbnails: extracted.thumbnails
                         });
                     }
                 } catch (_) {}
@@ -387,7 +416,10 @@ export async function getStreams(episodeUrl) {
                                 headers: extracted.headers,
                                 provider: "reanime",
                                 type: "m3u8",
-                                subtitles: extracted.subtitles
+                                subtitles: extracted.subtitles,
+                                intro: extracted.intro,
+                                outro: extracted.outro,
+                                thumbnails: extracted.thumbnails
                             });
                         }
                     } catch (_) {}

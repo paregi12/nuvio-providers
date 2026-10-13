@@ -44,7 +44,10 @@ Providers execute locally inside Nuvio's QuickJS runtime.
 Nuvio runs provider code inside a lightweight QuickJS JavaScript engine with built-in polyfills:
 - Global `fetch(url, options)` with automatic header and redirect support.
 - Global `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`.
-- Global `atob`, `btoa`, `URL`, and `URLSearchParams`.
+- Global Base64: `atob`, `btoa`, `safeBtoa`, and `safeAtob`.
+- Global string utilities: `replaceChars(str, from, to)` and `reverseString(str)`.
+- Global crypto: `rc4(key, data)`, `vidEncode(videoId, k1, k2)` / `vidIdEncode`, `CryptoJS.RC4`, and `VRF` helper object.
+- Global `URL` and `URLSearchParams`.
 - `cheerio-without-node-native` (HTML selector engine).
 - `crypto-js` and `aes-js` (Encryption/decryption).
 
@@ -69,7 +72,7 @@ async function getStreams(episodeUrl)
 
 The app invokes only the provider that supplied the selected episode URL. `getAnimeInfo` / `getDetails` must include an `episodeUrl` on every episode returned. `getStreams` must use that URL to identify and resolve the episode; it does not receive an anime ID, media type, season, or episode number.
 
-**Return Value:** Array of stream objects.
+**Return Value:** Array of stream objects (or `{ sources: [...], tracks: [...], intro: {...}, outro: {...} }`).
 ```javascript
 [
   {
@@ -77,6 +80,9 @@ The app invokes only the provider that supplied the selected episode URL. `getAn
     "title": "Episode 1",
     "url": "https://stream.example/master.m3u8",
     "quality": "1080p",
+    "intro": { "start": 85.5, "end": 175.0 },
+    "outro": { "start": 1320.0, "end": 1410.0 },
+    "thumbnails": "https://stream.example/thumbnails.vtt",
     "headers": {
       "Referer": "https://source.example/",
       "User-Agent": "Mozilla/5.0..."
@@ -91,6 +97,11 @@ The app invokes only the provider that supplied the selected episode URL. `getAn
   }
 ]
 ```
+
+> **Note on Skip Times & Thumbnails:**
+> - `intro` and `outro` can be `{ "start": s, "end": e }` or `[start, end]`.
+> - Alternatively, a `"skip": { "intro": [...], "outro": [...] }` block can be included at either the root object or item level.
+> - `thumbnails` can be a direct VTT URL string or supplied via a track with `"kind": "thumbnails"`.
 
 ---
 
@@ -124,6 +135,7 @@ async function getAnimeInfo(contentId)
       "number": 1,
       "title": "Ryomen Sukuna",
       "thumbnail": "https://.../thumb1.jpg",
+      "token": "optional-token-for-host",
       "isFiller": false,
       "isSub": true,
       "isDub": true

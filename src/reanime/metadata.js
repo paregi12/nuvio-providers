@@ -336,7 +336,8 @@ export async function getAnimeInfo(contentId) {
                 overview: ep.description || null,
                 isFiller: Boolean(ep.is_filler),
                 isSub: hasSub,
-                isDub: hasDub
+                isDub: hasDub,
+                token: ep.token || ep.data_id || ep.nid || null
             };
         });
 
