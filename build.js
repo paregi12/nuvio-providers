@@ -2,187 +2,92 @@
 
 /**
  * Build script for nuvio-providers
- * 
- * Bundles each provider from src/<provider>/ into a single file at providers/<provider>.js
- * 
- * Usage:
- *   node build.js              # Build all providers
- *   node build.js vixsrc       # Build only vixsrc
- *   node build.js --watch      # Watch mode (requires nodemon)
+ * Compiles Rust scrapers in scrapers/<name>/ to WebAssembly (wasm32-unknown-unknown)
+ * and copies the output .wasm binaries to providers/<name>.wasm.
  */
 
-const esbuild = require('esbuild');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const srcDir = path.join(__dirname, 'src');
+const scrapersDir = path.join(__dirname, 'scrapers');
 const outDir = path.join(__dirname, 'providers');
 
-// Modules that the Nuvio app provides - don't bundle these
-const EXTERNAL_MODULES = [
-    'cheerio-without-node-native',
-    'react-native-cheerio',
-    'cheerio',
-    'crypto-js',
-    'axios'
-];
-
-// Get provider names from command line or discover all
-function getProvidersToBuild() {
+function getScrapersToBuild() {
     const args = process.argv.slice(2).filter(arg => !arg.startsWith('-'));
+    if (args.length > 0) return args;
 
-    if (args.length > 0) {
-        return args;
-    }
-
-    // Discover all provider folders in src/
-    if (!fs.existsSync(srcDir)) {
-        console.error('❌ src/ directory not found. Create provider folders in src/<provider>/');
+    if (!fs.existsSync(scrapersDir)) {
+        console.error('scrapers/ directory not found.');
         process.exit(1);
     }
 
-    return fs.readdirSync(srcDir, { withFileTypes: true })
+    return fs.readdirSync(scrapersDir, { withFileTypes: true })
         .filter(d => d.isDirectory())
         .map(d => d.name);
 }
 
-async function buildProvider(providerName) {
-    const providerDir = path.join(srcDir, providerName);
-    const entryPoint = path.join(providerDir, 'index.js');
-    const outFile = path.join(outDir, `${providerName}.js`);
-
-    if (!fs.existsSync(entryPoint)) {
-        console.warn(`⚠️  Skipping ${providerName}: no src/${providerName}/index.js found`);
+function buildScraper(scraperName) {
+    const scraperPath = path.join(scrapersDir, scraperName);
+    if (!fs.existsSync(path.join(scraperPath, 'Cargo.toml'))) {
+        console.warn(`Skipping ${scraperName}: no Cargo.toml found in scrapers/${scraperName}`);
         return false;
     }
 
+    console.log(`Building Rust WASM scraper: ${scraperName}...`);
     try {
-        const result = await esbuild.build({
-            entryPoints: [entryPoint],
-            bundle: true,
-            outfile: outFile,
-            format: 'cjs',              // CommonJS for module.exports compatibility
-            platform: 'neutral',        // Works in both browser and node-like environments
-            target: 'es2016',           // Transpile async/await to generators for Hermes
-            minify: false,              // Keep readable for debugging
-            sourcemap: false,
-            external: EXTERNAL_MODULES,
-            banner: {
-                js: `/**\n * ${providerName} - Built from src/${providerName}/\n * Generated: ${new Date().toISOString()}\n */`
-            },
-            logLevel: 'warning'
+        execSync('cargo build --target wasm32-unknown-unknown --release', {
+            cwd: scraperPath,
+            stdio: 'inherit'
         });
 
-        const stats = fs.statSync(outFile);
-        const sizeKB = (stats.size / 1024).toFixed(1);
-        console.log(`✅ ${providerName}.js (${sizeKB} KB)`);
-        return true;
-    } catch (err) {
-        console.error(`❌ Failed to build ${providerName}:`, err.message);
-        return false;
-    }
-}
+        const targetDir = path.join(__dirname, 'target', 'wasm32-unknown-unknown', 'release');
+        const localTargetDir = path.join(scraperPath, 'target', 'wasm32-unknown-unknown', 'release');
 
-// Transpile a single file in providers/ (for developers writing single-file providers with async)
-async function transpileSingleFile(filename) {
-    const inputPath = path.join(outDir, filename);
-
-    if (!fs.existsSync(inputPath)) {
-        console.warn(`⚠️  File not found: providers/${filename}`);
-        return false;
-    }
-
-    // Read original file
-    const originalContent = fs.readFileSync(inputPath, 'utf-8');
-
-    // Check if it needs transpilation (has async/await)
-    if (!originalContent.includes('async ') && !originalContent.includes('await ')) {
-        console.log(`⏭️  ${filename} - no async/await, skipping`);
-        return true;
-    }
-
-    try {
-        const result = await esbuild.transform(originalContent, {
-            loader: 'js',
-            target: 'es2016',           // Transpile async/await to generators
-            format: 'cjs'
-        });
-
-        // Write transpiled content back
-        fs.writeFileSync(inputPath, result.code);
-
-        const stats = fs.statSync(inputPath);
-        const sizeKB = (stats.size / 1024).toFixed(1);
-        console.log(`✅ ${filename} transpiled (${sizeKB} KB)`);
-        return true;
-    } catch (err) {
-        console.error(`❌ Failed to transpile ${filename}:`, err.message);
-        return false;
-    }
-}
-
-async function main() {
-    const args = process.argv.slice(2);
-
-    // Handle --transpile flag for single-file providers
-    if (args.includes('--transpile')) {
-        const files = args.filter(a => a !== '--transpile' && !a.startsWith('-'));
-
-        if (files.length === 0) {
-            // Transpile all .js files in providers/ that aren't from src/
-            const srcProviders = fs.existsSync(srcDir)
-                ? fs.readdirSync(srcDir, { withFileTypes: true })
-                    .filter(d => d.isDirectory())
-                    .map(d => d.name + '.js')
-                : [];
-
-            const allProviderFiles = fs.readdirSync(outDir)
-                .filter(f => f.endsWith('.js') && !srcProviders.includes(f));
-
-            console.log(`\n🔄 Transpiling ${allProviderFiles.length} single-file provider(s)...\n`);
-
-            for (const file of allProviderFiles) {
-                await transpileSingleFile(file);
+        let candidateWasm = null;
+        for (const dir of [targetDir, localTargetDir]) {
+            if (fs.existsSync(dir)) {
+                const files = fs.readdirSync(dir).filter(f => f.endsWith('.wasm') && !f.includes('.d'));
+                for (const f of files) {
+                    if (f.includes(scraperName.replace(/-/g, '_')) || f.includes(scraperName)) {
+                        candidateWasm = path.join(dir, f);
+                        break;
+                    }
+                }
             }
-        } else {
-            console.log(`\n🔄 Transpiling ${files.length} file(s)...\n`);
-            for (const file of files) {
-                const filename = file.endsWith('.js') ? file : file + '.js';
-                await transpileSingleFile(filename);
-            }
+            if (candidateWasm) break;
         }
-        return;
+
+        if (!candidateWasm) {
+            console.error(`Compiled wasm file for ${scraperName} not found in target dir`);
+            return false;
+        }
+
+        if (!fs.existsSync(outDir)) {
+            fs.mkdirSync(outDir, { recursive: true });
+        }
+
+        const destFile = path.join(outDir, `${scraperName}.wasm`);
+        fs.copyFileSync(candidateWasm, destFile);
+
+        const stats = fs.statSync(destFile);
+        const sizeKB = (stats.size / 1024).toFixed(1);
+        console.log(`Successfully built ${destFile} (${sizeKB} KB)`);
+        return true;
+    } catch (err) {
+        console.error(`Failed to build ${scraperName}:`, err.message);
+        return false;
     }
-
-    const providers = getProvidersToBuild();
-
-    if (providers.length === 0) {
-        console.log('No providers found in src/ directory.');
-        console.log('Create a provider: mkdir -p src/myprovider && touch src/myprovider/index.js');
-        return;
-    }
-
-    console.log(`\n📦 Building ${providers.length} provider(s)...\n`);
-
-    // Ensure output directory exists
-    if (!fs.existsSync(outDir)) {
-        fs.mkdirSync(outDir, { recursive: true });
-    }
-
-    let success = 0;
-    let failed = 0;
-
-    for (const provider of providers) {
-        const result = await buildProvider(provider);
-        if (result) success++;
-        else failed++;
-    }
-
-    console.log(`\n✨ Done! ${success} built, ${failed} skipped/failed\n`);
 }
 
-main().catch(err => {
-    console.error('Build failed:', err);
-    process.exit(1);
-});
+function main() {
+    const scrapers = getScrapersToBuild();
+    console.log(`\nBuilding ${scrapers.length} WASM scraper(s)...\n`);
+    let success = 0;
+    for (const scraper of scrapers) {
+        if (buildScraper(scraper)) success++;
+    }
+    console.log(`\nDone! ${success}/${scrapers.length} scrapers built.\n`);
+}
 
+main();

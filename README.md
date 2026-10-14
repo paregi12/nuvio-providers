@@ -1,16 +1,16 @@
 # Nuvio Anime Providers
 
-A collection of anime streaming providers for the Nuvio app. Providers are JavaScript modules executed in QuickJS/Hermes to fetch streams, episode catalogs, and metadata from anime source sites.
+A collection of high-performance anime streaming providers for the Nuvio app. Providers are compiled WebAssembly (`.wasm`) modules written in Rust, running cross-platform on both Android and iOS via the native KMP Chasm WASM engine.
 
-📖 **[Read the Developer Guide](DOCUMENTATION.md)**
+📖 **[Read the Full Developer Guide](DOCUMENTATION.md)**
 
 ---
 
 ## Active Providers
 
-| Provider | Description | Formats | Languages |
-| :--- | :--- | :--- | :--- |
-| **Reanime** (`reanime`) | High-definition anime streaming with automated AniList mapping, skip times, and subtitle support | HLS (m3u8) | Sub, Dub |
+| Provider | Description | Formats | Languages | Binary |
+| :--- | :--- | :--- | :--- | :--- |
+| **Reanime** (`reanime`) | High-definition anime streaming with AniList mapping, skip times, server categorization (`SUB`, `DUB`, `HARDSUB`), and subtitle support | HLS (`m3u8`) | Sub, Dub | `providers/reanime.wasm` |
 
 ---
 
@@ -29,28 +29,55 @@ A collection of anime streaming providers for the Nuvio app. Providers are JavaS
 
 ## Architecture & How It Works
 
-Nuvio operates as an anime-focused streaming client with support for **AniList Enrichment**:
+Nuvio executes anime scrapers inside an isolated, cross-platform WebAssembly runtime:
 
-- **AniList Enrichment ON**: The app resolves anime titles, cast, voice actors, trailers, and studios from AniList, while querying active providers for playable video streams and episode lists.
-- **AniList Enrichment OFF**: The app queries the provider directly via `getAnimeInfo(contentId)` / `getDetails(contentId)` to fetch the title, synopsis, poster, age rating, episode lists (with sub/dub counts and filler badges), and related anime directly from the source site.
+- **Universal Support**: Runs on both Android and iOS without native C++ compilation or JavaScript overhead.
+- **AniList Enrichment ON**: The app resolves anime titles, cast, voice actors, trailers, and studios from AniList, while querying active WASM providers for playable video streams and episode lists.
+- **AniList Enrichment OFF**: The app queries the provider directly via `nuvio_details` to fetch the title, synopsis, poster, age rating, episode lists (with sub/dub counts and filler badges), and recommendations directly from the source.
+- **Categorized Server Selection**: Providers categorize streams into `SUB`, `DUB`, and `HARDSUB` so the player automatically matches user preferences.
 
 ---
 
-## Provider Methods
+## WebAssembly ABI Specification
 
-Anime providers export standard asynchronous functions:
+Every provider is compiled to `wasm32-unknown-unknown` and exports standard C-FFI entrypoints. Pointers and lengths are exchanged via a packed 64-bit integer (`(ptr << 32) | len`).
 
-### 1. `getStreams(episodeUrl)`
-Fetches playable video streams for the selected episode using its source watch URL. The provider's `getAnimeInfo` / `getDetails` method must include an `episodeUrl` for every episode. Nuvio calls only the provider that supplied that URL; no anime ID, media type, season, or episode number is passed to `getStreams`.
+### 1. Memory Management Exports
 
-**Return Format:**
-```javascript
+- `nuvio_alloc(size: usize) -> *mut u8`: Allocates heap memory for arguments passed from the host.
+- `nuvio_dealloc(ptr: *mut u8, size: usize)`: Frees memory allocated by the host or plugin.
+
+### 2. Provider API Exports
+
+- `nuvio_streams(url_ptr: i32, url_len: i32) -> i64`: Resolves playable streams for the selected episode URL.
+- `nuvio_home() -> i64` *(Optional)*: Returns catalog sections (`Latest Episodes`, `Popular Anime`, `Top Rated`) for the home screen.
+- `nuvio_search(arg_ptr: i32, arg_len: i32) -> i64` *(Optional)*: Searches anime catalog with `{ "query": "...", "page": 1 }`.
+- `nuvio_details(id_ptr: i32, id_len: i32) -> i64` *(Optional)*: Returns detailed anime metadata and episode catalog.
+- `nuvio_settings() -> i64` *(Optional)*: Returns configuration UI layout (e.g. domain selector).
+
+### 3. Host Imports (`env` / `nuvio`)
+
+- `nuvio_fetch(req_ptr: i32, req_len: i32) -> i64`: Executes asynchronous HTTP requests via the host's networking engine. Takes JSON `{ "url": "...", "method": "GET", "headers": {...}, "body": "..." }` and returns `{ "ok": bool, "status": u16, "body": String, "headers": {...} }`.
+- `nuvio_log(level: i32, msg_ptr: i32, msg_len: i32)`: Logs messages to the host logging framework (`0`=Debug, `1`=Info, `2`=Warn, `3`=Error).
+
+---
+
+## Stream Return Format
+
+`nuvio_streams` returns a JSON array of stream objects:
+
+```json
 [
   {
     "name": "Reanime [SUB] HD-1",
-    "title": "Episode 1",
+    "title": "Jujutsu Kaisen - Episode 1 (SUB)",
     "url": "https://.../master.m3u8",
     "quality": "Auto",
+    "server": "HD-1",
+    "provider": "reanime",
+    "type": "m3u8",
+    "subType": "SUB",
+    "format": "softsub",
     "intro": { "start": 85.5, "end": 175.0 },
     "outro": { "start": 1320.0, "end": 1410.0 },
     "thumbnails": "https://.../thumbnails.vtt",
@@ -60,8 +87,8 @@ Fetches playable video streams for the selected episode using its source watch U
     },
     "subtitles": [
       {
-        "url": "https://.../sub.vtt",
-        "language": "en",
+        "url": "https://.../en.vtt",
+        "language": "English",
         "name": "English"
       }
     ]
@@ -69,139 +96,54 @@ Fetches playable video streams for the selected episode using its source watch U
 ]
 ```
 
-### 2. `getAnimeInfo(contentId)` / `getDetails(contentId)` (Optional / Source Extraction)
-Provides full anime details and episode listings directly from the source site when AniList enrichment is turned off or for direct plugin browsing.
-
-**Return Format:**
-```javascript
-{
-  "id": "naruto-shippuden",
-  "title": "Naruto Shippuden",
-  "description": "Naruto Uzumaki returns to the Hidden Leaf Village...",
-  "poster": "https://.../poster.jpg",
-  "banner": "https://.../banner.jpg",
-  "status": "Completed",
-  "genres": ["Action", "Adventure", "Fantasy"],
-  "rating": 8.2,
-  "ageRating": "PG-13",
-  "totalEpisodes": 500,
-  "subEpisodes": 500,
-  "dubEpisodes": 500,
-  "episodes": [
-    {
-      "id": "naruto-shippuden-episode-1",
-      "number": 1,
-      "title": "Homecoming",
-      "thumbnail": "https://.../thumb1.jpg",
-      "token": "optional-token-for-host",
-      "isFiller": false,
-      "isSub": true,
-      "isDub": true
-    },
-    {
-      "id": "naruto-shippuden-episode-57",
-      "number": 57,
-      "title": "Mother Nature's Fury",
-      "thumbnail": "https://.../thumb57.jpg",
-      "isFiller": true,
-      "isSub": true,
-      "isDub": true
-    }
-  ],
-  "relations": [
-    {
-      "id": "naruto",
-      "title": "Naruto",
-      "type": "tv",
-      "poster": "https://.../naruto.jpg",
-      "relationType": "Prequel"
-    }
-  ]
-}
-```
-
-### 3. `getHome()` / `getMainPage()` (Optional / Home Feeds)
-Supplies catalogs to display on the Nuvio home screen.
-```javascript
-[
-  {
-    "title": "Latest Anime",
-    "items": [
-      {
-        "id": "frieren-s1",
-        "title": "Frieren: Beyond Journey's End",
-        "poster": "https://.../frieren.jpg",
-        "type": "tv",
-        "episodes": 28,
-        "subEpisodes": 28,
-        "dubEpisodes": 28,
-        "ageRating": "PG-13"
-      }
-    ]
-  }
-]
-```
-
-### 4. `onSettings()` (Optional / In-App Settings)
-Supplies a configuration layout for the provider settings modal in Nuvio.
-
 ---
 
 ## Project Structure
 
 ```
 nuvio-providers/
-├── src/                    # Source files (multi-file modular development)
+├── scrapers/               # Rust source crates for each provider
 │   └── reanime/
-│       ├── index.js        # Entry point
-│       ├── client.js       # HTTP client and URL utilities
-│       ├── constants.js    # URLs & constants
-│       ├── home.js         # Catalog & spotlight mapping
-│       ├── metadata.js     # Anime details, episode catalog, AniList resolver
-│       └── streamextraction.js # Stream extraction, FlixCloud decoding
+│       ├── Cargo.toml      # Scraper manifest (crate-type = ["cdylib"])
+│       └── src/
+│           └── lib.rs      # Stream extraction, FlixCloud decoding, ABI exports
 │
-├── providers/              # Bundled output (generated by build.js)
-│   └── reanime.js
+├── providers/              # Compiled WebAssembly binaries
+│   └── reanime.wasm
 │
+├── Cargo.toml              # Workspace Cargo configuration
 ├── manifest.json           # Plugin repository manifest
-├── build.js                # esbuild bundle script
+├── build.js                # Build automation script
 └── package.json
 ```
 
 ---
 
-## Development & Building
+## Building & Developing
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+### Prerequisites
 
-2. **Build providers:**
-   ```bash
-   # Build all providers
-   node build.js
+- **Rust**: 1.75 or newer
+- **wasm32 Target**:
+  ```bash
+  rustup target add wasm32-unknown-unknown
+  ```
+  *(On Termux: `pkg install rust rust-std-wasm32-unknown-unknown`)*
+- **Node.js**: v18+ (for `build.js` runner)
 
-   # Build specific provider
-   node build.js reanime
-   ```
+### Build Commands
 
-3. **Watch mode:**
-   ```bash
-   npm run build:watch
-   ```
+```bash
+# Build all WASM scrapers and copy to providers/
+npm run build
+# or: node build.js
 
----
+# Build only a specific scraper
+node build.js reanime
 
-## Available Modules
-
-Providers run in QuickJS / Hermes with access to:
-- `cheerio-without-node-native` (HTML parsing)
-- `crypto-js` / `aes-js` (Decryption)
-- Base64: `btoa`, `atob`, `safeBtoa`, `safeAtob`
-- String utilities: `replaceChars`, `reverseString`
-- Crypto utilities: `rc4`, `vidEncode` / `vidIdEncode`, `CryptoJS.RC4`, `VRF`
-- Native `fetch`, `setTimeout`, `clearTimeout`, `URL`, and `URLSearchParams` polyfills.
+# Direct Cargo build
+cargo build --target wasm32-unknown-unknown --release
+```
 
 ---
 

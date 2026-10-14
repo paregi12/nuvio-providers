@@ -1,12 +1,12 @@
 {
   "name": "Nuvio Anime Providers",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "scrapers": [
     {
       "id": "reanime",
       "name": "Reanime",
-      "description": "Reanime anime streaming with automated AniList mapping and subtitle support",
-      "version": "1.2.3",
+      "description": "High-performance Rust WASM anime streaming provider with automated AniList mapping, chapters, and subtitle support",
+      "version": "2.0.0",
       "author": "Nuvio Team",
       "supportedTypes": [
         "movie",
@@ -16,7 +16,7 @@
         "ona",
         "special"
       ],
-      "filename": "providers/reanime.js",
+      "filename": "providers/reanime.wasm",
       "enabled": true,
       "hasSettings": true,
       "formats": [
